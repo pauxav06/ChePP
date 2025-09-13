@@ -23,7 +23,6 @@ inline void score_moves(const SearchStack::Node& ss,
         } else if (move.type_of() == PROMOTION) {
             score = move.promotion_type().piece_value() * 8;
         } else {
-
             if (auto victim = ss.pos->piece_at(move.to_sq()); victim != NO_PIECE || move.type_of() == EN_PASSANT) {
                 score = ss.pos->see(move) * 10;
             } else {

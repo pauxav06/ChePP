@@ -77,9 +77,11 @@ struct HistoryManager {
     {
         const SearchStack::Node* ss = &ss_init;
 
-        for (int back = 0; back < max_back && ss; ++back, ss = ss_init.prev()) {
+        for (int back = 0; back < max_back && ss->prev(); ++back, ss = ss_init.prev()) {
 
             for (const auto [m, s] : quiets) {
+                if (ss->pos->move() == Move::null() || ss->pos->move() == Move::none()) continue;
+
                 const auto move  = m;
                 if (ss->pos->move() == Move::null()) continue;
 
@@ -104,7 +106,8 @@ struct HistoryManager {
 
         const SearchStack::Node* ss = &ss_init;
 
-        for (int back = 0; back < max_back && ss; ++back, ss = ss_init.prev()) {
+        for (int back = 0; back < max_back && ss->prev(); ++back, ss = ss_init.prev()) {
+            if (ss->pos->move() == Move::null() || ss->pos->move() == Move::none()) continue;
             bonus += cont_hist_score(*ss, move) / ((back + 2) / 2);
         }
 
