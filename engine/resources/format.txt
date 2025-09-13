@@ -1,0 +1,8 @@
+int16 12582912 g_ft_weights
+int16 1024 g_ft_biases
+int16 32768 g_l1_weights
+int32 16 g_l1_biases
+int16 512 g_l2_weights
+int32 32 g_l2_biases
+int16 32 g_out_weights
+int32 1 g_out_bias

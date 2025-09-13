@@ -1,0 +1,4 @@
+int16 6291456 g_ft_weights
+int16 512 g_ft_biases
+int16 1024 g_hidden_weights
+int32 1 g_hidden_biases
