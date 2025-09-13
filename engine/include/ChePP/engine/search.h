@@ -80,7 +80,7 @@ struct SearchThread
     {
         auto eval = m_accumulators.last().evaluate(m_positions.last().side_to_move());
         eval      = std::clamp(eval, MATED_IN_MAX_PLY + 1, MATE_IN_MAX_PLY - 1);
-        eval -= eval * m_positions.last().halfmove_clock() / 200;
+        eval -= eval * m_positions.last().halfmove_clock() / 101;
         return eval;
     }
 
@@ -281,6 +281,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 {
 
 
+    if (m_thread_id == 0 && m_infos.nodes % 4096 == 0)
+    {
+        TimeManager::UpdateInfo info{};
+        info.eval = depth;
+        m_tm.update_time();
+    }
     const Position&        pos = m_positions.last();
     SearchStackNode& ss  = m_ss[ply()];
 
@@ -419,12 +425,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
-    if (m_thread_id == 0)
-    {
-        TimeManager::UpdateInfo info{};
-        info.eval = depth;
-        m_tm.update_time();
-    }
 
     int      best_eval  = -INF_SCORE;
     Move     local_best = Move::none();
@@ -531,7 +531,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // here the search result is actually valid, and since we searched pv node first,
         // we can accept the result as valid
-        if (m_tm.should_stop() && is_root && bestMove != Move::none())
+        if (m_tm.should_stop() && is_root && local_best != Move::none())
         {
             break;
         }
