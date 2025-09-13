@@ -23,16 +23,16 @@ struct tt_entry_t
 
     tt_entry_t() noexcept = default;
     tt_entry_t(const hash_t hash, const int depth, const int score, const tt_bound_t bound, const int generation, const Move move)
-        : m_hash(hash), m_depth(depth), m_score(score), m_move(move), m_bound(bound), m_generation(generation)
+        : m_hash(hash), m_depth(depth), m_score(static_cast<int16_t>(score)), m_move(move), m_bound(bound), m_generation(generation)
     {
     }
 
-    hash_t  m_hash;
-    uint16_t m_depth;
-    int16_t m_score;
-    Move m_move;
-    tt_bound_t m_bound;
-    uint8_t m_generation;
+    hash_t  m_hash{};
+    uint16_t m_depth{};
+    int16_t m_score{};
+    Move m_move{};
+    tt_bound_t m_bound{};
+    uint8_t m_generation{};
     uint8_t m_repetitions{0};
 };
 
