@@ -947,14 +947,15 @@ constexpr int mated_in(const int ply) noexcept
     return MATED + ply;
 }
 
-struct SearchStackNode
+constexpr int absolute_eval(const int eval, const Color side) noexcept
 {
-    int eval{0};
-    Move excluded{Move::none()};
-    Move killer1{Move::none()};
-    Move killer2{Move::none()};
-};
+    return side == WHITE ? eval : -eval;
+}
 
+constexpr int relative_eval(const int eval, const Color side) noexcept
+{
+    return side == WHITE ? eval : -eval;
+}
 
 
 struct Date {

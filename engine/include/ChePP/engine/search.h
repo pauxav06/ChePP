@@ -39,7 +39,9 @@ struct SearchThread
 
     explicit SearchThread(const int id, TimeManager& tm, const Position& pos, std::span<Move> moves)
         : m_thread_id(id), m_tm(tm), m_positions(pos, moves), m_accumulators(m_positions.last()), m_ss(MAX_PLY + 1)
-    {}
+    {
+        ss().pos = &m_positions.last();
+    }
 
     int          m_thread_id;
     TimeManager& m_tm;
@@ -62,13 +64,13 @@ struct SearchThread
     {
         m_positions.do_move(move);
         if constexpr (UpdateNNUE) m_accumulators.do_move(m_positions[ply() - 1], m_positions.last());
-        ss().move = move;
+        ss().pos = &m_positions.last();
     }
 
     template <bool UpdateNNUE = true>
     void undo_move()
     {
-        ss().move = Move::none();
+        ss().pos = nullptr;
         m_positions.undo_move();
         if constexpr (UpdateNNUE) m_accumulators.undo_move();
     }
@@ -312,7 +314,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // this speeds up mate cases
         // our worse move is to be mated on the spot
-        alpha = std::max(alpha, mated_in(static_cast<int>(ply())));
+        alpha = std::max(alpha, mated_in(ply()));
         // their best move is to mate next turn
         beta = std::min(beta, mate_in(ply() + 1));
 
@@ -350,7 +352,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         return in_check ? mated_in(ply()) : 0;
     }
 
-    score_moves(positions(), moves, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
+    score_moves(ss(), moves, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
     moves.sort();
 
 
@@ -364,7 +366,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // if eval comes from tt, is upper bounded and not higher that beta, we cant assume anything on score
     // evaluating is not worth it so we just skip
     // only do it if there are enough pieces to not avoid zugzwang blindness
-    if (!is_root && !is_pv && positions().back().move() != Move::null() && !in_check && depth >= 3 && static_eval >= beta &&
+    if (!is_root && !is_pv && ss().pos->move() != Move::null() && !in_check && depth >= 3 && static_eval >= beta &&
         (!tt_hit || tt_hit->m_bound != UPPER || tt_hit->m_score > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
         pos.occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3) // add loss condition ?
     {
@@ -389,10 +391,9 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     if (!is_root && !is_pv && !in_check && depth >= 3 && static_eval >= beta + 150)
     {
         int       prob_beta = beta + 150;
-        const int reduction = 3;
 
         MoveList  tactical  = filter_tactical(pos, gen_legal(pos));
-        score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
+        score_moves(ss(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
         tactical.sort();
 
         for (auto [m, s] : tactical)
@@ -407,6 +408,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
             if (score >= prob_beta)
             {
+                const int reduction  = 3;
                 int prob_depth = std::max(1, depth - 1 - reduction);
                 prob_beta = -Negamax(prob_depth, -beta, -beta + 1);
             }
@@ -516,8 +518,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                     ss().killer2 = ss().killer1;
                     ss().killer1 = m;
                 }
-                m_history.update_cont_hist(positions(), quiets, m, depth, std::min(2, static_cast<int>(ply())));
-                m_history.update_hist(positions().back(), quiets, m, depth);
+                m_history.update_cont_hist(ss(), quiets, m, depth);
+                m_history.update_hist(ss(), quiets, m, depth);
             }
             break;
         }
@@ -531,6 +533,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         {
             break;
         }
+    }
+
+    if (m_thread_id == 0 && is_root)
+    {
+        TimeManager::UpdateInfo info{};
+        info.eval = absolute_eval(best_eval, pos.side_to_move());
+        info.nodes_searched = m_infos.nodes;
+        m_tm.send_update_info(info);
     }
 
     bool best_valid = !m_tm.should_stop() && local_best != Move::none();
@@ -602,7 +612,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     MoveList tactical = filter_tactical(pos, moves);
     //std::ranges::for_each(tactical, [&](auto m) {std::cout << m.move << std::endl;});
 
-    score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
+    score_moves(ss(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
     tactical.sort();
 
     int best_eval = stand_pat;

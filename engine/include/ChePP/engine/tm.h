@@ -1,13 +1,16 @@
 #ifndef TIME_MANAGER_H
 #define TIME_MANAGER_H
 
+#include "types.h"
+
 #include <algorithm>
 #include <chrono>
-#include <cstdint>
-#include <vector>
 #include <cmath>
+#include <cstdint>
 #include <iterator>
 #include <ranges>
+#include <utility>
+#include <vector>
 
 template<typename T>
 class RingBuffer {
@@ -93,6 +96,7 @@ struct TimeManager {
         double losing_factor{1.2};
         double unstable_factor{1.3};
         double stable_factor{0.8};
+        uint64_t normalisation_base{500000};
     };
 
     struct InitInfo {
@@ -109,8 +113,8 @@ struct TimeManager {
 
     TimeManager() = default;
 
-    explicit TimeManager(const Params& params, const InitInfo& info, const Constraints& constraints)
-        : params(params), init_info(info), constraints(constraints), update_infos(params.sampling_depth) {
+    explicit TimeManager(const Params& params, InitInfo info, const Constraints& constraints)
+        : params(params), init_info(std::move(info)), constraints(constraints), update_infos(params.sampling_depth) {
         compute_base_time();
     }
 
@@ -127,7 +131,7 @@ struct TimeManager {
     void send_update_info(const UpdateInfo& info)
     {
         update_infos.push(info);
-        adjust_time();
+        //adjust_time();
     }
 
     void update_depth(const int depth)
@@ -152,18 +156,19 @@ struct TimeManager {
 
 private:
 
-    int estimate_moves_to_go() const {
+    [[nodiscard]] int estimate_moves_to_go() const {
         int base_moves = constraints.moves_to_go > 0 ? constraints.moves_to_go : 35;
 
         const auto& evals = init_info.evaluations;
-        bool winning = init_info.evaluations.back() > 150;
-        bool losing = init_info.evaluations.back() < -150;
+        const bool winning = init_info.evaluations.back() > 150;
+        const bool losing = init_info.evaluations.back() < -150;
 
         int mean_diff = 0;
         if (evals.size() >= 2) {
             auto diffs = evals
-                       | std::views::adjacent<2>
-                        | std::views::transform([&](auto&& e) { return std::abs(std::get<0>(e) - std::get<1>(e)); });
+                | std::views::transform([&](const auto& e) { return relative_eval(e, init_info.side); })
+                | std::views::adjacent<2>
+                | std::views::transform([&](auto&& e) { return std::abs(std::get<0>(e) - std::get<1>(e)); });
 
             mean_diff = std::accumulate(diffs.begin(), diffs.end(), 0)
                         / static_cast<int>(evals.size() - 1);
@@ -171,8 +176,8 @@ private:
         mean_diff = std::clamp(mean_diff, -100, 100);
 
 
-        if (winning) base_moves = std::max(10, base_moves / (100 + mean_diff) / 100); // we are crushing
-        else if (losing) base_moves = std::max(10, base_moves / (100 - mean_diff) / 100); // we are getting crushed
+        if (winning) base_moves = std::max(10, base_moves / (150 + mean_diff) / 100); // we are crushing
+        else if (losing) base_moves = std::max(10, base_moves / (50 - mean_diff) / 100); // we are getting crushed
 
         if (!init_info.evaluations.empty()) {
             const double mean = std::accumulate(init_info.evaluations.begin(),
@@ -213,32 +218,45 @@ private:
     }
 
     void adjust_time() {
-        if (update_infos.size() < 2) return;
+        if (update_infos.size() < 2) return; // not enough data
+        if (constraints.time[init_info.side] < 0) return; // does not rely on time
+        if (constraints.move_time > 0) return; //do not adjust fixed time
 
-        int last_eval = update_infos[update_infos.size() - 1].eval;
-        int prev_eval = update_infos[update_infos.size() - 2].eval;
+        const int last_eval = update_infos[update_infos.size() - 1].eval;
 
-        auto evals = update_infos | std::views::transform(&UpdateInfo::eval);
-        int sum  = std::ranges::fold_left(evals, 0.0, std::plus<>());
-        int mean = sum / update_infos.size();
+        auto evals = update_infos |
+            std::views::transform(&UpdateInfo::eval) |
+            std::views::transform([&](auto&& e) {return relative_eval(e, init_info.side);});
 
-        int sq_sum = std::ranges::fold_left(evals | std::views::transform([](const int e){ return e * e; }),0, std::plus<>());
+        const int sum  = std::ranges::fold_left(evals, 0, std::plus<>());
+        const int mean = sum / static_cast<int>(update_infos.size());
 
-        auto variance = (sq_sum / update_infos.size()) - (mean * mean);
+        const int sq_sum = std::ranges::fold_left(evals | std::views::transform([](const int e){ return e * e; }),0, std::plus<>());
 
+        const int variance = sq_sum / static_cast<int>(update_infos.size()) - mean * mean;
 
-        bool winning = last_eval > 100;
-        bool losing  = last_eval < -100;
-        bool unstable = variance > 50;
-        bool stable = variance < 10;
+        const bool winning = last_eval > 100;
+        const bool losing  = last_eval < -100;
+        const bool unstable = variance > 50;
+        const bool stable = variance < 10;
 
         double factor = 1.0;
         if (winning) factor *= params.winning_factor;
         if (losing)  factor *= params.losing_factor;
-        if (unstable) factor *= params.unstable_factor * (1.0 + (variance + 50) / 100.0);
+        if (unstable) factor *= params.unstable_factor;
         if (stable) factor *= params.stable_factor;
 
+        UpdateInfo cur = update_infos[update_infos.size() - 1];
+        UpdateInfo last = update_infos[update_infos.size() - 2];
+
+        const double weight = static_cast<double>(cur.nodes_searched - last.nodes_searched) / static_cast<double>(params.normalisation_base);
+
+        const double adj_factor = std::pow(factor, weight);
+        factor *= adj_factor;
+
         adjusted_time_ms = std::clamp(static_cast<int>(m_max_time_ms * factor), params.min_time, params.max_time);
+        std::cout << "adjusted time" << adjusted_time_ms << std::endl;
+
     }
 
     Params params{};

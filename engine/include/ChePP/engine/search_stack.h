@@ -17,7 +17,7 @@ public:
     class Node {
     public:
         // general infos
-        Move move{Move::null()};
+        Position* pos;
         int ply{0};
         int eval{0};
         Move excluded{Move::none()};
@@ -28,14 +28,14 @@ public:
 
 
 
-        Node* next() {
+        [[nodiscard]] const Node* next() const {
             if (const auto self = this; self + 1 < owner_end_) {
                 return self + 1;
             }
             return nullptr;
         }
 
-        Node* prev() {
+        [[nodiscard]] const Node* prev() const {
             if (const auto self = this; self > owner_begin_) {
                 return self - 1;
             }
