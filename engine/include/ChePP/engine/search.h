@@ -17,19 +17,16 @@
 #include <utility>
 #include <vector>
 
-
-
-
-
+#include "search_stack.h"
 
 struct SearchThread
 {
     struct SearchResult
     {
-        int score;
-        int depth;
-        Move best_move;
-        bool full_search;
+        int score{};
+        int depth{};
+        Move best_move{Move::null()};
+        bool full_search{};
     };
 
     struct SearchInfos
@@ -41,37 +38,37 @@ struct SearchThread
 
 
     explicit SearchThread(const int id, TimeManager& tm, const Position& pos, std::span<Move> moves)
-        : m_thread_id(id), m_tm(tm), m_positions(pos, moves), m_accumulators(m_positions.last())
-    {
-        m_ss = std::make_unique<SearchStackNode[]>(MAX_PLY + 1);
-    }
+        : m_thread_id(id), m_tm(tm), m_positions(pos, moves), m_accumulators(m_positions.last()), m_ss(MAX_PLY + 1)
+    {}
 
     int          m_thread_id;
     TimeManager& m_tm;
 
     Positions                          m_positions;
     Accumulators                       m_accumulators;
-    std::unique_ptr<SearchStackNode[]> m_ss;
+    SearchStack                        m_ss;
 
     SearchInfos    m_infos{};
     HistoryManager m_history{};
 
     Move bestMove;
 
-    [[nodiscard]] bool timeUp() const { return m_tm.should_stop(); }
 
-    [[nodiscard]] std::size_t ply() const { return m_positions.ply(); }
+    [[nodiscard]] int ply() const { return static_cast<int>(m_positions.ply()); }
+    [[nodiscard]] SearchStack::Node& ss() { return m_ss[ply()]; }
 
     template <bool UpdateNNUE = true>
     void do_move(const Move move)
     {
         m_positions.do_move(move);
         if constexpr (UpdateNNUE) m_accumulators.do_move(m_positions[ply() - 1], m_positions.last());
+        ss().move = move;
     }
 
     template <bool UpdateNNUE = true>
     void undo_move()
     {
+        ss().move = Move::none();
         m_positions.undo_move();
         if constexpr (UpdateNNUE) m_accumulators.undo_move();
     }
@@ -288,7 +285,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         m_tm.update_time();
     }
     const Position&        pos = m_positions.last();
-    SearchStackNode& ss  = m_ss[ply()];
 
     const int  alpha_org = alpha;
     const bool is_root   = ply() == 0;
@@ -316,7 +312,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // this speeds up mate cases
         // our worse move is to be mated on the spot
-        alpha = std::max(alpha, mated_in(ply()));
+        alpha = std::max(alpha, mated_in(static_cast<int>(ply())));
         // their best move is to mate next turn
         beta = std::min(beta, mate_in(ply() + 1));
 
@@ -345,7 +341,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     }
 
     const int static_eval = tt_hit ? tt_hit->m_score : evaluate();
-    ss.eval = static_eval;
+    ss().eval = static_eval;
 
     MoveList moves = gen_legal(pos);
 
@@ -354,7 +350,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         return in_check ? mated_in(ply()) : 0;
     }
 
-    score_moves(positions(), moves, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss);
+    score_moves(positions(), moves, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
     moves.sort();
 
 
@@ -396,7 +392,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         const int reduction = 3;
 
         MoveList  tactical  = filter_tactical(pos, gen_legal(pos));
-        score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss);
+        score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
         tactical.sort();
 
         for (auto [m, s] : tactical)
@@ -515,10 +511,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         {
             if (is_quiet)
             {
-                if (ss.killer1 != m)
+                if (ss().killer1 != m)
                 {
-                    ss.killer2 = ss.killer1;
-                    ss.killer1 = m;
+                    ss().killer2 = ss().killer1;
+                    ss().killer1 = m;
                 }
                 m_history.update_cont_hist(positions(), quiets, m, depth, std::min(2, static_cast<int>(ply())));
                 m_history.update_hist(positions().back(), quiets, m, depth);
@@ -562,7 +558,6 @@ inline int SearchThread::QSearch(int alpha, int beta)
     bool is_pv = beta - alpha > 1;
 
     const Position&  pos = m_positions.last();
-    SearchStackNode& ss  = m_ss[ply()];
 
     //std::cout << positions().back() << evaluate() << " " << alpha << " " << beta  << std::endl;
 
@@ -596,7 +591,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     }
 
     const int stand_pat = evaluate();
-    ss.eval = stand_pat;
+    ss().eval = stand_pat;
 
     if (stand_pat >= beta)
         return beta;
@@ -607,7 +602,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     MoveList tactical = filter_tactical(pos, moves);
     //std::ranges::for_each(tactical, [&](auto m) {std::cout << m.move << std::endl;});
 
-    score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss);
+    score_moves(positions(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
     tactical.sort();
 
     int best_eval = stand_pat;
