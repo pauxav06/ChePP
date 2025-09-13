@@ -5,15 +5,13 @@
 #include "search_stack.h"
 #include "types.h"
 
-
-inline void score_moves(const std::span<const Position> positions,
+inline void score_moves(const SearchStack::Node& ss,
                         MoveList& list,
                         const Move prev_best,
-                        const HistoryManager& history,
+                        HistoryManager& history,
                         const SearchStack::Node& ssNode
                         )
 {
-    const Position& pos = positions.back();
     for (auto& [move, score] : list) {
 
         if (move == prev_best) {
@@ -25,14 +23,11 @@ inline void score_moves(const std::span<const Position> positions,
         } else if (move.type_of() == PROMOTION) {
             score = move.promotion_type().piece_value() * 8;
         } else {
-            auto victim   = pos.piece_at(move.to_sq());
 
-            if (victim != NO_PIECE || move.type_of() == EN_PASSANT) {
-                score = pos.see(move) * 10;
+            if (auto victim = ss.pos->piece_at(move.to_sq()); victim != NO_PIECE || move.type_of() == EN_PASSANT) {
+                score = ss.pos->see(move) * 10;
             } else {
-                auto back = std::min(2, int(positions.size()) - 1);
-                score += history.get_cont_hist_bonus(positions, move, back) + history.get_hist_bonus(pos, move);
-                //score += pos.see(move);
+                score += history.get_cont_hist_bonus(ss, move) + history.hist_score(ss, move);
             }
         }
     }
