@@ -34,13 +34,13 @@ class TmpFile {
             throw std::runtime_error("GetTempFileName failed");
         }
 
-        return {temp_file};
+        return {std::string(temp_file)};
 #else
         char tmpl[] = "/tmp/tmpfile_XXXXXX";
         const int fd = mkstemp(tmpl);
         if (fd < 0) throw std::runtime_error("mkstemp failed");
         close(fd);
-        return {tmpl};
+        return {std::string(tmpl)};
 #endif
     }
 
