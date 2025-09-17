@@ -7,5 +7,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_compile_options(-O3 -g -march=native -Wall)
 
 add_subdirectory(engine)
+add_subdirectory(nnue_training)
+
 
 enable_testing()
