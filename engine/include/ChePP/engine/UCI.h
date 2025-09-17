@@ -45,7 +45,7 @@ public:
     [[nodiscard]] T value() const { return m_value; }
 
 protected:
-    T m_init{};;
+    T m_init{};
     T& m_value{};
 };
 
@@ -80,7 +80,7 @@ public:
 
     bool parse(const std::string& v) override {
         try {
-            int val = std::stoi(v);
+            const int val = std::stoi(v);
             if (val < m_min || val > m_max) return false;
             m_value = val;
             return true;

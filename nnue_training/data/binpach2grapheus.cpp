@@ -10,7 +10,7 @@
 #include "stream/binpack_sfen_input_stream.h"
 #include "stream/stream_view.h"
 
-void binpack2grapheus(const char* input, const char* train, const char* val, const size_t n,
+void binpack2grapheus(const std::string& input, const std::string& train, const std::string& val, const size_t n,
                       const int chunk_size,
                       const float val_ = 0.1f) {
     constexpr DataloaderSkipConfig skip_config {true, 0, false, true, 0, 1};

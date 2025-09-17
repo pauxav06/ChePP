@@ -124,7 +124,7 @@ struct FilteredBinpackSfenInputStream : StreamSource<binpack::TrainingDataEntry>
     std::size_t remaining = 0;
 
     FilteredBinpackSfenInputStream(
-        const char* path, const bool cyclic, const std::size_t n,
+        const std::string& path, const bool cyclic, const std::size_t n,
         std::function<bool(const training_data::TrainingDataEntry&)> skipPredicate
     ) : in(path, cyclic, std::move(skipPredicate)), remaining(n) {}
 
