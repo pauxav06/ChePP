@@ -1,5 +1,28 @@
 cmake_minimum_required(VERSION 3.14)
-project(ChePP C CXX)
+
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+if(MSVC)
+    add_compile_options(
+            /O2
+            /W4
+            /permissive-
+            /Zi
+            /arch:AVX2
+    )
+else()
+    add_compile_options(
+            -O3
+            -g
+            -march=native
+            -Wall
+            -Wextra
+            -pedantic
+    )
+endif()
+
 
 include(FetchContent)
 
