@@ -9,8 +9,8 @@
 
 struct ScoredMove
 {
-    Move move;
-    int  score;
+    Move move{Move::none()};
+    int  score{0};
 
     bool operator<(const ScoredMove& other) const { return score < other.score; }
     bool operator>(const ScoredMove& other) const { return score > other.score; }

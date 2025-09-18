@@ -89,7 +89,7 @@ struct TimeManager {
 
     struct Params {
         int min_time{50};
-        int max_time{60 * 1000};
+        int max_time{60 * 1000 * 60};
         int safety_margin{200};
         int sampling_depth{10};
         double winning_factor{0.8};

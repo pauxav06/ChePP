@@ -21,10 +21,12 @@ public:
         int ply{0};
         int eval{0};
         Move excluded{Move::none()};
+        int double_extensions{0};
 
         // heuristics
         Move killer1{Move::none()};
         Move killer2{Move::none()};
+
 
 
 

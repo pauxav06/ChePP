@@ -12,22 +12,25 @@ inline void score_moves(const SearchStack::Node& ss,
                         const SearchStack::Node& ssNode
                         )
 {
-    for (auto& [move, score] : list) {
-
+    for (auto& [move, score] : list)
+    {
+        score  = 0;
         if (move == prev_best) {
-            score = 10000;
-        } else if (move == ssNode.killer1) {
-            score = 9000;
-        } else if (move == ssNode.killer2) {
-            score = 8900;
-        } else if (move.type_of() == PROMOTION) {
-            score = move.promotion_type().piece_value() * 8;
-        } else {
-            if (auto victim = ss.pos->piece_at(move.to_sq()); victim != NO_PIECE || move.type_of() == EN_PASSANT) {
-                score = ss.pos->see(move) * 10;
-            } else {
-                score += history.get_cont_hist_bonus(ss, move) + history.hist_score(ss, move);
-            }
+            score += 500'000'000;
+        } if (move == ssNode.killer1) {
+            score += 80'000'000;
+        } if (move == ssNode.killer2) {
+            score += 79'000'000;
+        }
+        auto victim = move.type_of() == EN_PASSANT ? PAWN : ss.pos->piece_at(move.to_sq()).type();
+        if (move.type_of() == PROMOTION)
+            score += (move.promotion_type().piece_value()) * 100'000;
+        if (victim)
+            score += ss.pos->see(move) * 100'000 + history.get_capture_hist_score(ss, move) * 0;
+        if (!victim && move.type_of() != PROMOTION)
+        {
+            score += history.get_cont_hist_bonus(ss, move);
+            score +=  history.get_hist_score(ss, move);
         }
     }
 }
