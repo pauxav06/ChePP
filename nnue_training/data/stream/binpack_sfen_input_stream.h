@@ -121,17 +121,75 @@ inline std::function<bool(const binpack::TrainingDataEntry&)>
 
 struct FilteredBinpackSfenInputStream : StreamSource<binpack::TrainingDataEntry> {
     training_data::BinpackSfenInputStream in;
-    std::size_t remaining = 0;
+
+    static constexpr size_t n_buffers = 2;
+    static constexpr size_t buf_size = 4096 * 64;
+
+    std::array<std::vector<binpack::TrainingDataEntry>, n_buffers> buffers;
+    std::array<std::atomic<bool>, n_buffers> ready{false};
+
+    std::atomic<bool> eof{false};
+    std::atomic<bool> stop{false};
+    size_t buf_n = 0;
+    size_t read_idx = 0;
+
+    std::thread producer;
 
     FilteredBinpackSfenInputStream(
-        const std::string& path, const bool cyclic, const std::size_t n,
-        std::function<bool(const training_data::TrainingDataEntry&)> skipPredicate
-    ) : in(path, cyclic, std::move(skipPredicate)), remaining(n) {}
+        const std::string& path, const bool cyclic,
+        std::function<bool(const training_data::TrainingDataEntry&)>&& skip_predicate
+    ) : in(path, cyclic, std::move(skip_predicate))
+    {
+        producer = std::thread([&]() {fill_loop();});
+    }
+
+    ~FilteredBinpackSfenInputStream() override {
+        stop.store(true);
+        if (producer.joinable())
+            producer.join();
+    }
+
+    void fill_loop()
+    {
+        size_t i = 0;
+        while (!stop.load(std::memory_order_relaxed))
+        {
+            if (!ready[i].load(std::memory_order_relaxed))
+            {
+                buffers[i].clear();
+                buffers[i].reserve(buf_size);
+                in.fill(buffers[i], buf_size);
+                eof.store(in.eof(), std::memory_order_release);
+                ready[i] = true;
+            }
+            i = (i + 1) % n_buffers;
+        }
+    }
+
 
     std::optional<binpack::TrainingDataEntry> next() override {
-        if (remaining-- == 0) return std::nullopt;
-        return in.next();
+        read_idx++;
+        if (read_idx >= buffers[buf_n].size())
+        {
+            if (ready[buf_n].load(std::memory_order_relaxed))
+            {
+                ready[buf_n].store(false, std::memory_order_release);
+            }
+            if (eof) return std::nullopt;
+
+            for (;;)
+            {
+                buf_n = (buf_n + 1) % n_buffers;
+                if (ready[buf_n].load(std::memory_order_relaxed))
+                    break;
+            }
+            read_idx = 0;
+        }
+        return buffers[buf_n][read_idx];
     }
 };
+
+
+
 
 #endif // CHEPP_BINPACK_SFEN_INPUT_STREAM_H

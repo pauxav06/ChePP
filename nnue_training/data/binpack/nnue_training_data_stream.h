@@ -132,6 +132,7 @@ namespace training_data {
             m_cyclic(cyclic),
             m_skipPredicate(std::move(skipPredicate))
         {
+            std::cout << m_filename << std::endl;
         }
 
         std::optional<TrainingDataEntry> next() override
