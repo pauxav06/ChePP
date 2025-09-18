@@ -111,37 +111,36 @@ struct FeatureTransformer
     }
 
   private:
-    static int king_square_index(int relative_king_square)
-    {
-        constexpr int indices[64]{
-            -1, -1, -1, -1, 14, 14, 15, 15, //
-            -1, -1, -1, -1, 14, 14, 15, 15, //
-            -1, -1, -1, -1, 12, 12, 13, 13, //
-            -1, -1, -1, -1, 12, 12, 13, 13, //
-            -1, -1, -1, -1, 8,  9,  10, 11, //
-            -1, -1, -1, -1, 8,  9,  10, 11, //
-            -1, -1, -1, -1, 4,  5,  6,  7,  //
-            -1, -1, -1, -1, 0,  1,  2,  3,  //
-        };
+    static int king_square_index(Square ksq) {
+        static EnumArray<Square, int> WKSqH = {
+            0,  1,  2,  3,  3,  2,  1,  0,
+            4,  5,  6,  7,  7,  6,  5,  4,
+            8,  9, 10, 11, 11, 10,  9,  8,
+           12, 13, 14, 15, 15, 14, 13, 12,
+           16, 17, 18, 19, 19, 18, 17, 16,
+           20, 21, 22, 23, 23, 22, 21, 20,
+           24, 25, 26, 27, 27, 26, 25, 24,
+           28, 29, 30, 31, 31, 30, 29, 28
+       };
 
-        return indices[relative_king_square];
+        return WKSqH[ksq];
     }
 
-    static int get_index(Color view, Square king_sq, Square piece_sq, Piece piece)
-    {
-
-        const PieceType piece_type  = piece.type();
-        const Color     piece_color = piece.color();
-
-        int piece_square = piece_sq.value() ^ 56;
-        int king_square  = king_sq.value() ^ 56;
-
-        const int oP  = piece_type.value() + 6 * (piece_color != view);
-        const int oK  = (7 * !(king_square & 4)) ^ (56 * view.value()) ^ king_square;
-        const int oSq = (7 * !(king_square & 4)) ^ (56 * view.value()) ^ piece_square;
-
-        return king_square_index(oK) * 12 * 64 + oP * 64 + oSq;
+    static int get_index(Color  view, Square king_square, Square piece_square,
+                     Piece  piece
+                     ) {
+        auto relative_piece_square = (view == WHITE ? piece_square : piece_square.flipped_horizontally());
+        auto relative_king_square = (view == WHITE ? king_square : king_square.flipped_horizontally());
+        if (king_square.file() > FILE_C) {
+            relative_piece_square = relative_piece_square.flipped_vertically();
+        }
+        // int piece_idx = chess::type_of(piece) == chess::KING ? 0 : 1 + chess::type_of(piece) * 2 + (chess::color_of(piece) == view ? 1 : 0);
+        int piece_idx = piece.type().value() * 2 + (piece.color() == view ? 1 : 0);
+        return king_square_index(relative_king_square) + relative_piece_square.value() * 32 + piece_idx * 32 * 64;
     }
+
+
+
 };
 
 #include <hwy/highway.h>
@@ -149,16 +148,26 @@ struct FeatureTransformer
 HWY_BEFORE_NAMESPACE();
 using namespace hwy::HWY_NAMESPACE;
 
+#define ALIGN_PTR(T, ptr) (static_cast<T*>(HWY_ASSUME_ALIGNED(ptr, 64)))
+
 struct Accumulator
 {
     static constexpr auto OutSz = 1024;
+    static constexpr auto PsqtOutSz = 1;
     static constexpr auto L1Sz  = 16;
     static constexpr auto L2Sz  = 32;
+
     using AccumulatorT          = std::array<int16_t, OutSz>;
+    using PsqtT                 = std::array<int16_t, PsqtOutSz>;
 
   private:
     HWY_ALIGN AccumulatorT white_accumulator{};
     HWY_ALIGN AccumulatorT black_accumulator{};
+
+    HWY_ALIGN PsqtT white_psqt{};
+    HWY_ALIGN PsqtT black_psqt{};
+
+
 
   public:
     Accumulator() = default;
@@ -179,10 +188,10 @@ struct Accumulator
     template <size_t UNROLL = 4>
     [[nodiscard]] int32_t evaluate(const Color view) const
     {
-        const auto our_acc_ptr = static_cast<const int16_t*>(
-            HWY_ASSUME_ALIGNED(view == WHITE ? white_accumulator.data() : black_accumulator.data(), 64));
-        const auto their_acc_ptr = static_cast<const int16_t*>(
-            HWY_ASSUME_ALIGNED(view == WHITE ? black_accumulator.data() : white_accumulator.data(), 64));
+        const auto* HWY_RESTRICT our_acc_ptr = ALIGN_PTR(int16_t, view == WHITE ? white_accumulator.data() : black_accumulator.data());
+        const auto* HWY_RESTRICT their_acc_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_accumulator.data() : white_accumulator.data());
+        const auto* HWY_RESTRICT our_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? white_psqt.data() : black_psqt.data());
+        const auto* HWY_RESTRICT their_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_psqt.data() : white_psqt.data());
 
         using D32 = ScalableTag<int32_t>;
         using D16 = ScalableTag<int16_t>;
@@ -196,9 +205,6 @@ struct Accumulator
         HWY_ALIGN std::array<int32_t, L2Sz> l2_out{};
         std::memcpy(l2_out.data(), g_l2_biases, sizeof(g_l2_biases));
         HWY_ALIGN int32_t out = g_out_bias[0];
-
-        // std::ranges::for_each(white_accumulator | std::views::take(10), [] (int16_t i) { std::cout << i << std::endl;
-        // });
 
 
         for (size_t j = 0; j < OutSz; j += Lanes(D16{}) * UNROLL) {
@@ -237,8 +243,6 @@ struct Accumulator
         }
 
 
-        // std::ranges::for_each(l1_out | std::views::take(10), [] (int16_t i) { std::cout << i << std::endl; });
-
         for (int i = 0; i < L2Sz; ++i)
         {
             HWY_ALIGN Vec<D32> acc = Zero(D32{});
@@ -260,8 +264,16 @@ struct Accumulator
             acc = Add(acc, Mul(v, w));
         }
         out += ReduceSum(D32{}, acc);
+        out >>= 16;
 
-        return out >> 16;
+        //std::cout << our_psqt_ptr[0] << " " << their_psqt_ptr[0] << std::endl;
+        for (int i = 0; i < PsqtOutSz; i++)
+        {
+            out += our_psqt_ptr[i] / 2;
+            out -= their_psqt_ptr[i] / 2;
+        }
+
+        return out;
     }
 
   private:
@@ -279,13 +291,16 @@ struct Accumulator
     void refresh_acc(const Color view, const FeatureTransformer::RetT& features)
     {
         auto& acc = (view == WHITE ? white_accumulator : black_accumulator);
+        auto& psqt_acc = (view == WHITE ? white_psqt : black_psqt);
+
 
         std::memcpy(acc.data(), g_ft_biases, OutSz * sizeof(int16_t));
+        std::memcpy(psqt_acc.data(), g_psqt_biases, PsqtOutSz * sizeof(int16_t));
 
         using D                         = ScalableTag<int16_t>;
         alignas(64) auto v_accumulators = std::array<decltype(Load(D{}, acc.data())), UNROLL>{};
 
-        auto* HWY_RESTRICT acc_ptr = static_cast<int16_t*>(HWY_ASSUME_ALIGNED(acc.data(), 64));
+        auto acc_ptr = ALIGN_PTR(int16_t, acc.data());
 
         for (size_t i = 0; i < OutSz; i += UNROLL * Lanes(D{}))
         {
@@ -312,6 +327,14 @@ struct Accumulator
                 if (i + u * Lanes(D{}) < OutSz)
                     Store(v_accumulators[u], D{}, &acc_ptr[i + u * Lanes(D{})]);
             }
+
+        }
+        for (const auto f : features)
+        {
+            for (int j = 0; j < PsqtOutSz; j++)
+            {
+                psqt_acc[j] += g_psqt_weights[f * PsqtOutSz + j];
+            }
         }
     }
 
@@ -321,8 +344,13 @@ struct Accumulator
     {
         auto& acc  = (view == WHITE ? white_accumulator : black_accumulator);
         auto& prev = (view == WHITE ? previous.white_accumulator : previous.black_accumulator);
+        auto& psqt_acc = (view == WHITE ? white_psqt : black_psqt);
+        auto& prev_psqt_acc = (view == WHITE ? previous.white_psqt : previous.black_psqt);
+
 
         std::memcpy(acc.data(), prev.data(), OutSz * sizeof(int16_t));
+        std::memcpy(psqt_acc.data(), prev_psqt_acc.data(), PsqtOutSz * sizeof(int16_t));
+
 
         using D                         = ScalableTag<int16_t>;
         alignas(64) auto v_accumulators = std::array<decltype(Load(D{}, acc.data())), UNROLL>{};
@@ -367,8 +395,24 @@ struct Accumulator
                     Store(v_accumulators[u], D{}, &acc_ptr[i + u * Lanes(D{})]);
             }
         }
+        for (const auto f : add)
+        {
+            for (int j = 0; j < PsqtOutSz; j++)
+            {
+                psqt_acc[j] += g_psqt_weights[f * PsqtOutSz + j];
+            }
+        }
+        for (const auto f : sub)
+        {
+            for (int j = 0; j < PsqtOutSz; j++)
+            {
+                psqt_acc[j] -= g_psqt_weights[f * PsqtOutSz + j];
+            }
+        }
     }
 };
+
+#undef ALIGN_PTR
 
 HWY_AFTER_NAMESPACE();
 

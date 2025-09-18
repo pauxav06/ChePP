@@ -53,6 +53,9 @@ Makefile
 *.xcworkspace
 xcuserdata/
 
+network_net.h
+network_net.cpp
+
 *.log
 
 .DS_Store

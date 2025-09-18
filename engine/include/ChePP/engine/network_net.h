@@ -1,8 +1,10 @@
 #pragma once
 #include <cstdint>
 
-alignas(64) extern int16_t g_ft_weights[12582912];
+alignas(64) extern int16_t g_ft_weights[25165824];
 alignas(64) extern int16_t g_ft_biases[1024];
+alignas(64) extern int16_t g_psqt_weights[24576];
+alignas(64) extern int16_t g_psqt_biases[1];
 alignas(64) extern int16_t g_l1_weights[32768];
 alignas(64) extern int32_t g_l1_biases[16];
 alignas(64) extern int16_t g_l2_weights[512];
