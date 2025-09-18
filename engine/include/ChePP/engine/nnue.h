@@ -135,7 +135,7 @@ struct FeatureTransformer
             relative_piece_square = relative_piece_square.flipped_vertically();
         }
         // int piece_idx = chess::type_of(piece) == chess::KING ? 0 : 1 + chess::type_of(piece) * 2 + (chess::color_of(piece) == view ? 1 : 0);
-        int piece_idx = piece.type().value() * 2 + (piece.color() == view ? 1 : 0);
+        int piece_idx = piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
         return king_square_index(relative_king_square) + relative_piece_square.value() * 32 + piece_idx * 32 * 64;
     }
 
@@ -153,7 +153,7 @@ using namespace hwy::HWY_NAMESPACE;
 struct Accumulator
 {
     static constexpr auto OutSz = 1024;
-    static constexpr auto PsqtOutSz = 1;
+    static constexpr auto PsqtOutSz = 8;
     static constexpr auto L1Sz  = 16;
     static constexpr auto L2Sz  = 32;
 
@@ -167,6 +167,8 @@ struct Accumulator
     HWY_ALIGN PsqtT white_psqt{};
     HWY_ALIGN PsqtT black_psqt{};
 
+    size_t bucket;
+
 
 
   public:
@@ -177,12 +179,15 @@ struct Accumulator
         refresh_acc(WHITE, wadd);
         const auto [badd, brem] = FeatureTransformer::get_features(pos, pos, BLACK, true);
         refresh_acc(BLACK, badd);
+        bucket = (pos.occupancy().popcount() - 1) / 4;
     }
 
     explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev)
     {
         update(acc_prev, pos_cur, pos_prev, WHITE);
         update(acc_prev, pos_cur, pos_prev, BLACK);
+        bucket = (pos_cur.occupancy().popcount() - 1) / 4;
+
     }
 
     template <size_t UNROLL = 4>
@@ -268,12 +273,10 @@ struct Accumulator
 
         //std::cout << our_psqt_ptr[0] << " " << their_psqt_ptr[0] << std::endl;
         int32_t psqt_acc = 0;
-        for (int i = 0; i < PsqtOutSz; i++)
-        {
-            psqt_acc += our_psqt_ptr[i] / 2;
-            psqt_acc -= their_psqt_ptr[i] / 2;
-        }
+        psqt_acc += our_psqt_ptr[bucket] / 2;
+        psqt_acc -= their_psqt_ptr[bucket] / 2;
         psqt_acc = (psqt_acc * 100 >> 8);
+        //std::cout << psqt_acc << " " << out << std::endl;
 
         return out + psqt_acc;
     }
