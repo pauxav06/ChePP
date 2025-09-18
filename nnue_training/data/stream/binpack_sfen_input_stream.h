@@ -160,6 +160,10 @@ struct FilteredBinpackSfenInputStream : StreamSource<binpack::TrainingDataEntry>
                 buffers[i].reserve(buf_size);
                 in.fill(buffers[i], buf_size);
                 eof.store(in.eof(), std::memory_order_release);
+                if (in.eof())
+                {
+                    stop.store(true, std::memory_order_release);
+                }
                 ready[i] = true;
             }
             i = (i + 1) % n_buffers;
