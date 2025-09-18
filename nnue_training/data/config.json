@@ -1,0 +1,13 @@
+{
+  "inputs": ["datasets/test80-2024_binpacks/test80-2024-01-jan-2tb7p.min-v2.v6",
+    "datasets/test80-2024_binpacks/test80-2024-02-feb-2tb7p.min-v2.v6",
+    "datasets/test80-2024_binpacks/test80-2024-03-mar-2tb7p.min-v2.v6",
+    "datasets/test80-2024_binpacks/test80-2024-04-apr-2tb7p.min-v2.v6",
+    "datasets/test80-2024_binpacks/test80-2024-05-may-2tb7p.min-v2.v6",
+    "datasets/test80-2024_binpacks/test80-2024-06-jun-2tb7p.min-v2.v6"
+  ],
+  "n_threads": 16,
+  "train_out_dir": "datasets/train",
+  "val_out_dir": "datasets/val",
+  "val_ratio": 0.1
+}

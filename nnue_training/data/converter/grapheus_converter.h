@@ -5,12 +5,23 @@
 #ifndef CHEPP_GRAPHEUS_CONVERTER_H
 #define CHEPP_GRAPHEUS_CONVERTER_H
 
-#include "binpack_converter.h"
+#include "../../../engine/include/ChePP/engine/types.h"
 #include "../binpack/nnue_training_data_formats.h"
 
 #include <cstdint>
 
+
+
+
 namespace GrapheusData {
+
+struct Header {
+    uint64_t entry_count {};
+    char     label_1[128] {};
+    char     label_2[128] {};
+    char     label_3[1024] {};
+};
+
 
 struct Position {
 
@@ -35,13 +46,6 @@ struct Position {
         }
 
         uint64_t bb[2] {0xCCCCCCCCCCCCCCCC, 0xCCCCCCCCCCCCCCCC};
-    };
-
-    struct Header {
-        uint64_t entry_count {};
-        char     label_1[128] {};
-        char     label_2[128] {};
-        char     label_3[1024] {};
     };
 
     struct PositionMeta {
@@ -84,9 +88,14 @@ struct Position {
     Result       res;
 };
 
-}    // namespace GrapheusData
 
-inline BinpackConverter grapheus_converter { GrapheusData::Position::from_binpack_entry};
+static Header make_header(const std::size_t size) {
+    Header header {};
+    header.entry_count = size;
+    return header;
+}
+
+}    // namespace GrapheusData
 
 
 #endif // CHEPP_GRAPHEUS_CONVERTER_H
