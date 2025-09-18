@@ -1,5 +1,7 @@
-int16 12582912 g_ft_weights
+int16 25165824 g_ft_weights
 int16 1024 g_ft_biases
+int16 24576 g_psqt_weights
+int16 1 g_psqt_biases
 int16 32768 g_l1_weights
 int32 16 g_l1_biases
 int16 512 g_l2_weights
