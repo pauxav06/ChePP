@@ -343,6 +343,7 @@ public:
 
     void go(const std::string& cmd)
     {
+        if (m_state != Waiting) return;
         TimeManager::Constraints constraints;
         std::istringstream iss(cmd);
         std::string token;
@@ -368,10 +369,8 @@ public:
         m_handler.set(m_params.threads, tm, m_pos.init_pos, m_pos.moves);
         m_worker = std::jthread([&]()
         {
-            m_handler.start( [this] ()
-            {
-                m_state = Waiting;
-            });
+            m_handler.start();
+            m_state = Waiting;
         });
 
         m_state = Searching;
@@ -387,10 +386,7 @@ public:
     void stop()
     {
         m_handler.stop_all();
-        while (!m_worker.joinable())
-        {
-        }
-        m_worker.join();
+        if (m_worker.joinable()) m_worker.join();
     }
 
     int loop() {

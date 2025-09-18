@@ -91,6 +91,8 @@ struct Position
 
 
     [[nodiscard]] int see(Move move) const;
+    bool              is_insufficient_material() const;
+
   private:
     // copied
     zobrist_t                      m_hash{};
@@ -706,6 +708,49 @@ inline int Position::see(const Move move) const
     return gains.empty() ? 0 : gains[0];
 }
 
+inline bool Position::is_insufficient_material() const
+{
+    if (occupancy(QUEEN, ROOK, PAWN) != Bitboard::empty())
+        return false;
+
+    int white_bishops = occupancy(WHITE, BISHOP).popcount();
+    int black_bishops = occupancy(BLACK, BISHOP).popcount();
+    int white_knights = occupancy(WHITE, KNIGHT).popcount();
+    int black_knights = occupancy(BLACK, KNIGHT).popcount();
+
+
+    int total_minor = white_bishops + black_bishops + white_knights + black_knights;
+
+    if (total_minor == 0)
+        return true;
+
+    if (total_minor == 1 && (white_bishops + black_bishops) == 1)
+        return true;
+
+    if (total_minor == 1 && (white_knights + black_knights) == 1)
+        return true;
+
+    // King and Bishop vs King and Bishop (on same color)
+    if (total_minor == 2 && white_bishops == 1 && black_bishops == 1)
+    {
+        auto get_bishop_square_color = [&](Color color) {
+            const Bitboard bb = occupancy(color, BISHOP);
+            if (bb) {
+                Square sq = Square{bb.get_lsb()};
+                return (sq.file().value() + sq.rank().value()) % 2;
+            }
+            return -1;
+        };
+
+        int white_color = get_bishop_square_color(WHITE);
+        int black_color = get_bishop_square_color(BLACK);
+        return white_color != -1 && white_color == black_color;
+    }
+
+    return false;
+}
+
+
 struct Positions
 {
     using PosRef      = Position&;
@@ -780,7 +825,7 @@ struct Positions
     [[nodiscard]] bool is_repetition() const
     {
         if (last().halfmove_clock() >= 100) return true;
-        const auto view = m_hashes | std::views::reverse | std::views::take(last().halfmove_clock());
+        const auto view = m_hashes | std::views::reverse | std::views::take(last().halfmove_clock() + 1);
         return std::ranges::any_of(view, [&](const auto h) { return h.second >= 3; });
     }
 
