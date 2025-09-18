@@ -267,13 +267,15 @@ struct Accumulator
         out >>= 16;
 
         //std::cout << our_psqt_ptr[0] << " " << their_psqt_ptr[0] << std::endl;
+        int32_t psqt_acc = 0;
         for (int i = 0; i < PsqtOutSz; i++)
         {
-            out += our_psqt_ptr[i] / 2;
-            out -= their_psqt_ptr[i] / 2;
+            psqt_acc += our_psqt_ptr[i] / 2;
+            psqt_acc -= their_psqt_ptr[i] / 2;
         }
+        psqt_acc = (psqt_acc * 100 >> 8);
 
-        return out;
+        return out + psqt_acc;
     }
 
   private:

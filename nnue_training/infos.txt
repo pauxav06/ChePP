@@ -1,0 +1,6 @@
+18/9
+
+Current feature uses 32 king buckets and 12 piece buckets (including kings)
+Accum is 1024 ans psqt is 1. Experimenting with 2 phase training psqt for ~10 epochs and then full network
+The results are very good! Will try multiple phase training when implementing the mixture of experts.
+Hopefully it will stabilise the accumulator and prevent it from receiving contradictory gradients from different experts

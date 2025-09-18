@@ -542,7 +542,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
 
         // Some pruning
-        if (!is_root && best_eval > MATED)
+        if (!is_root && best_eval > MATED && !first_move)
         {
             //Pruning for quiets
 
