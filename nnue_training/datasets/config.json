@@ -15,8 +15,19 @@
   "files": [
     "test78-2022-01-02-janfeb-16tb7p.min.binpack.zst",
     "test78-2022-01-to-05-jantomay-16tb7p.v6-dd.min.binpack.zst",
-    "test78-2022-06-to-09-juntosep-16tb7p.v6-dd.binpack.zst",
     "test78-2022-06-to-09-juntosep-16tb7p.v6-dd.min.binpack.zst"
-  ]
+    ]
+  },
+  {
+    "repo": "linrock/test80-2022",
+    "files" : [
+      "test80-2022-04-apr-16tb7p.min.binpack.zst",
+      "test80-2022-06-jun-16tb7p.v6-dd.min.binpack.zst",
+      "test80-2022-07-jul-16tb7p.v6-dd.min.binpack.zst",
+      "test80-2022-08-aug-16tb7p.v6-dd.min.binpack.zst",
+      "test80-2022-09-sep-16tb7p.v6-dd.min.binpack.zst",
+      "test80-2022-11-nov-16tb7p.v6-dd.min.binpack.zst",
+      "test80-2022-12-dec-16tb7p.v6-sk20.min.binpack.zst"
+    ]
   }
 ]
