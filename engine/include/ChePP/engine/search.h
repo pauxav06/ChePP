@@ -416,7 +416,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // the adjustment of the search score
     if (!is_root && !is_pv && !in_check && depth < 9 && static_eval >= beta + ((depth - is_improving) * 77 - ss().prev()->eval/400))
     {
-        return beta;
+        return static_eval;
     }
 
     // null move pruning
@@ -570,6 +570,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 }
 
                 //Continuation pruning.
+                // Weird but slos down the search at least in some position
                 if (false && lmrDepth < 3 && m_history.get_hist_score(ss(), m) < -4'000 * depth)
                 {
                     move_idx++;
@@ -591,7 +592,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 }
 
                 // SEE pruning for quiets. Approximate of the rice implementation, need to change see computation
-                if (depth <= 8 && pos.see(m) + 70 * depth <  0)
+                if (depth <= 8 && is_captured && pos.see(m) + 70 * depth <  0)
                 {
                     move_idx++;
                     first_move = false;
@@ -601,7 +602,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             } else
             {
                 // SEE pruning but for noisy
-                if (depth <= 6 && pos.see(m) + 15 * depth * depth <  0)
+                if (depth <= 6 && is_captured && pos.see(m) + 15 * depth * depth <  0)
                 {
                     move_idx++;
                     first_move = false;
@@ -625,7 +626,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         // Extend the search if the move comes from TT.
         if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() &&
             tt_hit->m_bound == LOWER && tt_hit->m_depth >= depth - 3 &&
-            std::abs(read_tt_score(tt_hit->m_score, ply())) < MATE_IN_MAX_PLY)
+            std::abs(read_tt_score(tt_hit->m_score, ply())) < MATE_IN_MAX_PLY && moves.size() > 1)
         {
             int tt_score = read_tt_score(tt_hit->m_score, ply());
             int singular_beta = tt_score - depth;
