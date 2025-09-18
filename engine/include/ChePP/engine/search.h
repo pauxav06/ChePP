@@ -785,6 +785,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         m_tm.send_update_info(info);
     }
 
+    assert(local_best == Move::none() && local_best != Move::null());
     bool best_valid = !m_tm.should_stop() && local_best != Move::none() && ss().excluded == Move::none();
     if (is_root && best_valid)
         bestMove = local_best;
