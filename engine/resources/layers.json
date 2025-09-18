@@ -1,0 +1,12 @@
+[
+  { "type": "int16", "size": 25165824, "name": "g_ft_weights" },
+  { "type": "int16", "size": 1024,     "name": "g_ft_biases" },
+  { "type": "int16", "size": 24576,    "name": "g_psqt_weights" },
+  { "type": "int16", "size": 1,        "name": "g_psqt_biases" },
+  { "type": "int16", "size": 32768,    "name": "g_l1_weights" },
+  { "type": "int32", "size": 16,       "name": "g_l1_biases" },
+  { "type": "int16", "size": 512,      "name": "g_l2_weights" },
+  { "type": "int32", "size": 32,       "name": "g_l2_biases" },
+  { "type": "int16", "size": 32,       "name": "g_out_weights" },
+  { "type": "int32", "size": 1,        "name": "g_out_bias" }
+]
