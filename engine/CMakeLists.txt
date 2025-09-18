@@ -63,9 +63,11 @@ endif()
 set(NETWORK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/resources/latest.net)
 set(NETWORK_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/ChePP/engine/network_net.h)
 set(NETWORK_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/network_net.cpp)
-set(NETWORK_CFG ${CMAKE_CURRENT_SOURCE_DIR}/resources/format.txt)
+set(NETWORK_CFG ${CMAKE_CURRENT_SOURCE_DIR}/resources/layers.json)
 
 add_executable(bin2h ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bin2h.cpp)
+target_link_libraries(bin2h PRIVATE nlohmann_json::nlohmann_json)
+
 
 add_custom_command(
         OUTPUT ${NETWORK_HEADER} ${NETWORK_SOURCE}

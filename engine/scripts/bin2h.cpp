@@ -9,6 +9,9 @@
 #include <unordered_map>
 #include <vector>
 
+#include <nlohmann/json.hpp>
+using json = nlohmann::json;
+
 enum class LayerType : uint8_t {
     UINT8=1, INT8, UINT16, INT16, UINT32, INT32, UINT64, INT64, FLOAT, DOUBLE
 };
@@ -107,25 +110,31 @@ std::unique_ptr<LayerBase> make_layer(const LayerType t, uint64_t size, const st
 
 int main(int argc,char**argv){
     if(argc!=5){
-        std::cerr<<"Usage: "<<argv[0]<<" <raw.bin> <config.txt> <output.h> <output.cpp>\n";
+        std::cerr<<"Usage: "<<argv[0]<<" <raw.bin> <config.json> <output.h> <output.cpp>\n";
         return 1;
     }
 
-    std::ifstream cfg(argv[2]);
     std::ifstream raw(argv[1],std::ios::binary);
     std::ofstream h(argv[3]);
     std::ofstream cpp(argv[4]);
 
-    if(!cfg || !raw || !h || !cpp){ std::cerr<<"Failed to open files\n"; return 1; }
+    if(!raw || !h || !cpp){ std::cerr<<"Failed to open files\n"; return 1; }
+
+    // Parse JSON
+    std::ifstream cfg(argv[2]);
+    if(!cfg){ std::cerr<<"Failed to open JSON config\n"; return 1; }
+    json j;
+    cfg >> j;
 
     h << "#pragma once\n#include <cstdint>\n\n";
     cpp << "#include \"" << argv[3] << "\"\n\n";
 
     std::vector<std::unique_ptr<LayerBase>> layers;
-    std::string type_str, name;
-    uint64_t size;
+    for(const auto& entry : j){
+        std::string type_str = entry.at("type");
+        uint64_t size = entry.at("size");
+        std::string name = entry.at("name");
 
-    while(cfg>>type_str>>size>>name){
         LayerType t = parse_type(type_str);
         layers.push_back(make_layer(t,size,name));
     }
