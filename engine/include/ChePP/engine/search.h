@@ -400,13 +400,16 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     if (in_check)
     {
         is_improving = false;
-    } else if (ply() >=2 )
-    {
-        is_improving = ss().prev()->prev()->eval > static_eval;
-    } else if (ply() >= 4)
+    }
+    else if (ply() >= 4)
     {
         is_improving = ss().prev()->prev()->prev()->prev()->eval > static_eval;
-    } else
+    }
+    else if (ply() >=2 )
+    {
+        is_improving = ss().prev()->prev()->eval > static_eval;
+    }
+    else
     {
         is_improving = true;
     }
