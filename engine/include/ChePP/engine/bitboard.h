@@ -428,41 +428,46 @@ constexpr Bitboard mask_nb(const Bitboard mask, const uint64_t n)
 template <PieceType pc>
 magics_t<pc>::magics_t()
 {
-    constexpr uint64_t               MAX_TRIES{UINT64_MAX};
-    constexpr uint64_t               MAX_COMB{4096};
-    std::array<Bitboard, MAX_COMB>   cached_blockers{};
-    std::array<Bitboard, MAX_COMB>   cached_attacks{};
+    constexpr uint64_t MAX_TRIES{UINT64_MAX};
     typename magic_val_t::index_type offset{0};
+
     for (auto sq = A1; sq <= H8; ++sq)
     {
-        const typename magic_val_t::mask_type  mask{relevancy_mask<pc>(sq)};
-        const int                              nb_ones{mask.popcount()};
-        const int                              combinations{1 << nb_ones};
+        const typename magic_val_t::mask_type mask{relevancy_mask<pc>(sq)};
+        const int nb_ones{mask.popcount()};
+        const int combinations{1 << nb_ones};
         const typename magic_val_t::shift_type shift{64 - nb_ones};
-        typename magic_val_t::magic_type       magic{0};
-        assert(combinations <= MAX_COMB && "to many blockers variations, check relevancy mask");
+        typename magic_val_t::magic_type magic{0};
+
+        std::vector<Bitboard> cached_blockers(combinations);
+        std::vector<Bitboard> cached_attacks(combinations);
+
         for (int comb = 0; comb < combinations; comb++)
         {
-            cached_blockers.at(comb) = mask_nb(mask, comb);
-            cached_attacks.at(comb)  = ray<pc>(sq, cached_blockers.at(comb));
+            cached_blockers[comb] = mask_nb(mask, comb);
+            cached_attacks[comb]  = ray<pc>(sq, cached_blockers[comb]);
         }
+
         for (uint64_t tries = 1;; tries++)
         {
-            std::array<bool, MAX_COMB> tries_map{};
-            bool                       fail{false};
+            std::vector<bool> tries_map(combinations, false);
+            bool fail{false};
             magic = random_magic();
+
             for (int c = 0; c < combinations; c++)
             {
-                const typename magic_val_t::index_type index = (cached_blockers.at(c).value() * magic) >> shift;
-                if (const Bitboard cur = attacks.at(offset + index);
-                    tries_map.at(index) && (cur != cached_attacks.at(c)))
+                const typename magic_val_t::index_type index =
+                    (cached_blockers[c].value() * magic) >> shift;
+
+                if (tries_map[index] && (attacks.at(offset + index) != cached_attacks[c]))
                 {
                     fail = true;
                     break;
                 }
-                attacks.at(offset + index) = cached_attacks.at(c);
-                tries_map.at(index)        = true;
+                attacks.at(offset + index) = cached_attacks[c];
+                tries_map[index]           = true;
             }
+
             if (!fail)
             {
                 break;
@@ -472,6 +477,7 @@ magics_t<pc>::magics_t()
                 assert(0 && "failed to find magic");
             }
         }
+
         magic_vals.at(sq).offset = offset;
         magic_vals.at(sq).magic  = magic;
         magic_vals.at(sq).mask   = mask;
@@ -479,6 +485,7 @@ magics_t<pc>::magics_t()
         offset += combinations;
     }
 }
+
 
 template <PieceType pc>
 Bitboard attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE)
