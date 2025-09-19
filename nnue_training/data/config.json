@@ -1,10 +1,13 @@
 {
-  "inputs": ["datasets/test80-2024_binpacks/test80-2024-01-jan-2tb7p.min-v2.v6",
-    "datasets/test80-2024_binpacks/test80-2024-02-feb-2tb7p.min-v2.v6",
-    "datasets/test80-2024_binpacks/test80-2024-03-mar-2tb7p.min-v2.v6",
-    "datasets/test80-2024_binpacks/test80-2024-04-apr-2tb7p.min-v2.v6",
-    "datasets/test80-2024_binpacks/test80-2024-05-may-2tb7p.min-v2.v6",
-    "datasets/test80-2024_binpacks/test80-2024-06-jun-2tb7p.min-v2.v6"
+  "inputs": ["datasets/binpacks/test80-2024-01-jan-2tb7p.min-v2.v6",
+    "datasets/binpacks/test80-2024-02-feb-2tb7p.min-v2.v6",
+    "datasets/binpacks/test80-2024-03-mar-2tb7p.min-v2.v6",
+    "datasets/binpacks/test80-2024-04-apr-2tb7p.min-v2.v6",
+    "datasets/binpacks/test80-2024-05-may-2tb7p.min-v2.v6",
+    "datasets/binpacks/test80-2024-06-jun-2tb7p.min-v2.v6",
+    "datasets/binpacks/test78-2022-01-02-janfeb-16tb7p.min",
+    "datasets/binpacks/test78-2022-01-to-05-jantomay-16tb7p.v6-dd.min",
+    "datasets/binpacks/test78-2022-06-to-09-juntosep-16tb7p.v6-dd"
   ],
   "n_threads": 16,
   "train_out_dir": "datasets/train",
