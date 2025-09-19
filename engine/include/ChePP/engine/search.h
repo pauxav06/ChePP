@@ -37,7 +37,6 @@ struct SearchThread
         uint64_t tb_hits;
     };
 
-
     explicit SearchThread(const int id, TimeManager& tm, const Position& pos, std::span<Move> moves)
         : m_thread_id(id), m_tm(tm), m_positions(pos, moves), m_accumulators(m_positions.last()), m_ss(MAX_PLY + 1), m_root_refutation_time()
     {
@@ -542,7 +541,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
 
         // Some pruning
-        if (!is_root && best_eval > MATED && !first_move)
+        if (!is_root && best_eval > MATED && local_best != Move::none())
         {
             //Pruning for quiets
 
@@ -698,7 +697,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             search_depth -= reduction;
 
             // do the search at reduced depth (picking up from where the extensions left us)
-            score = -Negamax(search_depth - reduction, -alpha -1, -alpha);
+            score = -Negamax(search_depth - 1, -alpha -1, -alpha);
 
             // go full depth if score beat alpha
             fullsearch = score > alpha && reduction != 1;
@@ -763,6 +762,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             {
                 m_history.update_capture_hist(ss(), captures, m, depth );
             }
+            assert(local_best != Move::none());
             break;
         }
 
