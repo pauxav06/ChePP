@@ -681,7 +681,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // LMR. Moves that are late enough are searched at reduced depth depending on factors.
         // If they beat alpha, they are researched full depth but reduced window.
-        if (depth >= 3 && !in_check && move_idx > 2 * (1 + is_pv) &&  (false && !allow_singular_extension) /* TODO should we reduce singular moves ?) */)
+        if (depth >= 3 && !in_check && move_idx > 2 * (1 + is_pv) &&  (true || !allow_singular_extension) /* TODO should we reduce singular moves ?) */)
         {
             int reduction = std::min(lmr_table(is_quiet)[depth][move_idx], depth - 1);
 
@@ -690,7 +690,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             //Should add a reduction for quiet moves that lose material , e.g if the quiet move leaves us open to a take
             //reduction += is_quiet;
 
-            //reduction -= m_history.get_hist_score(ss(), m) / 4'000; // Reduce or increase depending on history score /* TODO fix scaling */
+            //reduction -= m_history.get_hist_score(ss(), m) / 4'000; // Reduce or increase depending on history score /* TODO fix scaling  rn it just sets it to 1 or max*/
             reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
 
             //adjustment to avoid dropping into a Qsearch.
