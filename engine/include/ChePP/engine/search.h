@@ -625,6 +625,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         bool negative_extension = false;
         Move tt_move = tt_hit ? tt_hit->m_move : Move::none();
 
+
         // Extend the search if the move comes from TT.
         if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() &&
             tt_hit->m_bound == LOWER && tt_hit->m_depth >= depth - 3 &&
@@ -680,7 +681,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // LMR. Moves that are late enough are searched at reduced depth depending on factors.
         // If they beat alpha, they are researched full depth but reduced window.
-        if (depth >= 3 && !in_check && move_idx > 2 * (1 + is_pv))
+        if (depth >= 3 && !in_check && move_idx > 2 * (1 + is_pv) &&  (false && !allow_singular_extension) /* TODO should we reduce singular moves ?) */)
         {
             int reduction = std::min(lmr_table(is_quiet)[depth][move_idx], depth - 1);
 
