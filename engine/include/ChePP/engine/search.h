@@ -653,7 +653,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             {
                 return tt_score;
             }
-            else if (tt_score <= singular_score || !is_pv)
+            else if (tt_score <= singular_score || !is_pv) /* TODO should we negative extend ALL non PV nodes? */
             {
                 negative_extension = true;
             }
