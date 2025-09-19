@@ -253,8 +253,8 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
     int alpha, beta;
 
     if (depth <= 7) {
-        alpha = -INF;
-        beta  = +INF;
+        alpha = -INF_SCORE;
+        beta  = +INF_SCORE;
         auto eval = Negamax(depth, alpha, beta);
 
         if (depth > 1) {
@@ -276,8 +276,8 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
             break;
 
         window *= 2;
-        alpha = eval - window;
-        beta  = eval + window;
+        alpha = std::clamp(eval - window, -INF_SCORE, INF_SCORE);
+        beta  = std::clamp(eval + window, -INF_SCORE, INF_SCORE);
 
         eval = Negamax(depth, alpha, beta);
     }
@@ -291,9 +291,9 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 inline auto store_tt_score(const int score, const int ply)
 {
     if (score >= MATE_IN_MAX_PLY)
-        return score + ply;
-    if (score <= -MATE_IN_MAX_PLY)
         return score - ply;
+    if (score <= MATED_IN_MAX_PLY)
+        return score + ply;
     return score;
 };
 
@@ -301,7 +301,7 @@ inline auto read_tt_score(const int score, const int ply)
 {
     if (score >= MATE_IN_MAX_PLY)
         return score - ply;
-    if (score <= -MATE_IN_MAX_PLY)
+    if (score <= MATED_IN_MAX_PLY)
         return score + ply;
     return score;
 };
@@ -340,7 +340,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     {
         if (is_draw())
         {
-           // std::cout << "draw bz rep or insufficient material" << std::endl;
+            //std::cout << "draw bz rep or insufficient material" << std::endl;
             return 0;
         }
 
@@ -389,6 +389,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
 
     int static_eval = in_check? 0 : tt_hit ? tt_hit->m_score : evaluate();
+    assert(static_eval > -INF);
 
     ss().eval = static_eval;
 
@@ -517,6 +518,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     bool     first_move  = true;
     int      move_idx    = 0;
     bool     skip_quiets = false;
+    int score = -INF_SCORE;
+
 
     MoveList quiets{};
     MoveList captures{};
@@ -676,7 +679,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         do_move(m);
 
-        int score;
         bool fullsearch = !is_pv || move_idx > 0;
 
         // LMR. Moves that are late enough are searched at reduced depth depending on factors.
@@ -699,6 +701,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
             // do the search at reduced depth (picking up from where the extensions left us)
             score = -Negamax(search_depth - 1, -alpha -1, -alpha);
+            assert(score != -INF);
 
             // go full depth if score beat alpha
             fullsearch = score > alpha && reduction != 1;
@@ -714,12 +717,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         if (fullsearch)
         {
             score = -Negamax(search_depth-1, -alpha -1, -alpha);
+            assert(score != -INF);
         }
 
         // PVS
         if (is_pv && (first_move || (score > alpha && score < beta)))
         {
             score = -Negamax(search_depth-1, -beta, -alpha);
+            assert(score != -INF);
         }
 
         undo_move();
@@ -786,6 +791,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         m_tm.send_update_info(info);
     }
 
+    if (local_best == Move::none())
+    {
+        std::cout << std::format("local best {}", best_eval) << std::endl;
+        throw new std::runtime_error("");
+    }
+
     assert(local_best != Move::none() && local_best != Move::null());
     bool best_valid = !m_tm.should_stop() && local_best != Move::none() && ss().excluded == Move::none();
     if (is_root && best_valid)
@@ -804,6 +815,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     if (best_valid)
         g_tt.store(pos.hash(), depth, store_tt_score(best_eval, ply()), bound, local_best);
 
+    assert(best_eval > -INF && best_eval < INF);
     return best_eval;
 }
 
@@ -830,7 +842,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
         return 0;
 
     const MoveList moves = gen_legal(pos);
-    if (false && moves.empty())
+    if (moves.empty())
     {
         if (pos.checkers(pos.side_to_move()))
         {
@@ -852,6 +864,8 @@ inline int SearchThread::QSearch(int alpha, int beta)
     {
         const tt_entry_t& e     = *tt_hit;
         const int         score = read_tt_score(e.m_score, ply());
+        if (score <= -INF  || score >= INF) std::cout << e.m_score << " " << score << std::endl;
+        assert(score > -INF && score < INF);
         if (e.m_bound == EXACT)
             return score;
         if (e.m_bound == LOWER && score >= alpha)
@@ -863,6 +877,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     const int stand_pat = evaluate();
     ss().eval = stand_pat;
 
+    //assert(beta > -INF && beta < INF);
     if (stand_pat >= beta)
         return beta;
     if (stand_pat > alpha)
@@ -902,6 +917,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
         if (alpha >= beta)
             break;
     }
+    assert(best_eval > -INF && best_eval < INF);
     return best_eval;
 }
 
