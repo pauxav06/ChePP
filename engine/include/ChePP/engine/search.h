@@ -288,6 +288,7 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 }
 
 
+/* TODO IMPORTANT check signs, caused faulty mate reports*/
 inline auto store_tt_score(const int score, const int ply)
 {
     if (score >= MATE_IN_MAX_PLY)
