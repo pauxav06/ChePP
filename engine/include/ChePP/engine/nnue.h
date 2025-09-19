@@ -197,6 +197,13 @@ struct Accumulator
         const auto* HWY_RESTRICT their_acc_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_accumulator.data() : white_accumulator.data());
         const auto* HWY_RESTRICT our_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? white_psqt.data() : black_psqt.data());
         const auto* HWY_RESTRICT their_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_psqt.data() : white_psqt.data());
+        const auto* HWY_RESTRICT l1_weights_ptr = ALIGN_PTR(int16_t, &g_l1_weights[bucket * OutSz * L1Sz * 2]);
+        const auto* HWY_RESTRICT l2_weights_ptr = ALIGN_PTR(int16_t, &g_l2_weights[bucket * L1Sz * L2Sz]);
+        const auto* HWY_RESTRICT out_weights_ptr = ALIGN_PTR(int16_t, &g_out_weights[bucket * L2Sz]);
+        const auto* HWY_RESTRICT l1_biases_ptr = ALIGN_PTR(int32_t, &g_l1_biases[bucket * L1Sz]);
+        const auto* HWY_RESTRICT l2_biases_ptr = ALIGN_PTR(int32_t, &g_l2_biases[bucket * L2Sz]);
+        const auto* HWY_RESTRICT out_biases_ptr = ALIGN_PTR(int32_t, &g_out_bias[bucket]);
+
 
         using D32 = ScalableTag<int32_t>;
         using D16 = ScalableTag<int16_t>;
@@ -206,10 +213,12 @@ struct Accumulator
 
 
         HWY_ALIGN std::array<int32_t, L1Sz> l1_out{};
-        std::memcpy(l1_out.data(), g_l1_biases, sizeof(g_l1_biases));
+        std::memcpy(l1_out.data(), l1_biases_ptr, sizeof(g_l1_biases) / 8);
         HWY_ALIGN std::array<int32_t, L2Sz> l2_out{};
-        std::memcpy(l2_out.data(), g_l2_biases, sizeof(g_l2_biases));
-        HWY_ALIGN int32_t out = g_out_bias[0];
+        std::memcpy(l2_out.data(), l2_biases_ptr, sizeof(g_l2_biases) / 8);
+        HWY_ALIGN int32_t out = out_biases_ptr[0];
+
+
 
 
         for (size_t j = 0; j < OutSz; j += Lanes(D16{}) * UNROLL) {
@@ -227,8 +236,8 @@ struct Accumulator
 
                 for (size_t u = 0; u < UNROLL; ++u) {
                     const size_t idx = j + u * Lanes(D16{});
-                    const Vec<D16> w_our   = Load(D16{}, &g_l1_weights[i * OutSz * 2 + idx]);
-                    const Vec<D16> w_their = Load(D16{}, &g_l1_weights[i * OutSz * 2 + idx + OutSz]);
+                    const Vec<D16> w_our   = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx]);
+                    const Vec<D16> w_their = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx + OutSz]);
 
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_our_block[u], w_our));
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_their_block[u], w_their));
@@ -254,7 +263,7 @@ struct Accumulator
             for (size_t j = 0; j < L1Sz; j += Lanes(HalfD16{}))
             {
                 const Vec<D32> v = Max(Load(D32{}, &l1_out[j]), Zero(D32{}));
-                const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &g_l2_weights[i * L1Sz + j]));
+                const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &l2_weights_ptr[i * L1Sz + j]));
                 acc = Add(acc, Mul(v, w));
             }
             l2_out[i] += ReduceSum(D32{}, acc);
@@ -265,7 +274,7 @@ struct Accumulator
         for (size_t j = 0; j < L2Sz; j += Lanes(HalfD16{}))
         {
             const Vec<D32> v = Max(Load(D32{}, &l2_out[j]), Zero(D32{}));
-            const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &g_out_weights[j]));
+            const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &out_weights_ptr[j]));
             acc = Add(acc, Mul(v, w));
         }
         out += ReduceSum(D32{}, acc);
