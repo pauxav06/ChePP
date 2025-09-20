@@ -80,7 +80,7 @@ struct SearchThread
     int32_t evaluate()
     {
         auto eval = m_accumulators.last().evaluate(m_positions.last().side_to_move());
-        eval      = std::clamp(eval, MATED_IN_MAX_PLY + 1, MATE_IN_MAX_PLY - 1);
+        eval      = std::clamp(eval, LOSS_TB + 1, WIN_TB - 1);
         eval -= eval * m_positions.last().halfmove_clock() / 101;
         return eval;
     }
@@ -322,29 +322,28 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         TimeManager::UpdateInfo info{};
         m_tm.update_time();
     }
+
+    if (depth <= 0)
+        return QSearch(alpha, beta);
+
+
     const Position&        pos = m_positions.last();
 
     const int  alpha_org = alpha;
     const bool is_root   = ply() == 0;
     const bool in_check  = pos.checkers(pos.side_to_move()).value();
 
+    if (!is_root && is_draw()) return 0;
+
     // increase depth if we are in check
     depth += in_check;
 
     // quiescence search supposed to prevent horizon effect
-    if (depth <= 0)
-        return QSearch(alpha, beta);
 
     m_infos.nodes++;
 
     if (!is_root)
     {
-        if (is_draw())
-        {
-            //std::cout << "draw bz rep or insufficient material" << std::endl;
-            return 0;
-        }
-
         if (ply() >= MAX_PLY)
         {
             return evaluate();
@@ -387,6 +386,27 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             }
         }
     }
+
+
+
+    if (!is_root && pos.occupancy().popcount() <= 7) {
+        auto wdl = pos.wdl_probe();
+        if (wdl != TB_RESULT_FAILED) {
+            m_infos.tb_hits++;
+
+            int score;
+            switch (wdl) {
+                case TB_LOSS: score = LOSS_TB + ply(); break;
+                case TB_DRAW: case TB_BLESSED_LOSS: case TB_CURSED_WIN: score = 0; break;
+                case TB_WIN:  score = WIN_TB - ply(); break;
+                default:          score = 0;
+            }
+
+            return score;
+        }
+    }
+
+
 
 
     int static_eval = in_check? 0 : tt_hit ? tt_hit->m_score : evaluate();
@@ -834,13 +854,15 @@ inline int SearchThread::QSearch(int alpha, int beta)
 
     const Position&  pos = m_positions.last();
 
-    //std::cout << positions().back() << evaluate() << " " << alpha << " " << beta  << std::endl;
-
     if (ply() >= MAX_PLY)
         return evaluate();
 
     if (is_draw())
         return 0;
+
+    //std::cout << positions().back() << evaluate() << " " << alpha << " " << beta  << std::endl;
+
+
 
     const MoveList moves = gen_legal(pos);
     if (moves.empty())
@@ -874,6 +896,25 @@ inline int SearchThread::QSearch(int alpha, int beta)
         if (e.m_bound == UPPER && score <= beta)
             return score;
     }
+
+
+    if (pos.occupancy().popcount() <= 7) {
+        auto wdl = pos.wdl_probe();
+        if (wdl != TB_RESULT_FAILED) {
+            m_infos.tb_hits++;
+
+            int score;
+            switch (wdl) {
+                case TB_LOSS: score = LOSS_TB + ply(); break;
+                case TB_DRAW: case TB_BLESSED_LOSS: case TB_CURSED_WIN: score = 0; break;
+                case TB_WIN:  score = WIN_TB - ply(); break;
+                default:          score = 0;
+            }
+
+            return score;
+        }
+    }
+
 
     const int stand_pat = evaluate();
     ss().eval = stand_pat;

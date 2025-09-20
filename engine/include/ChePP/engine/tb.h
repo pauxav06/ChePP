@@ -10,19 +10,19 @@
 #include <filesystem>
 #include <iostream>
 
-inline int init_tb(const std::string_view path)
+inline bool init_tb(const std::string_view path)
 {
     if (!std::filesystem::exists(path)) {
         std::cerr << "Tablebase path does not exist: " << path << "\n";
-        return 1;
+        return false;
     }
 
     if (tb_init(path.begin()))
     {
-        return 0;
+        return true;
     }
     std::cerr << "Tablebase init failed: " << path << "\n";
-    return 1;
+    return false;
 
 }
 
