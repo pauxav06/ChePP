@@ -927,6 +927,8 @@ constexpr int INVALID_SCORE = 32002;
 
 enum Score : int
 {
+    WIN_TB = 10000,
+    LOSS_TB = -WIN_TB,
     MATE             = 32000,
     MATED            = -MATE,
     MATE_IN_MAX_PLY  = MATE - MAX_PLY,
