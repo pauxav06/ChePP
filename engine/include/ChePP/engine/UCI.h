@@ -271,7 +271,7 @@ public:
     UCIEngine() {
         m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512);
         m_params.handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
-        m_params.handler.add<EngineParamString>("Tb Path", m_params.tb_path, "", [this] ()
+        m_params.handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this] ()
         {
             bool val = init_tb(m_params.tb_path);
             if (val) std::cout << "info string set tb path" << std::endl;
@@ -362,7 +362,7 @@ public:
                 }
             }
         }
-        std::cout << m_pos.init_pos << std::endl;
+        //std::cout << m_pos.init_pos << std::endl;
     }
 
 
