@@ -68,7 +68,7 @@ struct FeatureTransformer
     using FeatureT                   = uint16_t;
     using RetT                       = ArrayStack<FeatureT, MaxChanges>;
 
-    static constexpr size_t n_features_v = 16 * 12 * 64;
+    static constexpr size_t n_features_v = 32 * 11 * 64;
 
     static bool needs_refresh(const Position& cur, const Position& prev, const Color view)
     {
@@ -134,8 +134,8 @@ struct FeatureTransformer
         if (king_square.file() > FILE_C) {
             relative_piece_square = relative_piece_square.flipped_vertically();
         }
-        // int piece_idx = chess::type_of(piece) == chess::KING ? 0 : 1 + chess::type_of(piece) * 2 + (chess::color_of(piece) == view ? 1 : 0);
-        int piece_idx = piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
+        int piece_idx = piece.type() == KING ? 0 : 1 + piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
+        //int piece_idx = piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
         return king_square_index(relative_king_square) + relative_piece_square.value() * 32 + piece_idx * 32 * 64;
     }
 
@@ -167,7 +167,7 @@ struct Accumulator
     HWY_ALIGN PsqtT white_psqt{};
     HWY_ALIGN PsqtT black_psqt{};
 
-    size_t bucket;
+    size_t m_bucket;
 
 
 
@@ -179,55 +179,81 @@ struct Accumulator
         refresh_acc(WHITE, wadd);
         const auto [badd, brem] = FeatureTransformer::get_features(pos, pos, BLACK, true);
         refresh_acc(BLACK, badd);
-        bucket = (pos.occupancy().popcount() - 1) / 4;
+        m_bucket = (pos.occupancy().popcount() - 1) / 4;
     }
 
     explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev)
     {
         update(acc_prev, pos_cur, pos_prev, WHITE);
         update(acc_prev, pos_cur, pos_prev, BLACK);
-        bucket = (pos_cur.occupancy().popcount() - 1) / 4;
+        m_bucket = (pos_cur.occupancy().popcount() - 1) / 4;
 
+    }
+
+
+    [[nodiscard]] void evaluate_uci(const Color view) const
+    {
+        for (size_t i = 0; i < 8; i++)
+        {
+            std::cout << std::format("Eval for bucket {} : {}", i, evaluate(view, i));
+            if (i == m_bucket)
+            {
+                std::cout  << " <- active bucket";
+            }
+            std::cout << std::endl;
+        }
     }
 
     template <size_t UNROLL = 4>
     [[nodiscard]] int32_t evaluate(const Color view) const
     {
+        return evaluate(view, m_bucket);
+    }
+
+
+    template <size_t UNROLL = 4>
+    [[nodiscard]] int32_t evaluate(const Color view, const size_t bucket) const
+    {
         const auto* HWY_RESTRICT our_acc_ptr = ALIGN_PTR(int16_t, view == WHITE ? white_accumulator.data() : black_accumulator.data());
         const auto* HWY_RESTRICT their_acc_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_accumulator.data() : white_accumulator.data());
         const auto* HWY_RESTRICT our_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? white_psqt.data() : black_psqt.data());
         const auto* HWY_RESTRICT their_psqt_ptr = ALIGN_PTR(int16_t, view == WHITE ? black_psqt.data() : white_psqt.data());
+
         const auto* HWY_RESTRICT l1_weights_ptr = ALIGN_PTR(int16_t, &g_l1_weights[bucket * OutSz * L1Sz * 2]);
         const auto* HWY_RESTRICT l2_weights_ptr = ALIGN_PTR(int16_t, &g_l2_weights[bucket * L1Sz * L2Sz]);
         const auto* HWY_RESTRICT out_weights_ptr = ALIGN_PTR(int16_t, &g_out_weights[bucket * L2Sz]);
-        const auto* HWY_RESTRICT l1_biases_ptr = ALIGN_PTR(int32_t, &g_l1_biases[bucket * L1Sz]);
+        const auto* HWY_RESTRICT l1_psqt_weights_ptr = ALIGN_PTR(int16_t, &g_l1_psqt_weights[bucket * OutSz * 2]);
+
+        const auto* HWY_RESTRICT l1_biases_ptr = ALIGN_PTR(int16_t, &g_l1_biases[bucket * L1Sz]);
         const auto* HWY_RESTRICT l2_biases_ptr = ALIGN_PTR(int32_t, &g_l2_biases[bucket * L2Sz]);
         const auto* HWY_RESTRICT out_biases_ptr = ALIGN_PTR(int32_t, &g_out_bias[bucket]);
+        const auto* HWY_RESTRICT l1_psqt_bias_ptr = ALIGN_PTR(int32_t, &g_l1_psqt_biases[bucket]);
+
 
 
         using D32 = ScalableTag<int32_t>;
         using D16 = ScalableTag<int16_t>;
 
         using HalfD16 = FixedTag<int16_t, Lanes(D32{})>;
-        using HalfD8  = FixedTag<int8_t, Lanes(D16{})>;
+
+        static_assert(Lanes(D32{}) == Lanes(HalfD16{}), "Lanes must be equal");
 
 
         HWY_ALIGN std::array<int32_t, L1Sz> l1_out{};
         std::memcpy(l1_out.data(), l1_biases_ptr, sizeof(g_l1_biases) / 8);
         HWY_ALIGN std::array<int32_t, L2Sz> l2_out{};
         std::memcpy(l2_out.data(), l2_biases_ptr, sizeof(g_l2_biases) / 8);
+        HWY_ALIGN int32_t l1_psqt_out = l1_psqt_bias_ptr[0];
         HWY_ALIGN int32_t out = out_biases_ptr[0];
-
-
 
 
         for (size_t j = 0; j < OutSz; j += Lanes(D16{}) * UNROLL) {
             std::array<Vec<D16>, UNROLL> v_our_block{};
             std::array<Vec<D16>, UNROLL> v_their_block{};
             for (size_t u = 0; u < UNROLL; ++u) {
-                const size_t idx = j + u * Lanes(HalfD8{});
-                v_our_block[u]   = Min(Max(Load(D16{}, &our_acc_ptr[idx]), Zero(D16{})), Set(D16{}, 127*32));
-                v_their_block[u] = Min(Max(Load(D16{}, &their_acc_ptr[idx]), Zero(D16{})), Set(D16{}, 127*32));
+                const size_t idx = j + u * Lanes(D16{});
+                v_our_block[u]   = Max(Load(D16{}, &our_acc_ptr[idx]), Zero(D16{}));
+                v_their_block[u] = Max(Load(D16{}, &their_acc_ptr[idx]), Zero(D16{}));
             }
 
 
@@ -236,8 +262,8 @@ struct Accumulator
 
                 for (size_t u = 0; u < UNROLL; ++u) {
                     const size_t idx = j + u * Lanes(D16{});
-                    const Vec<D16> w_our   = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx]);
-                    const Vec<D16> w_their = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx + OutSz]);
+                    const Vec<D16> w_our   = LoadU(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx]);
+                    const Vec<D16> w_their = LoadU(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx + OutSz]);
 
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_our_block[u], w_our));
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_their_block[u], w_their));
@@ -245,22 +271,32 @@ struct Accumulator
 
                 l1_out[i] += ReduceSum(D32{}, acc);
             }
-        }
 
-        // we get better precision by dividing in the end
+            Vec<D32> acc = Zero(D32{});
+            for (size_t u = 0; u < UNROLL; ++u) {
+                const size_t idx = j + u * Lanes(D16{});
+                const Vec<D16> w_our   = Load(D16{}, &l1_psqt_weights_ptr[idx]);
+                const Vec<D16> w_their = Load(D16{}, &l1_psqt_weights_ptr[idx + OutSz]);
+
+                acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_our_block[u], w_our));
+                acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_their_block[u], w_their));
+            }
+            l1_psqt_out += ReduceSum(D32{}, acc);
+        }
+        l1_psqt_out >>= 16;
+
+
         using QuantVec = CappedTag<int32_t, L1Sz>;
-        for (int i = 0; i < L1Sz; i += Lanes(QuantVec{}))
-        {
-            Vec<D32> acc = Load(QuantVec{}, &l1_out[i]);
+        for (int i = 0; i < L1Sz; i += Lanes(QuantVec{})) {
+            auto acc = Load(QuantVec{}, &l1_out[i]);
             acc = ShiftRight<16>(acc);
             Store(acc, QuantVec{}, &l1_out[i]);
         }
 
-
         for (int i = 0; i < L2Sz; ++i)
         {
             HWY_ALIGN Vec<D32> acc = Zero(D32{});
-            for (size_t j = 0; j < L1Sz; j += Lanes(HalfD16{}))
+            for (size_t j = 0; j < L1Sz; j += Lanes(D32{}))
             {
                 const Vec<D32> v = Max(Load(D32{}, &l1_out[j]), Zero(D32{}));
                 const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &l2_weights_ptr[i * L1Sz + j]));
@@ -270,8 +306,9 @@ struct Accumulator
         }
 
 
+
         HWY_ALIGN Vec<D32> acc = Zero(D32{});
-        for (size_t j = 0; j < L2Sz; j += Lanes(HalfD16{}))
+        for (size_t j = 0; j < L2Sz; j += Lanes(D32{}))
         {
             const Vec<D32> v = Max(Load(D32{}, &l2_out[j]), Zero(D32{}));
             const Vec<D32> w = PromoteTo(D32{}, Load(HalfD16{}, &out_weights_ptr[j]));
@@ -284,10 +321,12 @@ struct Accumulator
         int32_t psqt_acc = 0;
         psqt_acc += our_psqt_ptr[bucket] / 2;
         psqt_acc -= their_psqt_ptr[bucket] / 2;
-        psqt_acc = (psqt_acc * 100 >> 8);
-        //std::cout << psqt_acc << " " << out << std::endl;
+        psqt_acc = (psqt_acc * 100 ) >> 8;
 
-        return out + psqt_acc;
+        //std::cout << psqt_acc << " " << out << std::endl;
+        //std::cout << out << " " << l1_psqt_out << " " << psqt_acc << std::endl;
+
+        return out + l1_psqt_out + psqt_acc;
     }
 
   private:

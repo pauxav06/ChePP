@@ -8,9 +8,15 @@
 #include <type_traits>
 #include <unordered_map>
 #include <vector>
+#include <filesystem>
 
+#include "argparse.hpp"
+
+#include <format>
 #include <nlohmann/json.hpp>
+
 using json = nlohmann::json;
+namespace fs = std::filesystem;
 
 enum class LayerType : uint8_t {
     UINT8=1, INT8, UINT16, INT16, UINT32, INT32, UINT64, INT64, FLOAT, DOUBLE
@@ -109,46 +115,80 @@ std::unique_ptr<LayerBase> make_layer(const LayerType t, uint64_t size, const st
 }
 
 int main(int argc,char**argv){
-    if(argc!=5){
-        std::cerr<<"Usage: "<<argv[0]<<" <raw.bin> <config.json> <output.h> <output.cpp>\n";
+    fs::path header_file{};
+    fs::path cpp_file{};
+    try {
+        argparse::ArgumentParser parser("bin2h");
+        parser.add_argument("--raw").required().help("Input raw binary file");
+        parser.add_argument("--config").required().help("JSON config file");
+        parser.add_argument("--header").required().help("Output header file");
+        parser.add_argument("--cpp").required().help("Output cpp file");
+
+        try {
+            parser.parse_args(argc, argv);
+        } catch (const std::exception& err) {
+            std::cerr << err.what() << std::endl;
+            std::cerr << parser;
+            std::exit(1);
+        }
+
+        fs::path raw_file = parser.get("--raw");
+        fs::path cfg_file = parser.get("--config");
+        header_file = parser.get("--header");
+        cpp_file = parser.get("--cpp");
+
+        std::ifstream raw(raw_file, std::ios::binary);
+        if(!raw) throw std::runtime_error("Failed to open raw file: " + raw_file.string());
+
+        std::ifstream cfg(cfg_file);
+        if(!cfg) throw std::runtime_error("Failed to open config file: " + cfg_file.string());
+        json j; cfg >> j;
+
+        std::ofstream h(header_file ,std::ofstream::trunc);
+        std::ofstream cpp(cpp_file, std::ofstream::trunc);
+        if(!h || !cpp) throw std::runtime_error("Failed to open output files");
+
+        h << "#pragma once\n#include <cstdint>\n\n";
+        cpp << "#include " << absolute(header_file) << "\n\n";
+
+        std::vector<std::unique_ptr<LayerBase>> layers;
+        for(const auto& entry : j){
+            std::string type_str = entry.at("type");
+            uint64_t size = entry.at("size");
+            std::string name = entry.at("name");
+            LayerType t = parse_type(type_str);
+            layers.push_back(make_layer(t,size,name));
+        }
+
+        size_t total_size = 0;
+        for(auto &layer : layers){
+            layer->emit_declaration(h);
+
+            size_t bytes = layer->type_size() * layer->size;
+            total_size += bytes;
+            std::vector<uint8_t> buf(bytes);
+            raw.read(reinterpret_cast<char*>(buf.data()), bytes);
+            if(static_cast<size_t>(raw.gcount()) != bytes){
+                throw std::runtime_error(std::format("Raw file too small: expected a layer to be {} bytes and {} bytes were left"
+                    , std::to_string(bytes), std::to_string(raw.gcount())));
+            }
+
+            layer->emit_definition(cpp, buf.data());
+        }
+
+        if (raw.tellg() != fs::file_size(raw_file.string()))
+        {
+            throw std::runtime_error(std::format("Raw file too big: read {} out of {} bytes", total_size, fs::file_size(raw_file.string())));
+        }
+
+        std::cout<<"Embedded all layers into "<<header_file<<" and "<<cpp_file<<"\n";
+        return 0;
+    } catch(const std::exception& e){
+        std::cerr<<"Error: "<<e.what()<<"\n";
+        if(argc >= 4) {
+            if (!header_file.empty()) fs::remove(header_file);
+            if (!cpp_file.empty()) fs::remove(cpp_file);
+        }
         return 1;
     }
-
-    std::ifstream raw(argv[1],std::ios::binary);
-    std::ofstream h(argv[3]);
-    std::ofstream cpp(argv[4]);
-
-    if(!raw || !h || !cpp){ std::cerr<<"Failed to open files\n"; return 1; }
-
-    // Parse JSON
-    std::ifstream cfg(argv[2]);
-    if(!cfg){ std::cerr<<"Failed to open JSON config\n"; return 1; }
-    json j;
-    cfg >> j;
-
-    h << "#pragma once\n#include <cstdint>\n\n";
-    cpp << "#include \"" << argv[3] << "\"\n\n";
-
-    std::vector<std::unique_ptr<LayerBase>> layers;
-    for(const auto& entry : j){
-        std::string type_str = entry.at("type");
-        uint64_t size = entry.at("size");
-        std::string name = entry.at("name");
-
-        LayerType t = parse_type(type_str);
-        layers.push_back(make_layer(t,size,name));
-    }
-
-    for(auto &layer : layers){
-        layer->emit_declaration(h);
-
-        size_t bytes = layer->type_size() * layer->size;
-        std::vector<uint8_t> buf(bytes);
-        raw.read(reinterpret_cast<char*>(buf.data()), bytes);
-        if(!raw){ std::cerr<<"Raw file too small\n"; return 1; }
-
-        layer->emit_definition(cpp, buf.data());
-    }
-
-    std::cout<<"Embedded all layers into "<<argv[3]<<" and "<<argv[4]<<"\n";
 }

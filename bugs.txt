@@ -1,4 +1,4 @@
-position fen 8/4Q3/2p5/2k2p2/p3p3/1bq3PP/rr4N1/5B1K b - - 17 57 moves c5b6 e7d8 b6c5 d8e7 c5b6 e7d8 b6c5 d8e7 c5d5
+position fen 8/4Q3/2p5/2k2p2/p3p3/1bq3PP/rr4N1/5B1K b - - 17 57 moves c5b6 e7d8 b6c5 d8e7 c5d5
 gets stuck in infinite tt probe zero when in fact losing
 
 position fen 2q3k1/8/4NppP/p2PP3/P2Q4/6P1/2p3K1/2r5 w - - 0 61

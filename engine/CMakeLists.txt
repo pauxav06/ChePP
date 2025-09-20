@@ -67,12 +67,12 @@ set(NETWORK_CFG ${CMAKE_CURRENT_SOURCE_DIR}/resources/layers.json)
 
 add_executable(bin2h ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bin2h.cpp)
 target_link_libraries(bin2h PRIVATE nlohmann_json::nlohmann_json)
-
+target_include_directories(bin2h PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../external)
 
 add_custom_command(
         OUTPUT ${NETWORK_HEADER} ${NETWORK_SOURCE}
-        COMMAND $<TARGET_FILE:bin2h> ${NETWORK_BIN} ${NETWORK_CFG} ${NETWORK_HEADER} ${NETWORK_SOURCE}
-        DEPENDS ${NETWORK_BIN} scripts/bin2h.cpp bin2h
+        COMMAND $<TARGET_FILE:bin2h> --raw ${NETWORK_BIN} --config ${NETWORK_CFG} --header ${NETWORK_HEADER} --cpp ${NETWORK_SOURCE}
+        DEPENDS ${NETWORK_BIN} ${NETWORK_CFG} scripts/bin2h.cpp bin2h
         COMMENT "Generating embedded network_net resource"
 )
 
@@ -90,7 +90,7 @@ add_library(ChePP_engine STATIC ${ENGINE_SOURCES})
 
 target_include_directories(ChePP_engine PUBLIC
         ${CMAKE_SOURCE_DIR}/engine/include
-        ${CMAKE_SOURCE_DIR}/engine/external
+        ${CMAKE_SOURCE_DIR}/external
         ${fathom_SOURCE_DIR}
         ${highway_SOURCE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}

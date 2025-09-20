@@ -8,7 +8,7 @@
 #include "ChePP/engine/position.h"
 #include "ChePP/engine/search.h"
 #include "ChePP/engine/tm.h"
-
+#include "tb.h"
 
 #include <algorithm>
 #include <functional>
@@ -20,26 +20,35 @@
 #include <utility>
 #include <vector>
 
+inline auto uci_cb_none = [] () { return true; };
+
 class EngineParameter {
 public:
-    explicit EngineParameter(std::string name) : m_name(std::move(name)) {}
+    explicit EngineParameter(std::string name, std::function<bool()> cb = uci_cb_none)
+        : m_name(std::move(name)) , m_cb(std::move(cb)) {}
     virtual ~EngineParameter() = default;
 
     [[nodiscard]] const std::string& name() { return m_name; };
     [[nodiscard]] virtual std::string uci_declare() const = 0;
-    virtual bool parse(const std::string& value) = 0;
+    virtual bool parse(const std::string& value)
+    {
+        return m_cb();
+    };
     [[nodiscard]] virtual std::string value_str() const = 0;
 protected:
     std::string m_name;
+    std::function<bool()> m_cb;
 };
 
 template <typename T>
 class ValueEngineParameter : public EngineParameter {
 public:
-    explicit ValueEngineParameter(std::string name, T& underlying, T  init) : EngineParameter(std::move(name)), m_init(std::move(init)), m_value(underlying)
+    explicit ValueEngineParameter(std::string name, T& underlying, T  init, std::function<bool()> cb = uci_cb_none)
+    : EngineParameter(std::move(name), std::move(cb)), m_init(std::move(init)), m_value(underlying)
     {
         m_value = m_init;
     }
+
     ~ValueEngineParameter() override = default;
 
     [[nodiscard]] T value() const { return m_value; }
@@ -51,16 +60,24 @@ protected:
 
 class EngineParamCheck final : public ValueEngineParameter<bool> {
 public:
-    explicit EngineParamCheck(std::string name, bool& underlying, const bool def = false)
-        : ValueEngineParameter(std::move(name), underlying, def) {}
+    explicit EngineParamCheck(std::string name, bool& underlying, const bool def = false, std::function<bool()> cb = uci_cb_none)
+        : ValueEngineParameter(std::move(name), underlying, def, std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
         return "option name " + m_name + " type check default " + (m_init ? "true" : "false");
     }
 
     bool parse(const std::string& v) override {
-        if (v == "true" || v == "1") { m_value = true; return true; }
-        if (v == "false" || v == "0") { m_value = false; return true; }
+        if (v == "true" || v == "1")
+        {
+            m_value = true;
+            return EngineParameter::parse(v);
+        }
+        if (v == "false" || v == "0")
+        {
+            m_value = false;
+            return EngineParameter::parse(v);
+        }
         return false;
     }
 
@@ -69,8 +86,8 @@ public:
 
 class EngineParamSpin final : public ValueEngineParameter<int> {
 public:
-    EngineParamSpin(std::string name, int& underlying, const int init, const int min, const int max)
-        : ValueEngineParameter(std::move(name), underlying, init), m_min(min), m_max(max) {}
+    EngineParamSpin(std::string name, int& underlying, const int init, const int min, const int max, std::function<bool()> cb = uci_cb_none)
+        : ValueEngineParameter(std::move(name), underlying, init, std::move(cb)), m_min(min), m_max(max) {}
 
     [[nodiscard]] std::string uci_declare() const override {
         return "option name " + m_name + " type spin default " +
@@ -83,7 +100,7 @@ public:
             const int val = std::stoi(v);
             if (val < m_min || val > m_max) return false;
             m_value = val;
-            return true;
+            return EngineParameter::parse(v);
         } catch (...) { return false; }
     }
 
@@ -95,8 +112,8 @@ private:
 
 class EngineParamCombo final : public ValueEngineParameter<std::string> {
 public:
-    EngineParamCombo(std::string name, std::string& underlying, std::string def, std::vector<std::string> choices)
-        : ValueEngineParameter(std::move(name), underlying, std::move(def)), m_choices(std::move(choices)) {}
+    EngineParamCombo(std::string name, std::string& underlying, std::string def, std::vector<std::string> choices, std::function<bool()> cb = uci_cb_none)
+        : ValueEngineParameter(std::move(name), underlying, std::move(def), std::move(cb)), m_choices(std::move(choices)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
         std::ostringstream ss;
@@ -108,7 +125,7 @@ public:
     bool parse(const std::string& v) override {
         if (std::ranges::find(m_choices, v) != m_choices.end()) {
             m_value = v;
-            return true;
+            return EngineParameter::parse(v);
         }
         return false;
     }
@@ -121,14 +138,18 @@ private:
 
 class EngineParamString final : public ValueEngineParameter<std::string> {
 public:
-    explicit EngineParamString(std::string name, std::string& underlying, std::string init = "")
-        : ValueEngineParameter(std::move(name), underlying, std::move(init)) {}
+    explicit EngineParamString(std::string name, std::string& underlying, std::string init = "", std::function<bool()> cb = uci_cb_none)
+        : ValueEngineParameter(std::move(name), underlying, std::move(init), std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
         return "option name " + m_name + " type string default " + m_init;
     }
 
-    bool parse(const std::string& v) override { m_value = v; return true; }
+    bool parse(const std::string& v) override
+    {
+        m_value = v;
+        return EngineParameter::parse(v);
+    }
 
     [[nodiscard]] std::string value_str() const override { return m_value; }
 };
@@ -136,26 +157,21 @@ public:
 
 class EngineParamButton final : public EngineParameter {
 public:
-    using Callback = std::function<bool()>;
 
-    EngineParamButton(const std::string& name, Callback cb)
-        : EngineParameter(name), m_callback(std::move(cb)) {}
+    explicit EngineParamButton(const std::string& name, std::function<bool()> cb = uci_cb_none)
+        : EngineParameter(name, std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
         return "option name " + m_name + " type button";
     }
 
     bool parse(const std::string& v) override {
-        if (m_callback) return m_callback();
-        return false;
+        return EngineParameter::parse(v);
     }
 
     [[nodiscard]] std::string value_str() const override {
         return "<button>";
     }
-
-private:
-    Callback m_callback;
 };
 
 class EngineParameters {
@@ -232,6 +248,7 @@ class UCIEngine {
     {
         int hash_size{};
         int threads{};
+        std::string tb_path{};
         EngineParameters handler{};
     };
 
@@ -254,6 +271,14 @@ public:
     UCIEngine() {
         m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512);
         m_params.handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
+        m_params.handler.add<EngineParamString>("Tb Path", m_params.tb_path, "", [this] ()
+        {
+            bool val = init_tb(m_params.tb_path);
+            if (val) std::cout << "info string set tb path" << std::endl;
+            return val;
+
+        });
+
         m_params.handler.add<EngineParamButton>("Clear Hash", []() {
             g_tt.reset();
             std::cout << "info string Hash cleared" << std::endl;
@@ -379,7 +404,8 @@ public:
     void eval() const
     {
         const Accumulator accum{m_pos.last_pos};
-        std::cout << "Evaluation for " << m_pos.last_pos.side_to_move() << " (cp): " << accum.evaluate(m_pos.last_pos.side_to_move()) << std::endl;
+        std::cout << "Evaluation for " << m_pos.last_pos.side_to_move() << " (cp): ";
+        accum.evaluate_uci(m_pos.last_pos.side_to_move());
     }
 
 
