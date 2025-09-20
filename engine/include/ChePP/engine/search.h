@@ -19,7 +19,6 @@
 
 #include "search_stack.h"
 
-
 struct SearchThread
 {
     struct SearchResult
@@ -116,15 +115,16 @@ inline std::vector<Move> get_pv_line(const Position& pos, int max_depth = MAX_PL
     return pv;
 }
 
-inline void print_pv_line(const Position& pos, const int depth, const int eval)
+inline std::string format_pv_line(const Position& pos, const int depth)
 {
+    std::ostringstream oss;
     auto pv = get_pv_line(pos, depth);
-    std::cout << "PV (Eval " << eval << "): ";
     for (auto m : pv)
     {
-        std::cout << m << " ";
+        oss << m << " ";
     }
-    std::cout << std::endl;
+    oss << std::endl;
+    return oss.str();
 }
 
 inline const std::array<std::array<int, 256>, MAX_PLY>& lmr_table(bool quiet)
@@ -208,15 +208,26 @@ inline SearchThread::SearchResult SearchThread::IterativeDeepening()
                 std::string score;
                 if (eval >= MATE_IN_MAX_PLY)
                 {
-                    score.append("mate in ");
-                    score.append(std::to_string(MATE - eval));
+                    score.append("mate ");
+                    score.append(std::to_string((MATE - eval) / 2));
+                }
+                else if (eval <= MATED_IN_MAX_PLY)
+                {
+                    score.append("mate ");
+                    score.append(std::to_string((MATED - eval) / 2));
                 }
                 else
-                    score = std::to_string(eval);
+                {
+                    score.append("cp ");
+                    score.append(std::to_string(eval));
+                }
 
-                std::cout << "Depth " << depth << " Eval " << score << " Nodes " << m_infos.nodes << " best "
-                          << bestMove << std::endl;
-                print_pv_line(m_positions.last(), depth, prev_eval);
+                std::string uci_output = std::format(
+                    "info score {} depth {} nodes {} tb_hits {} pv {}",
+                    score, depth, m_infos.nodes, m_infos.tb_hits,
+                    format_pv_line(m_positions.last(), depth)
+                );
+                std::cout << uci_output << std::flush;
             }
         }
     }
@@ -265,7 +276,7 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
     }
 
     int window = stats.window();
-    std::cout <<  "window " << window << std::endl;
+    //std::cout <<  "window " << window << std::endl;
     alpha = prev_eval - window;
     beta  = prev_eval + window;
 
@@ -322,21 +333,23 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         TimeManager::UpdateInfo info{};
         m_tm.update_time();
     }
-
-    if (depth <= 0)
-        return QSearch(alpha, beta);
-
-
     const Position&        pos = m_positions.last();
 
     const int  alpha_org = alpha;
     const bool is_root   = ply() == 0;
     const bool in_check  = pos.checkers(pos.side_to_move()).value();
 
-    if (!is_root && is_draw()) return 0;
+    assert(depth >= 0);
+
+
+
+    if (depth <= 0)
+        return QSearch(alpha, beta);
+
+
+
 
     // increase depth if we are in check
-    depth += in_check;
 
     // quiescence search supposed to prevent horizon effect
 
@@ -344,6 +357,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     if (!is_root)
     {
+        if (is_draw())
+        {
+            return 0;
+        }
         if (ply() >= MAX_PLY)
         {
             return evaluate();
@@ -360,6 +377,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             return alpha;
         }
     }
+
+    if (in_check)
+    {
+        depth++;
+    }
+
 
     const bool is_pv = beta - alpha > 1;
 
@@ -381,6 +404,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             const int score = read_tt_score(e.m_score, ply());
             if (e.m_bound == EXACT || (e.m_bound == LOWER && score >= alpha) || (e.m_bound == UPPER && score <= beta))
             {
+                if (false && e.m_score >= beta && e.m_move.type_of() != PROMOTION && pos.piece_at(e.m_move.to_sq()) == NO_PIECE)
+                {
+                    m_history.update_cont_hist(ss(), MoveList{}, e.m_move, depth);
+                    m_history.update_hist(ss(), MoveList{}, e.m_move, depth);
+                    m_history.update_pawn_hist(ss(), MoveList{}, e.m_move, depth);
+                }
+
+
                 m_infos.tt_hits++;
                 return score;
             }
@@ -405,6 +436,31 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             return score;
         }
     }
+
+    if (false && is_root && pos.occupancy().popcount() <= 7) {
+        auto res = pos.dtz_probe();
+        if (res != TB_RESULT_FAILED) {
+            m_infos.tb_hits++;
+
+            switch (res) {
+                case TB_LOSS: break;
+                case TB_DRAW: break;
+                case TB_WIN:
+                {
+                    Square from{TB_GET_FROM(res)};
+                    Square to{TB_GET_TO(res)};
+                    Square ep{TB_GET_EP(res)};
+                    Piece promote{TB_GET_PROMOTES(res)};
+
+                    break;
+                }
+
+                default: break;
+            }
+
+        }
+    }
+
 
 
 
@@ -717,9 +773,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
 
             //adjustment to avoid dropping into a Qsearch.
-            reduction = std::min(depth -1, std::max(reduction, 1));
+            reduction = std::min(depth - 2, std::max(reduction, 1));
             search_depth -= reduction;
 
+            assert(search_depth >0);
             // do the search at reduced depth (picking up from where the extensions left us)
             score = -Negamax(search_depth - 1, -alpha -1, -alpha);
             assert(score != -INF);
@@ -825,14 +882,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     //std::cout << best_valid << " " << local_best << " " << best_eval << " " << evaluate() << std::endl;
 
-    tt_bound_t bound;
-    if (best_eval <= alpha_org)
-        bound = UPPER;
-    else if (best_eval >= beta)
-        bound = LOWER;
-    else
-        bound = EXACT;
-
+    tt_bound_t bound = (best_eval <= alpha_org) ? bound = UPPER : (best_eval >= beta) ? LOWER : EXACT;
     if (best_valid)
         g_tt.store(pos.hash(), depth, store_tt_score(best_eval, ply()), bound, local_best);
 
@@ -853,6 +903,8 @@ inline int SearchThread::QSearch(int alpha, int beta)
     bool is_pv = beta - alpha > 1;
 
     const Position&  pos = m_positions.last();
+
+    //assert((pos.checkers(WHITE) | pos.checkers(BLACK)) == Bitboard::empty());
 
     if (ply() >= MAX_PLY)
         return evaluate();
@@ -887,7 +939,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     {
         const tt_entry_t& e     = *tt_hit;
         const int         score = read_tt_score(e.m_score, ply());
-        if (score <= -INF  || score >= INF) std::cout << e.m_score << " " << score << std::endl;
+        if (score <= -INF  || score >= INF) std::cout << "alert " << e.m_score << " " << score << std::endl;
         assert(score > -INF && score < INF);
         if (e.m_bound == EXACT)
             return score;
@@ -933,6 +985,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     tactical.sort();
 
     int best_eval = stand_pat;
+    Move best_move = Move::none();
     for (auto [m, s] : tactical)
     {
         //std::cout << m << std::endl;
@@ -953,12 +1006,17 @@ inline int SearchThread::QSearch(int alpha, int beta)
         }
 
         if (score > best_eval)
+        {
             best_eval = score;
+            best_move = m;
+        }
         if (best_eval > alpha)
             alpha = best_eval;
         if (alpha >= beta)
             break;
     }
+    tt_bound_t bound = (best_eval >= beta) ? LOWER : UPPER;
+    if (best_move != Move::none())g_tt.store(pos.hash(), 0, store_tt_score(best_eval, ply()), bound, best_move);
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
 }

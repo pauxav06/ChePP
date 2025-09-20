@@ -136,7 +136,7 @@ struct TimeManager {
 
     void update_depth(const int depth)
     {
-        std::cout << adjusted_time_ms << " " << depth << std::endl;
+        //std::cout << adjusted_time_ms << " " << depth << std::endl;
         if (depth > 0 && constraints.depth > 0 && depth > constraints.depth) {
             m_stop_flag = true;
         }
@@ -255,7 +255,7 @@ private:
         factor *= adj_factor;
 
         adjusted_time_ms = std::clamp(static_cast<int>(m_max_time_ms * factor), params.min_time, params.max_time);
-        std::cout << "adjusted time" << adjusted_time_ms << std::endl;
+        //std::cout << "adjusted time" << adjusted_time_ms << std::endl;
 
     }
 

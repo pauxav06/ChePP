@@ -26,7 +26,7 @@ inline void score_moves(const SearchStack::Node& ss,
         if (move.type_of() == PROMOTION)
             score += (move.promotion_type().piece_value()) * 100'000;
         if (victim)
-            score += ss.pos->see(move) * 100'000 + history.get_capture_hist_score(ss, move) * 0;
+            score += ss.pos->see(move) * 100'000 + history.get_capture_hist_score(ss, move);
         if (!victim && move.type_of() != PROMOTION)
         {
             score += history.get_cont_hist_bonus(ss, move);

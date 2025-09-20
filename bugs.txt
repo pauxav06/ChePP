@@ -3,3 +3,16 @@ gets stuck in infinite tt probe zero when in fact losing
 
 position fen 2q3k1/8/4NppP/p2PP3/P2Q4/6P1/2p3K1/2r5 w - - 0 61
 blunders the advantage, sees an inexistent mate because of qsearch, without qsearch still blunders the advantage
+
+2r3k1/1pqnbp2/p1rp1np1/P2Np1Bp/4P2P/1N1R1PP1/1PPRQ1K1/8 b - - 23 39 finds f6d5 instead of c7d8
+
+position fen 6k1/ppp2p2/2p5/4Pqbb/2P4p/1P2Q2P/P4BPK/4N3 w - - 0 33
+tricky position right move is e3d4
+
+https://lichess.org/aRGoYgmz/black
+did not find the draw at move 42
+
+position fen 2rr3k/1p4p1/5p1p/3p4/2nn1N2/P4P1P/BP3RP1/3R2K1 b - - 5 32
+broski is blind, saw g7g5 idiot
+
+position fen r1b1k2r/4b3/p1p1p3/4p3/q1P4p/1R4P1/P1Q1B2P/5RK1 b kq - 1 22 moves a4a5

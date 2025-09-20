@@ -282,6 +282,8 @@ inline MoveList gen_legal(const Position& pos)
     return moves;
 }
 
+/* TODO IMPORTANT decide weather to evaluate giving checks in qsearch */
+// if we include giving checks we must include going out of check otherwise we get faulty scores from nnue evaluating in check positions
 inline MoveList filter_tactical(const Position& pos, const MoveList& list)
 {
     MoveList ret;
@@ -290,9 +292,9 @@ inline MoveList filter_tactical(const Position& pos, const MoveList& list)
                          {
                              return pos.is_occupied(mv.move.to_sq()) || mv.move.type_of() == EN_PASSANT ||
                                     mv.move.type_of() == PROMOTION ||
-                                    attacks(pos.piece_type_at(mv.move.from_sq()), mv.move.to_sq(),
+                                    (false && ( pos.checkers(pos.side_to_move()) || attacks(pos.piece_type_at(mv.move.from_sq()), mv.move.to_sq(),
                                             pos.occupancy() & ~Bitboard(mv.move.from_sq()), pos.side_to_move())
-                                        .is_set(pos.ksq(~pos.side_to_move()));
+                                        .is_set(pos.ksq(~pos.side_to_move()))));
                          });
     return ret;
 }

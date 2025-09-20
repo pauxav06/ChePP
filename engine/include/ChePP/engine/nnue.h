@@ -131,7 +131,7 @@ struct FeatureTransformer
                      ) {
         auto relative_piece_square = (view == WHITE ? piece_square : piece_square.flipped_horizontally());
         auto relative_king_square = (view == WHITE ? king_square : king_square.flipped_horizontally());
-        if (king_square.file() > FILE_C) {
+        if (king_square.file() > FILE_D) {
             relative_piece_square = relative_piece_square.flipped_vertically();
         }
         int piece_idx = piece.type() == KING ? 0 : 1 + piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
