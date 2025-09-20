@@ -21,7 +21,7 @@ struct DataloaderSkipConfig {
     int  param_index;
 };
 
-// this function was taken from the stockfish repo
+// this fulambdanction was taken from the stockfish repo
 inline std::function<bool(const binpack::TrainingDataEntry&)>
     make_skip_predicate(DataloaderSkipConfig config) {
     if (config.filtered || config.random_fen_skipping || config.wld_filtered

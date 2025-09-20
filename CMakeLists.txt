@@ -10,4 +10,5 @@ FetchContent_MakeAvailable(json)
 add_subdirectory(engine)
 add_subdirectory(nnue_training)
 
+
 enable_testing()
