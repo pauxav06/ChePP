@@ -392,7 +392,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
-    int static_eval = in_check ? 0 : tt_hit ? tt_hit->score : evaluate(); // Important static_eval is 0 if in check
+    int static_eval = in_check ? 0 : tt_hit ? TT::read_score(tt_hit->score, ply()) : evaluate(); // Important static_eval is 0 if in check
     assert(static_eval > -INF);
 
     // careful need to manage eval properly
@@ -411,7 +411,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // need to be careful though because can give the illusion of strong moves to the search tree, which is the reason
     // for the adjustment of the search score
     if (!is_root && !is_pv && !in_check && depth < 9 &&
-        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400))
+        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400) && !ss().excluded)
     {
         return static_eval;
     }
@@ -424,8 +424,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // to do inm case of anexcluded move that comes ffrom resear5ch where we retry without the tt
     if (!is_root && !is_pv && ss().position->move() != Move::null() && !in_check && depth >= 3 && static_eval >= beta &&
-        (!tt_hit || tt_hit->bound != TT::Bound::UPPER || tt_hit->score > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
-        ss().position->occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3) // add loss condition ?
+        (!tt_hit || tt_hit->bound != TT::Bound::UPPER || TT::read_score(tt_hit->score, ply()) > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
+        ss().position->occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3 && !ss().excluded) // add loss condition ?
     {
         const int reduction  = 3 + depth / 3 + std::clamp((static_eval - beta) / 100, 0, 4);
         int       null_depth = std::max((depth - 1) / 2, (depth - reduction - 1) / 2);
@@ -518,6 +518,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // CHECK THE ORDERING
     for (auto [m, s] : scored_moves)
     {
+        std::cout<< std::format("Here we are") << std::endl;
 
         if (m == ss().excluded)
         {
@@ -535,7 +536,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             captures.push_back(m);
 
         // Some pruning
-        if (!is_root && best_eval > MATED_IN_MAX_PLY && local_best != Move::none() && !is_pv) // do not do that on pv no ?
+        if (!is_root && best_eval > MATED_IN_MAX_PLY && !first_move) // do not do that on pv no ?
         {
             // Pruning for quiets
 
@@ -619,7 +620,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         // Singular extensions. Consider extending a TT move based on a singular search of reduced depth.
         if (false && !is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
             tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
-            moves.size() > 1)
+            moves.size() > 1 && !first_move)
         {
             int tt_score       = TT::read_score(tt_hit->score, ply());
             int singular_beta  = tt_score - depth;
@@ -662,7 +663,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 if (double_extend)
                     search_depth += 1;
             }
-            else if (negative_extension)
+            else if (negative_extension && !first_move)
             {
                 search_depth = std::max(1, search_depth - 1);
             }
@@ -738,7 +739,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             return 0;
         }
 
-        if (score > best_eval)
+        if (score> best_eval)
         {
             best_eval  = score;
             local_best = m;
@@ -786,6 +787,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     if (local_best == Move::none())
     {
+        std::cout << std::format("alpha {}, beta{}, first_move{}", alpha, beta, first_move) << std::endl;
         std::cout << std::format("local best {}", best_eval) << std::endl;
         throw new std::runtime_error("");
     }

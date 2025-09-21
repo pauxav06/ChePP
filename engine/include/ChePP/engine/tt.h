@@ -102,9 +102,9 @@ struct TT
     static int store_score(const int score, const int ply)
     {
         if (score >= MATE_IN_MAX_PLY)
-            return score - ply;
-        if (score <= MATED_IN_MAX_PLY)
             return score + ply;
+        if (score <= MATED_IN_MAX_PLY)
+            return score - ply;
         return score;
     };
 
