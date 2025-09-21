@@ -121,9 +121,9 @@ struct TT
   private:
     [[nodiscard]] size_t index(const hash_t hash) const { return hash & (m_size - 1); }
 
-    int                m_generation = 0;
-    std::size_t        m_size       = 0;
-    std::vector<Entry> m_table;
+    int                m_generation{0};
+    std::size_t        m_size{0};
+    std::vector<Entry> m_table{};
 };
 
 #endif // TT_H
