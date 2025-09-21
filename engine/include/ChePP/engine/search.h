@@ -216,7 +216,7 @@ inline void SearchThread::IterativeDeepening()
                 int nps = m_statistics.nodes / time_since_start.count();
                 std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                     score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(prev_pv_lines[0].line));
-                std::cout << uci_output << std::flush;
+                std::cout << uci_output << std::endl;
 
                 TimeManager::UpdateInfo update_info;
                 update_info.eval = eval;

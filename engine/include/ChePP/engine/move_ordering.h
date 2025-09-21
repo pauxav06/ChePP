@@ -125,8 +125,8 @@ struct Scorer<ScorerType::Search> {
                 score += m_ss.position->see(m) * m_params.see_factor + m_ss.capture_history.get_bonus(m);
             else if (m.type_of() != PROMOTION) {
                 score += m_ss.history.get_bonus(m);
-                if (m_ss.ply > 1) score += m_ss.continuation_history.get_bonus(*m_ss.position, m);
-                if (m_ss.ply > 2) score += m_ss.prev->continuation_history.get_bonus(*m_ss.position, m);
+                if (m_ss.ply > 1 && m_ss.position->move() != Move::null()) score += m_ss.continuation_history.get_bonus(*m_ss.position, m);
+                if (m_ss.ply > 2 && m_ss.prev->position->move() != Move::null()) score += m_ss.prev->continuation_history.get_bonus(*m_ss.position, m);
             }
 
             return score;
