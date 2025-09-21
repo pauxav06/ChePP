@@ -71,7 +71,6 @@ public:
     void undo_move(const bool update_nnue)
     {
         assert(ply() > 0);
-        std::cout << "Uwinding search stak at depth " << ply() << std::endl;
         const Move move = m_positions.last().move();
         reset_last_node();
         if (update_nnue && move != Move::none() && move != Move::null())
