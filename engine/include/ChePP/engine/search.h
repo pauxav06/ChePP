@@ -76,7 +76,7 @@ struct SearchThread
     using PvLines = std::vector<PvLine>;
 
     explicit SearchThread(const Parameters& parameters, const int id, TimeManager* tm, TT* tt, const Positions& pos)
-        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos), m_pv_lines(parameters.n_pv)
+        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos)
     {
         init_cache();
     }
@@ -90,7 +90,7 @@ struct SearchThread
     Cache                 m_cache;
     Statistics            m_statistics;
     SearchStack           m_search_stack;
-    PvLines               m_pv_lines{};
+    PvLine                m_pv_line{};
 
 
     void init_cache()
@@ -138,6 +138,28 @@ struct SearchThread
                ss().position->is_insufficient_material();
     }
 
+
+    MoveList get_pv(const Position& startpos, const Move first_move) const
+    {
+        Positions positions{};
+        positions.set_pos(startpos);
+        Move move = first_move;
+        MoveList moves{};
+        while (true)
+        {
+            if (!positions.last().is_valid(move)) break;
+            if (!positions.is_repetition() || positions.last().halfmove_clock() >= 100)
+            moves.push_back(move);
+            positions.do_move(move);
+            auto tt_hit = m_tt->probe(positions.last().hash());
+            if (!tt_hit) break;
+            if (moves.size() == MAX_MOVES) break;
+            move = tt_hit->move;
+        }
+        return moves;
+    }
+
+
     [[nodiscard]] std::string format_pv_line(const MoveList& pv_line) const
     {
         std::ostringstream oss;
@@ -176,27 +198,21 @@ struct SearchThread
 inline void SearchThread::IterativeDeepening()
 {
     int prev_eval = evaluate();
-    PvLines prev_pv_lines = m_pv_lines;
     m_statistics.t_start = std::chrono::high_resolution_clock::now();
 
     for (int i = 0; i < m_parameters.n_pv; ++i)
     {
         for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
         {
-            m_pv_lines[i].line.clear();
-            m_pv_lines[i].score = 0;
 
             const int eval = AspirationWindow(depth, prev_eval);
             assert(ss().position);
-
-            std::ranges::reverse(m_pv_lines);
 
             assert(eval > -INF && eval < INF);
 
             if (!m_tm->should_stop()) // aspiration window got cancelled, we discard the result
             {
                 prev_eval = eval;
-                prev_pv_lines = m_pv_lines;
 
                 if (m_thread_id == 0)
                 {
@@ -216,8 +232,9 @@ inline void SearchThread::IterativeDeepening()
                     auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                     time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                     int nps = m_statistics.nodes / time_since_start.count();
+                    auto pv = get_pv(ss().position(), ss().best_move);
                     std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
-                        score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(prev_pv_lines[0].line));
+                        score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(pv));
                     std::cout << uci_output << std::endl;
 
                     TimeManager::UpdateInfo update_info;
@@ -226,7 +243,6 @@ inline void SearchThread::IterativeDeepening()
                 }
             }
         }
-        m_pv_lines = prev_pv_lines;
     }
 }
 
@@ -321,11 +337,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             const int score = TT::read_score(e.score, ply());
             if (e.bound == TT::Bound::EXACT || (e.bound == TT::Bound::LOWER && score >= alpha) || (e.bound == TT::Bound::UPPER && score <= beta))
             {
-                if (e.bound == TT::Bound::EXACT && score >= beta)
+                if (e.bound == TT::Bound::EXACT && score >= beta && ss().position->is_quiet(e.move))
                 {
-                    ss().history.apply_bonus(e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
-                    if (ply() > 1) ss().continuation_history.apply_bonus(ss().position(), e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                    //ss().history.apply_bonus(e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                    //if (ply() > 1) ss().continuation_history.apply_bonus(ss().position(), e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
                 }
+
 
                 m_statistics.tt_hits++;
                 return score;
@@ -795,7 +812,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     assert(local_best != Move::none() && local_best != Move::null());
     bool best_valid = !m_tm->should_stop() && local_best != Move::none() && ss().excluded == Move::none();
     if (is_root && best_valid)
-        m_pv_lines[0].line.push_back(local_best);
+        ss().best_move = local_best;
 
     TT::Bound bound = (best_eval <= alpha_org) ? TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
@@ -982,7 +999,7 @@ struct SearchThreadHandler
 
         for (const auto& t : threads)
         {
-            move_votes[t->m_pv_lines[0].line[0].raw()]++;
+            move_votes[t->ss().best_move.raw()]++;
         }
 
         const auto it =

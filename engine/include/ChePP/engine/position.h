@@ -1010,10 +1010,11 @@ struct Positions
 
     Positions(const Positions& positions)
     {
-        m_positions.reserve(positions.m_positions.size());
-        m_hashes.reserve(positions.m_hashes.size());
+        m_positions.reserve(positions.m_positions.capacity());
+        m_hashes.reserve(positions.m_hashes.capacity());
         std::ranges::copy(positions.m_positions, std::back_inserter(m_positions));
         std::ranges::copy(positions.m_hashes, std::back_inserter(m_hashes));
+        m_start_size = positions.m_start_size;
     }
 
     void clear()
@@ -1029,7 +1030,8 @@ struct Positions
         Position pos;
         if (!pos.from_fen(fen) && validate)
             return false;
-        m_positions.push_back(pos);
+        m_positions.reserve(MAX_PLY + moves.size() + 1);
+        m_positions.emplace_back(pos);
         m_hashes.emplace_back(pos.hash(), 1);
         for (const auto m : moves)
         {
@@ -1116,7 +1118,7 @@ struct Positions
 
     Handle handle_to_last()
     {
-        return VectorHandle{&m_positions, ply()};
+        return VectorHandle{&m_positions, static_cast<unsigned>(ply() + m_start_size - 1)};
     }
 
   private:

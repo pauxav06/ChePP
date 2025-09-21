@@ -29,6 +29,7 @@ public:
         int static_eval{0};
         Move excluded{Move::none()};
         int double_extensions{0};
+        Move best_move{Move::none()};
 
         Move killer1{Move::none()};
         Move killer2{Move::none()};
@@ -89,7 +90,7 @@ private:
     void update_last_node()
     {
         Node& node = m_nodes[ply()];
-        node.prev = &m_nodes[ply() - 1];
+        node.prev = ply() == 0 ? nullptr : &m_nodes[ply() - 1];
         node.ply = ply();
         node.accumulator = m_accumulators.handle_to_last();
         node.position = m_positions.handle_to_last();
