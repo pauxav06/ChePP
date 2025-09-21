@@ -750,16 +750,22 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                     ss().killer2 = ss().killer1;
                     ss().killer1 = m;
                 }
-                ss().history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
-                ss().continuation_history.apply_bonus(pos, m, [depth] (const auto b) { return b + depth * depth; });
+                ss().history.apply_bonus(m, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                ss().continuation_history.apply_bonus(pos, m, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
             }
             if (is_captured)
             {
-                ss().capture_history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
+                //ss().capture_history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
             }
             assert(local_best != Move::none());
             break;
         }
+
+        //ss().history.decay(quiets, [] (const auto b) { return b - b / 5;});
+        //ss().continuation_history.decay(pos, quiets, [] (const auto b) { return b - b / 5;});
+        //ss().capture_history.decay(captures, [] (const auto b) { return b - b / 5;});
+
+
 
         first_move = false;
         move_idx++;
