@@ -54,7 +54,6 @@ struct ContinuationHistoryTable
     const HistoryTable& get_relevant_history(const Position& position) const
     {
         const Move move = position.move();
-        std::cout << position.piece_at(move.to_sq()) << std::endl;
         return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
     }
 
