@@ -20,11 +20,12 @@
 #include <utility>
 #include <vector>
 
+using UciCallbacT = std::function<bool()>;
 inline auto uci_cb_none = [] () { return true; };
 
 class EngineParameter {
 public:
-    explicit EngineParameter(std::string name, std::function<bool()> cb = uci_cb_none)
+    explicit EngineParameter(std::string name, UciCallbacT cb = uci_cb_none)
         : m_name(std::move(name)) , m_cb(std::move(cb)) {}
     virtual ~EngineParameter() = default;
 
@@ -37,13 +38,13 @@ public:
     [[nodiscard]] virtual std::string value_str() const = 0;
 protected:
     std::string m_name;
-    std::function<bool()> m_cb;
+    UciCallbacT m_cb;
 };
 
 template <typename T>
 class ValueEngineParameter : public EngineParameter {
 public:
-    explicit ValueEngineParameter(std::string name, T& underlying, T  init, std::function<bool()> cb = uci_cb_none)
+    explicit ValueEngineParameter(std::string name, T& underlying, T  init, UciCallbacT cb = uci_cb_none)
     : EngineParameter(std::move(name), std::move(cb)), m_init(std::move(init)), m_value(underlying)
     {
         m_value = m_init;
@@ -60,7 +61,7 @@ protected:
 
 class EngineParamCheck final : public ValueEngineParameter<bool> {
 public:
-    explicit EngineParamCheck(std::string name, bool& underlying, const bool def = false, std::function<bool()> cb = uci_cb_none)
+    explicit EngineParamCheck(std::string name, bool& underlying, const bool def = false, UciCallbacT cb = uci_cb_none)
         : ValueEngineParameter(std::move(name), underlying, def, std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
@@ -86,7 +87,7 @@ public:
 
 class EngineParamSpin final : public ValueEngineParameter<int> {
 public:
-    EngineParamSpin(std::string name, int& underlying, const int init, const int min, const int max, std::function<bool()> cb = uci_cb_none)
+    EngineParamSpin(std::string name, int& underlying, const int init, const int min, const int max, UciCallbacT cb = uci_cb_none)
         : ValueEngineParameter(std::move(name), underlying, init, std::move(cb)), m_min(min), m_max(max) {}
 
     [[nodiscard]] std::string uci_declare() const override {
@@ -112,7 +113,7 @@ private:
 
 class EngineParamCombo final : public ValueEngineParameter<std::string> {
 public:
-    EngineParamCombo(std::string name, std::string& underlying, std::string def, std::vector<std::string> choices, std::function<bool()> cb = uci_cb_none)
+    EngineParamCombo(std::string name, std::string& underlying, std::string def, std::vector<std::string> choices, UciCallbacT cb = uci_cb_none)
         : ValueEngineParameter(std::move(name), underlying, std::move(def), std::move(cb)), m_choices(std::move(choices)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
@@ -138,7 +139,7 @@ private:
 
 class EngineParamString final : public ValueEngineParameter<std::string> {
 public:
-    explicit EngineParamString(std::string name, std::string& underlying, std::string init = "", std::function<bool()> cb = uci_cb_none)
+    explicit EngineParamString(std::string name, std::string& underlying, std::string init = "", UciCallbacT cb = uci_cb_none)
         : ValueEngineParameter(std::move(name), underlying, std::move(init), std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
@@ -158,7 +159,7 @@ public:
 class EngineParamButton final : public EngineParameter {
 public:
 
-    explicit EngineParamButton(const std::string& name, std::function<bool()> cb = uci_cb_none)
+    explicit EngineParamButton(const std::string& name, UciCallbacT cb = uci_cb_none)
         : EngineParameter(name, std::move(cb)) {}
 
     [[nodiscard]] std::string uci_declare() const override {
@@ -174,7 +175,7 @@ public:
     }
 };
 
-class EngineParameters {
+class EngineParameterHandler {
 public:
     template <typename T, typename... Args>
     T* add(Args&&... args) {
@@ -249,31 +250,25 @@ class UCIEngine {
         int hash_size{};
         int threads{};
         std::string tb_path{};
-        EngineParameters handler{};
-    };
-
-    struct Pos
-    {
-        Position init_pos{};
-        Position last_pos{};
-        std::vector<Move> moves{};
+        SearchThread::Parameters tunables;
+        EngineParameterHandler handler{};
     };
 
 
     Parameters m_params{};
     State m_state{Waiting};
-    Pos m_pos{};
+    Positions m_pos{};
     std::jthread m_worker;
     SearchThreadHandler m_handler{};
 
 
 public:
-    UCIEngine() {
+    explicit UCIEngine(const bool enable_tuning) {
         m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512);
         m_params.handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
         m_params.handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this] ()
         {
-            bool val = init_tb(m_params.tb_path);
+            const bool val = init_tb(m_params.tb_path);
             if (val) std::cout << "info string set tb path" << std::endl;
             return val;
 
@@ -284,8 +279,11 @@ public:
             std::cout << "info string Hash cleared" << std::endl;
             return true;
         });
-        m_pos.init_pos.from_fen(start_fen);
-        m_pos.last_pos.from_fen(start_fen);
+        if (enable_tuning)
+        {
+            m_params.handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
+        }
+        m_pos.set_fen(start_fen);
     }
 
     void uci() const
@@ -302,74 +300,77 @@ public:
         std::cout << "readyok" << std::endl ;
     }
 
-    void ucinewgame() {
+    void ucinewgame()
+    {
         if (m_state != Waiting) return;
         g_tt.reset();
+        m_pos.clear();
+        m_pos.set_fen(start_fen);
+    }
+
+    void parse_moves(std::istringstream& iss, MoveList& moves) {
+        std::string token;
+        while (iss >> token) {
+            auto move = Move::from_uci(token, {
+                m_pos.last().pieces(),
+                m_pos.last().ep_square(),
+                m_pos.last().castling_rights()
+            });
+            if (!move) {
+                throw std::invalid_argument(std::format("invalid move {}", token));
+            }
+            moves.push_back(*move);
+        }
     }
 
     void position(const std::string& cmd) {
         if (m_state != Waiting) return;
+
         std::istringstream iss(cmd);
         std::string token;
         iss >> token;
+        assert(token == "position");
 
-        m_pos.moves.clear();
-        m_pos.moves.reserve(MAX_PLY);
+        m_pos.clear();
+        MoveList moves;
 
         std::string type;
         iss >> type;
-        if (type == "startpos") {
-            m_pos.init_pos.from_fen(start_fen);
-            m_pos.last_pos = m_pos.init_pos;
-            if (iss >> token && token == "moves") {
-                while (iss >> token) {
-                    auto m = Move::from_uci(token, {
-                        m_pos.last_pos.pieces(),
-                        m_pos.last_pos.ep_square(),
-                        m_pos.last_pos.castling_rights()
-                    });
-                    if (m)
-                    {
-                        m_pos.moves.push_back(m.value());
-                        m_pos.last_pos.do_move(m.value());
-                    }
-                }
-            }
-        } else if (type == "fen") {
-            std::string fen, part;
-            for (int i = 0; i < 6 && iss >> part; ++i) {
-                if (i) fen += " ";
-                fen += part;
-            }
-            bool success = m_pos.init_pos.from_fen(fen);
-            m_pos.last_pos = m_pos.init_pos;
-            if (success)
-            {
-                std::string is_moves;
-                if (iss >> token && token == "moves") {
-                    while (iss >> token) {
-                        auto m = Move::from_uci(token, {
-                            m_pos.last_pos.pieces(),
-                            m_pos.last_pos.ep_square(),
-                            m_pos.last_pos.castling_rights()
-                        });
-                        if (m)
-                        {
-                            m_pos.moves.push_back(m.value());
-                            m_pos.last_pos.do_move(m.value());
-                        }
-                    }
-                }
-            }
-        }
-        //std::cout << m_pos.init_pos << std::endl;
-    }
 
+        try {
+            if (type == "startpos") {
+                if (!m_pos.set_fen(start_fen)) {
+                    throw std::invalid_argument("invalid startpos fen");
+                }
+
+                if (iss >> token && token == "moves") {
+                    parse_moves(iss, moves);
+                }
+            }
+            else if (type == "fen") {
+                std::string fen, part;
+                for (int i = 0; i < 6 && iss >> part; ++i) {
+                    if (i) fen += " ";
+                    fen += part;
+                }
+
+                if (!m_pos.set_fen(fen)) {
+                    throw std::invalid_argument("invalid fen");
+                }
+
+                if (iss >> token && token == "moves") {
+                    parse_moves(iss, moves);
+                }
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "position command error: " << e.what() << '\n';
+        }
+    }
 
     void go(const std::string& cmd)
     {
         if (m_state != Waiting) return;
-        TimeManager::Constraints constraints;
+        TimeManager::UCIConstraints constraints;
         std::istringstream iss(cmd);
         std::string token;
 
@@ -386,12 +387,12 @@ public:
 
         TimeManager::Params tm_params{};
         TimeManager::InitInfo init_info{};
-        init_info.moves_played = m_pos.last_pos.full_move_clock();
-        init_info.side = m_pos.last_pos.side_to_move();
+        init_info.moves_played = (m_pos.last().full_move_clock() - 1) * 2;
+        init_info.side = m_pos.last().side_to_move();
 
         TimeManager tm{ tm_params, init_info, constraints };
 
-        m_handler.set(m_params.threads, tm, m_pos.init_pos, m_pos.moves);
+        m_handler.set(m_params.threads, m_params.tunables, tm, m_pos);
         m_worker = std::jthread([&]()
         {
             m_handler.start();
@@ -403,9 +404,10 @@ public:
 
     void eval() const
     {
-        const Accumulator accum{m_pos.last_pos};
-        std::cout << "Evaluation for " << m_pos.last_pos.side_to_move() << " (cp): ";
-        accum.evaluate_uci(m_pos.last_pos.side_to_move());
+        std::cout << m_pos.last() << std::endl;
+        const Accumulator accum{m_pos.last()};
+        std::cout << "Evaluation for " << m_pos.last().side_to_move() << " (cp): " << std::endl;
+        accum.evaluate_uci(m_pos.last().side_to_move());
     }
 
 
@@ -433,6 +435,8 @@ public:
                     std::cerr << "info string Unknown option or invalid value\n" << std::endl;
             } else if (line == "evaluate" || line == "eval") {
                 eval();
+            } else if (line  == "print") {
+                std::cout << m_pos.last() << std::endl;
             } else if (line == "stop") {
                 stop();
             } else if (line == "quit") {

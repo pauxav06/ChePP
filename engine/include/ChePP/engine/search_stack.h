@@ -5,6 +5,7 @@
 #ifndef CHEPP_SEARCH_STACK_H
 #define CHEPP_SEARCH_STACK_H
 
+#include "nnue.h"
 
 #include <cassert>
 #include <cstddef>
@@ -12,68 +13,111 @@
 
 #include "ChePP/engine/position.h"
 
+using HistoryT = EnumArray<Piece, EnumArray<Square, int>>;
+using ContinuationHistoryT = EnumArray<Piece, EnumArray<Square, EnumArray<Piece, EnumArray<Square, int>>>>;
+using RefutationMapT = std::unordered_map<Move, size_t>;
+
 class SearchStack {
 public:
-    class Node {
-    public:
-        // general infos
-        Position* pos;
-        int ply{0};
+    struct Node
+    {
+        Node* prev{};
+        int ply{};
+        Position* position{};
+        bool is_repetition{false};
+        Accumulator* accumulator{};
+
         int eval{0};
+        int static_eval{0};
         Move excluded{Move::none()};
         int double_extensions{0};
 
-        // heuristics
         Move killer1{Move::none()};
         Move killer2{Move::none()};
 
-
-
-
-        [[nodiscard]] const Node* next() const {
-            if (const auto self = this; self + 1 < owner_end_) {
-                return self + 1;
-            }
-            return nullptr;
-        }
-
-        [[nodiscard]] const Node* prev() const {
-            if (const auto self = this; self > owner_begin_) {
-                return self - 1;
-            }
-            return nullptr;
-        }
-
-
-    private:
-        friend class SearchStack;
-        inline static Node* owner_begin_{nullptr};
-        inline static Node* owner_end_{nullptr};
+        HistoryT* continuation_history{};
+        HistoryT* history{};
+        RefutationMapT* refutation_nodes{};
     };
 
-    explicit SearchStack(const std::size_t depth)
-        : capacity_(depth),
-          nodes_(std::make_unique<Node[]>(depth))
+    explicit SearchStack(const Positions& positions)
+    : m_positions(positions), m_accumulators(positions.last()), m_nodes(std::make_unique<Node[]>(MAX_PLY))
     {
-        Node::owner_begin_ = nodes_.get();
-        Node::owner_end_   = nodes_.get() + depth;
+        update_last_node();
     }
 
-    Node& operator[](std::size_t i) {
-        assert(i < capacity_);
-        return nodes_[i];
+    [[nodiscard]] int ply() const { return m_positions.ply(); }
+
+    void update_last_node()
+    {
+        Node& node = m_nodes[ply()];
+        node.prev = &m_nodes[ply() - 1];
+        node.ply = ply();
+        node.position = &m_positions.last();
+        node.accumulator = &m_accumulators.last();
+        node.history = &m_history;
+        const Piece moved_piece = node.position->piece_at(node.position->move().to_sq());
+        const Square moved_to = node.position->move().to_sq();
+        node.continuation_history = &m_continuation_history.at(moved_piece).at(moved_to);
+        node.refutation_nodes = &m_refutation_nodes;
+        node.is_repetition = m_positions.is_repetition();
     }
 
-    const Node& operator[](const std::size_t i) const {
-        assert(i < capacity_);
-        return nodes_[i];
+    void reset_last_node()
+    {
+        Node& node = m_nodes[ply()];
+        node.prev = nullptr;
+        node.ply = 0;
+        node.position = nullptr;
+        node.accumulator = nullptr;
+        node.history = nullptr;
+        node.refutation_nodes = nullptr;
+        node.continuation_history = nullptr;
+        node.is_repetition = false;
     }
 
-    [[nodiscard]] std::size_t capacity() const { return capacity_; }
+    Node& operator[](const int i) {
+        assert(i >= 0 && i <= ply());
+        return m_nodes[i];
+    }
+
+    const Node& operator[] (const int i) const {
+        assert(i >= 0 && i <= ply());
+        return m_nodes[i];
+    }
+
+    void do_move(const Move move)
+    {
+        const int init_ply = ply();
+        m_positions.do_move(move);
+        if (move != Move::none() && move != Move::null())
+        {
+            m_accumulators.do_move(m_positions[init_ply], m_positions[ply()]);
+        }
+        Node& node = m_nodes[ply()];
+        update_last_node();
+    }
+
+    void undo_move()
+    {
+        const Move move = m_positions.last().move();
+        reset_last_node();
+        if (move != Move::none() && move != Move::null())
+        {
+            m_accumulators.undo_move();
+        }
+        m_positions.undo_move();
+
+    }
 
 private:
-    std::size_t capacity_;
-    std::unique_ptr<Node[]> nodes_;
+    Positions m_positions;
+    Accumulators m_accumulators;
+    std::unique_ptr<Node[]> m_nodes;
+
+    HistoryT m_history{};
+    ContinuationHistoryT m_continuation_history{};
+    RefutationMapT m_refutation_nodes{MAX_MOVES};
 };
 
 

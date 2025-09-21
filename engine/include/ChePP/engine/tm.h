@@ -12,74 +12,9 @@
 #include <utility>
 #include <vector>
 
-template<typename T>
-class RingBuffer {
-public:
-    explicit RingBuffer(size_t capacity)
-        : buffer(capacity), capacity(capacity), head(0), size_(0) {}
-
-    void push(const T& value) {
-        buffer[head] = value;
-        head = (head + 1) % capacity;
-        if (size_ < capacity) size_++;
-    }
-
-    const T& operator[](size_t i) const {
-        size_t index = (head + capacity - size_ + i) % capacity;
-        return buffer[index];
-    }
-
-    size_t size() const { return size_; }
-    bool full() const { return size_ == capacity; }
-
-    struct BufferIterator {
-        using iterator_category = std::random_access_iterator_tag;
-        using value_type        = T;
-        using difference_type   = std::ptrdiff_t;
-        using pointer           = const T*;
-        using reference         = const T&;
-
-        const RingBuffer* rb{};
-        size_t pos{};
-
-        reference operator*() const { return (*rb)[pos]; }
-        pointer operator->() const { return &(*rb)[pos]; }
-
-        BufferIterator& operator++() { ++pos; return *this; }
-        BufferIterator operator++(int) { auto tmp = *this; ++*this; return tmp; }
-        BufferIterator& operator--() { --pos; return *this; }
-        BufferIterator operator--(int) { auto tmp = *this; --*this; return tmp; }
-
-        BufferIterator& operator+=(difference_type n) { pos += n; return *this; }
-        BufferIterator& operator-=(difference_type n) { pos -= n; return *this; }
-
-        reference operator[](difference_type n) const { return *(*this + n); }
-
-        friend BufferIterator operator+(BufferIterator it, difference_type n) { it += n; return it; }
-        friend BufferIterator operator+(difference_type n, BufferIterator it) { return it + n; }
-        friend BufferIterator operator-(BufferIterator it, difference_type n) { it -= n; return it; }
-        friend difference_type operator-(BufferIterator a, BufferIterator b) { return difference_type(a.pos) - difference_type(b.pos); }
-
-        friend bool operator==(const BufferIterator& a, const BufferIterator& b) { return a.pos == b.pos; }
-        friend bool operator!=(const BufferIterator& a, const BufferIterator& b) { return !(a == b); }
-        friend bool operator<(const BufferIterator& a, const BufferIterator& b) { return a.pos < b.pos; }
-        friend bool operator>(const BufferIterator& a, const BufferIterator& b) { return b < a; }
-        friend bool operator<=(const BufferIterator& a, const BufferIterator& b) { return !(b < a); }
-        friend bool operator>=(const BufferIterator& a, const BufferIterator& b) { return !(a < b); }
-    };
-
-    auto begin() const { return BufferIterator{this, 0}; }
-    auto end()   const { return BufferIterator{this, size_}; }
-
-private:
-    std::vector<T> buffer;
-    size_t capacity, head, size_;
-};
-
-
 struct TimeManager {
 
-    struct Constraints {
+    struct UCIConstraints {
         int move_time{-1};
         EnumArray<Color, int> time{-1, -1};
         EnumArray<Color, int> inc{-1, -1};
@@ -88,185 +23,137 @@ struct TimeManager {
     };
 
     struct Params {
+        int baseline_moves_to_go{30};
         int min_time{50};
         int max_time{60 * 1000 * 60};
         int safety_margin{200};
-        int sampling_depth{10};
-        double winning_factor{0.8};
-        double losing_factor{1.2};
-        double unstable_factor{1.3};
-        double stable_factor{0.8};
-        uint64_t normalisation_base{500000};
+        float instabiliy_factor{0.05f};
+        float stability_factor{0.01f};
+        float killer_factor{1.5f};
     };
 
     struct InitInfo {
         Color side{NO_COLOR};
         int moves_played{0};
-        std::vector<int> evaluations{};
+        int static_eval{};
     };
 
     struct UpdateInfo {
         int eval{0};
         int second_move_delta{0};
+        bool changed{false};
         uint64_t nodes_searched{0};
+    };
+
+    struct State
+    {
+        std::chrono::steady_clock::time_point start_time{};
+        int max_time_ms{-1};
+        int adjusted_time_ms{-1};
+        bool stop_flag{false};
+        int same_move_streak{0};
+        int n_changes{0};
+        int score{0};
     };
 
     TimeManager() = default;
 
-    explicit TimeManager(const Params& params, InitInfo info, const Constraints& constraints)
-        : params(params), init_info(std::move(info)), constraints(constraints), update_infos(params.sampling_depth) {
+    explicit TimeManager(const Params& params, const InitInfo& info, const UCIConstraints& constraints)
+        : m_params(params), m_init_info(info), m_constraints(constraints) {
         compute_base_time();
     }
 
     void start() {
-        start_time = std::chrono::steady_clock::now();
-        m_stop_flag = false;
+        m_state.start_time = std::chrono::steady_clock::now();
+        m_state.stop_flag = false;
     }
 
-    bool should_stop() const
+    [[nodiscard]] bool should_stop() const
     {
-        return m_stop_flag;
+        return m_state.stop_flag;
     }
 
-    void send_update_info(const UpdateInfo& info)
+
+    // called by iterative deepening
+    void adjust_time(const UpdateInfo& info) {
+        if (info.changed)
+        {
+            m_state.same_move_streak = 0;
+            m_state.n_changes++;
+        }
+        else m_state.same_move_streak++;
+        m_state.adjusted_time_ms *= std::pow(1.0f - m_params.stability_factor, m_state.same_move_streak);
+        m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
+    }
+
+    void new_killer()
     {
-        update_infos.push(info);
-        //adjust_time();
+        m_state.adjusted_time_ms *= m_params.killer_factor;
+        m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
     }
 
     void update_depth(const int depth)
     {
-        //std::cout << adjusted_time_ms << " " << depth << std::endl;
-        if (depth > 0 && constraints.depth > 0 && depth > constraints.depth) {
-            m_stop_flag = true;
+        if (depth > 0 && m_constraints.depth > 0 && depth > m_constraints.depth) {
+            m_state.stop_flag = true;
         }
     }
 
     void update_time() {
-
-        if (m_max_time_ms > 0) {
-            auto elapsed = std::chrono::steady_clock::now() - start_time;
-            if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= adjusted_time_ms) {
-                m_stop_flag = true;
+        if (m_state.max_time_ms > 0) {
+            auto elapsed = std::chrono::steady_clock::now() - m_state.start_time;
+            if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >= m_state.adjusted_time_ms) {
+                m_state.stop_flag = true;
             }
         }
     }
 
-    void stop() { m_stop_flag = true; }
+    void stop() { m_state.stop_flag = true; }
 
 private:
 
     [[nodiscard]] int estimate_moves_to_go() const {
-        int base_moves = constraints.moves_to_go > 0 ? constraints.moves_to_go : 35;
-
-        const auto& evals = init_info.evaluations;
-        const bool winning = init_info.evaluations.back() > 150;
-        const bool losing = init_info.evaluations.back() < -150;
-
-        int mean_diff = 0;
-        if (evals.size() >= 2) {
-            auto diffs = evals
-                | std::views::transform([&](const auto& e) { return relative_eval(e, init_info.side); })
-                | std::views::adjacent<2>
-                | std::views::transform([&](auto&& e) { return std::abs(std::get<0>(e) - std::get<1>(e)); });
-
-            mean_diff = std::accumulate(diffs.begin(), diffs.end(), 0)
-                        / static_cast<int>(evals.size() - 1);
-        }
-        mean_diff = std::clamp(mean_diff, -100, 100);
-
-
-        if (winning) base_moves = std::max(10, base_moves / (150 + mean_diff) / 100); // we are crushing
-        else if (losing) base_moves = std::max(10, base_moves / (50 - mean_diff) / 100); // we are getting crushed
-
-        if (!init_info.evaluations.empty()) {
-            const double mean = std::accumulate(init_info.evaluations.begin(),
-                                          init_info.evaluations.end(), 0.0) /
-                          init_info.evaluations.size();
-            const double sq_sum = std::inner_product(init_info.evaluations.begin(),
-                                               init_info.evaluations.end(),
-                                               init_info.evaluations.begin(),
-                                               0.0);
-            const double variance = (sq_sum / init_info.evaluations.size()) - (mean * mean);
-
-            if (variance > 50) base_moves = static_cast<int>(base_moves * 1.5); // unstable -> longer
-            if (std::abs(mean) < 30 && variance < 10) base_moves = static_cast<int>(base_moves * 1.5); // dead draw -> very long
-        }
-
-        return base_moves;
+        assert(m_constraints.moves_to_go < 0);
+        const int baseline = m_params.baseline_moves_to_go;
+        int estimate = baseline;
+        estimate -= std::min(std::abs(m_init_info.static_eval / 100), 10); // if high eval we will probably finish sooner
+        estimate += (m_init_info.moves_played > 75 ? m_init_info.moves_played / 30 : 0); // very long drawish games
+        return estimate;
     }
 
 
     void compute_base_time() {
-        if (constraints.move_time > 0) {
-            m_max_time_ms = constraints.move_time;
-            adjusted_time_ms = m_max_time_ms;
+        // first we check if we have a fixed time to search
+        if (m_constraints.move_time > 0) {
+            m_state.max_time_ms = m_constraints.move_time;
+            m_state.adjusted_time_ms = m_constraints.move_time;
             return;
         }
-        const int time_left = constraints.time[init_info.side];
-        const int inc = constraints.inc[init_info.side];
-        if (time_left < 0) {
-            m_max_time_ms = params.max_time;
-            adjusted_time_ms = m_max_time_ms;
+        const int time_left = m_constraints.time[m_init_info.side];
+        const int inc = m_constraints.inc[m_init_info.side];
+        if (time_left < 0) { // if we get no time we assume we can go on forever
+            m_state.max_time_ms = m_params.max_time;
+            m_state.adjusted_time_ms = m_params.max_time;
             return;
         }
-        const int moves_to_go = constraints.moves_to_go > 0 ? constraints.moves_to_go : 35;
-        m_max_time_ms = std::max(params.min_time, (time_left / moves_to_go) + inc);
-        m_max_time_ms = std::max(params.min_time, m_max_time_ms - params.safety_margin);
-        m_max_time_ms = std::min(m_max_time_ms, params.max_time);
-        adjusted_time_ms = m_max_time_ms;
+        const int moves_to_go = m_constraints.moves_to_go > 0 ? m_constraints.moves_to_go : estimate_moves_to_go();
+        m_state.max_time_ms = std::max(m_params.min_time, (time_left / moves_to_go) + inc);
+        m_state.max_time_ms = clamp_time(m_state.max_time_ms);
+        m_state.adjusted_time_ms = m_state.max_time_ms;
     }
 
-    void adjust_time() {
-        if (update_infos.size() < 2) return; // not enough data
-        if (constraints.time[init_info.side] < 0) return; // does not rely on time
-        if (constraints.move_time > 0) return; //do not adjust fixed time
-
-        const int last_eval = update_infos[update_infos.size() - 1].eval;
-
-        auto evals = update_infos |
-            std::views::transform(&UpdateInfo::eval) |
-            std::views::transform([&](auto&& e) {return relative_eval(e, init_info.side);});
-
-        const int sum  = std::ranges::fold_left(evals, 0, std::plus<>());
-        const int mean = sum / static_cast<int>(update_infos.size());
-
-        const int sq_sum = std::ranges::fold_left(evals | std::views::transform([](const int e){ return e * e; }),0, std::plus<>());
-
-        const int variance = sq_sum / static_cast<int>(update_infos.size()) - mean * mean;
-
-        const bool winning = last_eval > 100;
-        const bool losing  = last_eval < -100;
-        const bool unstable = variance > 50;
-        const bool stable = variance < 10;
-
-        double factor = 1.0;
-        if (winning) factor *= params.winning_factor;
-        if (losing)  factor *= params.losing_factor;
-        if (unstable) factor *= params.unstable_factor;
-        if (stable) factor *= params.stable_factor;
-
-        UpdateInfo cur = update_infos[update_infos.size() - 1];
-        UpdateInfo last = update_infos[update_infos.size() - 2];
-
-        const double weight = static_cast<double>(cur.nodes_searched - last.nodes_searched) / static_cast<double>(params.normalisation_base);
-
-        const double adj_factor = std::pow(factor, weight);
-        factor *= adj_factor;
-
-        adjusted_time_ms = std::clamp(static_cast<int>(m_max_time_ms * factor), params.min_time, params.max_time);
-        //std::cout << "adjusted time" << adjusted_time_ms << std::endl;
-
+    [[nodiscard]] int clamp_time(int time) const
+    {
+        time  = std::max(m_params.min_time, time - m_params.safety_margin);
+        time = std::min(time, m_params.max_time);
+        return time;
     }
 
-    Params params{};
-    InitInfo init_info{};
-    Constraints constraints{};
-    RingBuffer<UpdateInfo> update_infos{0};
-    std::chrono::steady_clock::time_point start_time{};
-    int m_max_time_ms{-1};
-    int adjusted_time_ms{-1};
-    bool m_stop_flag{false};
+    Params m_params{};
+    InitInfo m_init_info{};
+    UCIConstraints m_constraints{};
+    State m_state{};
+
 };
 
 #endif // TIME_MANAGER_H
