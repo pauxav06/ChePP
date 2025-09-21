@@ -16,3 +16,4 @@ position fen 2rr3k/1p4p1/5p1p/3p4/2nn1N2/P4P1P/BP3RP1/3R2K1 b - - 5 32
 broski is blind, saw g7g5 idiot
 
 position fen r1b1k2r/4b3/p1p1p3/4p3/q1P4p/1R4P1/P1Q1B2P/5RK1 b kq - 1 22 moves a4a5
+position fen 8/qr2rpk1/2QR2pp/pp2p3/4P3/P6P/1PP3P1/1K3R2 b - - 5 35
