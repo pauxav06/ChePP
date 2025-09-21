@@ -13,24 +13,6 @@ struct perft_test_case_t
 };
 
 
-inline void pft2(Positions& positions, const int ply, size_t& out)
-{
-    MoveList l = gen_legal(positions.last());
-
-    if (ply == 1)
-    {
-        out += l.size();
-        return;
-    }
-
-    for (const auto [move, score] : l)
-    {
-        positions.do_move(move);
-        pft2(positions, ply - 1, out);
-        positions.undo_move();
-    }
-}
-
 TEST(EngineTest, PerftCases)
 {
     const std::vector<perft_test_case_t> test_cases =
@@ -58,11 +40,12 @@ TEST(EngineTest, PerftCases)
 
     for (const auto& test_case : test_cases)
     {
-        Positions pos{test_case.fen};
+        Positions pos{};
+        pos.set_fen(test_case.fen);
         for (size_t d = 1; d < test_case.expected_perfts.size(); ++d)
         {
             size_t out = 0;
-            pft2(pos, d, out);
+            perft(pos.last(), d, out);
             EXPECT_EQ(out, test_case.expected_perfts[d]) << "Failed on " << test_case.name << " at depth " << d;
         }
     }

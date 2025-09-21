@@ -589,8 +589,8 @@ inline void Position::do_move(const Move move)
     }
 
     m_halfmove_clock++;
-    m_color = ~m_color;
     m_fullmove_clock += m_color == BLACK;
+    m_color = ~m_color;
     m_ep_square = NO_SQUARE;
     m_captured  = NO_PIECE;
     m_move      = move;
@@ -831,6 +831,7 @@ inline bool Position::is_insufficient_material() const
     return false;
 }
 
+
 struct Positions
 {
     using PosRef      = Position&;
@@ -882,7 +883,7 @@ struct Positions
         return true;
     }
 
-    [[nodiscard]] int ply() const { return static_cast<int>(m_positions.size() - m_start_size); }
+    [[nodiscard]] uint32_t ply() const { return static_cast<int>(m_positions.size() - m_start_size); }
 
     std::span<Position> positions()
     {
@@ -927,6 +928,18 @@ struct Positions
     {
         const auto view = m_hashes | std::views::reverse | std::views::take(last().halfmove_clock() + 1);
         return std::ranges::any_of(view, [&](const auto h) { return h.second >= 3; });
+    }
+
+    [[nodiscard]] bool is_50_move_rule() const
+    {
+        return m_positions.back().halfmove_clock() >= 100;
+    }
+
+    using Handle = VectorHandle<Position>;
+
+    Handle handle_to_last()
+    {
+        return VectorHandle{&m_positions, ply()};
     }
 
   private:

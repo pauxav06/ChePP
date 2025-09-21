@@ -22,8 +22,8 @@ public:
     {
         Node* prev{};
         int ply{};
-        Position* position{};
-        Accumulator* accumulator{};
+        Positions::Handle position{};
+        Accumulators::Handle accumulator{};
         bool is_repetition{false};
 
         int static_eval{0};
@@ -70,6 +70,8 @@ public:
 
     void undo_move(const bool update_nnue)
     {
+        assert(ply() > 0);
+        std::cout << "Uwinding search stak at depth " << ply() << std::endl;
         const Move move = m_positions.last().move();
         reset_last_node();
         if (update_nnue && move != Move::none() && move != Move::null())
@@ -77,7 +79,6 @@ public:
             m_accumulators.undo_move();
         }
         m_positions.undo_move();
-
     }
 
 private:
@@ -86,8 +87,8 @@ private:
         Node& node = m_nodes[ply()];
         node.prev = &m_nodes[ply() - 1];
         node.ply = ply();
-        node.position = &m_positions.last();
-        node.accumulator = &m_accumulators.last();
+        node.accumulator = m_accumulators.handle_to_last();
+        node.position = m_positions.handle_to_last();
         node.continuation_history = ContinuationHistory(&m_continuation_history, node.position);
         node.history = History(&m_history, node.position);
         node.capture_history = History(&m_capture_history, node.position);
@@ -100,8 +101,8 @@ private:
         Node& node = m_nodes[ply()];
         node.prev = nullptr;
         node.ply = 0;
-        node.position = nullptr;
-        node.accumulator = nullptr;
+        node.position = {};
+        node.accumulator = {};
         node.history = {};
         node.continuation_history = {};
         node.capture_history = {};

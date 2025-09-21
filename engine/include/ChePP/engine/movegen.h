@@ -128,6 +128,7 @@ inline void gen_castling(const Position& pos, MoveList& list)
         {
             auto [k_from, k_to] = type.king_move();
             auto [r_from, r_to] = type.rook_move();
+            //std::cout << pos << std::endl;
             assert(pos.piece_at(k_from) == Piece(c, KING));
             bool            safe = (from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
             const Direction dir  = direction_from(k_from, k_to);

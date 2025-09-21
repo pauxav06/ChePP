@@ -54,6 +54,7 @@ struct ContinuationHistoryTable
     const HistoryTable& get_relevant_history(const Position& position) const
     {
         const Move move = position.move();
+        std::cout << position.piece_at(move.to_sq()) << std::endl;
         return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
     }
 
@@ -81,7 +82,7 @@ struct ContinuationHistoryTable
 struct History
 {
     History() = default;
-    History(HistoryTable* hist, Position* pos) : m_hist(hist), position(pos) {}
+    History(HistoryTable* hist, Positions::Handle pos) : m_hist(hist), position(pos) {}
 
     History(const History&) = default;
     History& operator=(const History&) = default;
@@ -92,27 +93,22 @@ struct History
 
     [[nodiscard]] BonusT get_bonus(const Move move) const
     {
-        assert(m_hist && position);
         return m_hist->get_bonus(*position, move);
     }
 
     template <BonusFn F>
     void apply_bonus(const Move move, const F& bonus) {
-        assert(m_hist && position);
         m_hist->apply_bonus(*position, move, bonus);
     }
 
     template <BonusFn F>
     void decay(const MoveList& moves, const F& decay)
     {
-        assert(m_hist && position);
         m_hist->decay(*position, moves, decay);
     }
 
-    [[nodiscard]] bool valid() const noexcept { return m_hist && position; }
-
     HistoryTable* m_hist = nullptr;
-    Position* position = nullptr;
+    Positions::Handle position{};
 };
 
 
@@ -122,7 +118,7 @@ struct ContinuationHistory
     using Decay = std::function<int(int)>;
 
     ContinuationHistory() = default;
-    ContinuationHistory(ContinuationHistoryTable* hist, Position* prev) : m_hist(hist), previous(prev) {}
+    ContinuationHistory(ContinuationHistoryTable* hist, const Positions::Handle& prev) : m_hist(hist), previous(prev) {}
 
     ContinuationHistory(const ContinuationHistory&) = default;
     ContinuationHistory& operator=(const ContinuationHistory&) = default;
@@ -133,28 +129,24 @@ struct ContinuationHistory
 
     [[nodiscard]] BonusT get_bonus(const Position& current, const Move move) const
     {
-        assert(m_hist && previous);
         return m_hist->get_bonus(*previous, current, move);
     }
 
     template <BonusFn F>
     void apply_bonus(const Position& current, const Move move, const F& bonus)
     {
-        assert(m_hist && previous);
         m_hist->apply_bonus(*previous, current, move, bonus);
     }
 
     template <BonusFn F>
     void decay(const Position& current, const MoveList& moves, const F& decay)
     {
-        assert(m_hist && previous);
         m_hist->decay(*previous, current, moves, decay);
     }
 
-    [[nodiscard]] bool valid() const noexcept { return m_hist && previous; }
 
     ContinuationHistoryTable* m_hist = nullptr;
-    Position* previous = nullptr;
+    Positions::Handle previous{};
 };
 
 using RefutationMapT = std::unordered_map<Move, size_t>;
