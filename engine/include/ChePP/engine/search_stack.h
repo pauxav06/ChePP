@@ -47,8 +47,6 @@ public:
     m_capture_history(std::make_unique<HistoryTable>()),
     m_continuation_history(std::make_unique<ContinuationHistoryTable>())
     {
-        std::cout << "created search stack " << this << std::endl;
-        std::cout << m_positions[ply()] << std::endl;
         update_last_node();
     }
 

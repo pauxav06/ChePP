@@ -1066,7 +1066,7 @@ struct VectorHandle {
     std::vector<T>* ptr;
     uint32_t index;
 
-    VectorHandle(std::vector<T>* p, uint32_t i) : ptr(p), index(i) {}
+    VectorHandle(std::vector<T>* p, const uint32_t i) : ptr(p), index(i) {}
     VectorHandle() : ptr(nullptr), index(0) {}
 
     T& operator*() const {
@@ -1075,6 +1075,10 @@ struct VectorHandle {
 
     T* operator->() const {
         return &ptr->at(index);
+    }
+
+    T& operator()() const {
+        return ptr->at(index);
     }
 
     explicit operator bool() const {

@@ -63,7 +63,7 @@ struct Position
     [[nodiscard]] bool is_capture(Move move) const;
     void               do_move(Move move);
     [[nodiscard]] bool is_quiet(Move move) const;
-    bool               is_valid_move(Move move) const;
+    [[nodiscard]] bool is_valid(Move move) const;
 
     [[nodiscard]] bool in_check(const Color c) const { return checkers(c) != Bitboard::empty(); }
 
@@ -483,102 +483,6 @@ inline bool Position::is_quiet(const Move move) const
     return move.type_of() != PROMOTION && !is_capture(move);
 }
 
-inline bool Position::is_valid_move(const Move move) const
-{
-    std::cout << to_string() << move << std::endl;
-    if (move == Move::null())
-        return true;
-
-    const Square from = move.from_sq();
-    const Square to   = move.to_sq();
-    const Piece  pc   = piece_at(from);
-
-    if (pc == NO_PIECE)
-        return false;
-
-    const Color us = pc.color();
-    if (us != side_to_move())
-        return false;
-
-    switch (pc.type().value())
-    {
-        case PAWN.value():
-            if (move.type_of() == EN_PASSANT)
-            {
-                if (to != ep_square())
-                    return false;
-                const Direction up = (us == WHITE ? NORTH : SOUTH);
-                if (!(Bitboard(from) & pseudo_attack<PAWN>(to - up, ~us)))
-                    return false;
-            }
-            else if (move.type_of() == PROMOTION)
-            {
-                if ((us == WHITE && to.rank() != RANK_8) || (us == BLACK && to.rank() != RANK_1))
-                    return false;
-            }
-            if (!(pseudo_attack<PAWN>(from, us) & Bitboard(to)))
-                //return false;
-            break;
-
-        case KNIGHT.value():
-            if (!(attacks<BISHOP>(from) & Bitboard(to)))
-                return false;
-            break;
-
-        case BISHOP.value():
-            if (!(attacks<BISHOP>(from, occupancy()) & Bitboard(to)))
-                return false;
-            break;
-
-        case ROOK.value():
-            if (!(attacks<ROOK>(from, occupancy()) & Bitboard(to)))
-                return false;
-            break;
-
-        case QUEEN.value():
-            if (!(attacks<QUEEN>(from, occupancy()) & Bitboard(to)))
-                return false;
-            break;
-
-        case KING.value():
-            if (move.type_of() == CASTLING)
-            {
-                const auto cr = castling_rights();
-                if (!cr.has(move.castling_type()))
-                    return false;
-                auto [k_from, k_to] = move.castling_type().king_move();
-                auto [r_from, r_to] = move.castling_type().rook_move();
-                if (from != k_from || to != k_to || piece_at(r_from) != Piece{us, ROOK})
-                    return false;
-                Bitboard path = line(k_from, k_to) | Bitboard(k_to);
-                if ((path & occupancy()) != Bitboard(to))
-                    return false;
-                Direction d = direction_from(k_from, k_to);
-                for (Square sq = from; sq != to; sq = sq + d)
-                {
-                    if (is_attacking_sq(sq, ~us))
-                        return false;
-                }
-            }
-            else
-            {
-                if (!(attacks<KING>(from) & Bitboard(to)))
-                    return false;
-            }
-            break;
-        default:
-            return false;
-    }
-
-    if (is_occupied(to) && color_at(to) == us)
-        return false;
-
-    if (!is_legal(move))
-        return false;
-
-    return true;
-}
-
 inline void Position::do_move(const Move move)
 {
 
@@ -833,6 +737,271 @@ inline bool Position::is_insufficient_material() const
 }
 
 
+
+#include "bitboard.h"
+#include "position.h"
+#include "types.h"
+
+#include <ranges>
+
+struct MoveList : ArrayStack<Move, 256> {
+    using Base = ArrayStack;
+    using Base::push_back;
+    using Base::operator[];
+    using Base::size;
+    using Base::begin;
+    using Base::end;
+};
+
+
+inline void make_all_promotions(MoveList& list, const Square from, const Square to)
+{
+    list.push_back(Move::make<PROMOTION>(from, to, QUEEN));
+    list.push_back(Move::make<PROMOTION>(from, to, ROOK));
+    list.push_back(Move::make<PROMOTION>(from, to, BISHOP));
+    list.push_back(Move::make<PROMOTION>(from, to, KNIGHT));
+}
+
+template <move_type_t T>
+void add_moves_from_bb(MoveList& list, const Bitboard bb, const int delta)
+{
+    bb.for_each_square([&](const Square to) { list.push_back(Move::make<T>(to - delta, to)); });
+}
+
+inline void add_promotions(MoveList& list, const Bitboard bb, const int delta)
+{
+    bb.for_each_square([&](const Square to) { make_all_promotions(list, to - delta, to); });
+}
+
+
+template <Color c>
+void gen_pawn_moves(const Position& pos, MoveList& list)
+{
+    constexpr auto up{relative_dir<c, NORTH>};
+    constexpr auto down{relative_dir<c, SOUTH>};
+    constexpr auto up_right{relative_dir<c, NORTH_EAST>};
+    constexpr auto up_left{relative_dir<c, NORTH_WEST>};
+
+    constexpr Bitboard bb_promotion_rank{relative_rank<c, RANK_7>};
+    constexpr Bitboard bb_third_rank{relative_rank<c, RANK_3>};
+    const Bitboard     check_mask = pos.check_mask(c) == bb::empty() ? bb::full() : pos.check_mask(c);
+    const Bitboard     available  = ~pos.occupancy();
+    const Bitboard     enemy      = pos.occupancy(~c);
+    const Bitboard     pawns      = pos.occupancy(c, PAWN);
+    const Bitboard     ep_bb      = pos.ep_square() == NO_SQUARE ? bb::empty() : bb(pos.ep_square());
+
+    // straight
+    {
+        Bitboard single_push = shift<up>(pawns & ~bb_promotion_rank) & available;
+        Bitboard double_push = shift<up>(single_push & bb_third_rank) & available & check_mask;
+        single_push &= check_mask;
+
+        add_moves_from_bb<NORMAL>(list, single_push, up);
+        add_moves_from_bb<NORMAL>(list, double_push, up + up);
+    }
+    // promotion
+    if (const Bitboard promotions = pawns & bb_promotion_rank)
+    {
+        Bitboard push       = shift<up>(promotions) & available & check_mask;
+        Bitboard take_right = shift<up_right>(promotions) & enemy & check_mask;
+        Bitboard take_left  = shift<up_left>(promotions) & enemy & check_mask;
+
+        add_promotions(list, push, up);
+        add_promotions(list, take_right, up_right);
+        add_promotions(list, take_left, up_left);
+    }
+    // capture
+    {
+        Bitboard       capturable = enemy | ep_bb;
+        const Bitboard ep_mask    = (check_mask & shift<down>(ep_bb)) ? ep_bb : bb::empty();
+
+        auto handle_capture = [&](Bitboard bb, const int delta)
+        {
+            bb.for_each_square(
+                [&](const Square to)
+                {
+                    if (to == pos.ep_square())
+                        list.push_back(Move::make<EN_PASSANT>(to - delta, to));
+                    else
+                        list.push_back(Move::make<NORMAL>(to - delta, to));
+                });
+        };
+
+        Bitboard take_right = shift<up_right>(pawns & ~bb_promotion_rank) & capturable & (check_mask | ep_mask);
+        Bitboard take_left  = shift<up_left>(pawns & ~bb_promotion_rank) & capturable & (check_mask | ep_mask);
+
+        handle_capture(take_right, up_right);
+        handle_capture(take_left, up_left);
+    }
+}
+
+template <PieceType pc>
+void gen_pc_moves(const Position& pos, MoveList& list)
+{
+    const Color    c = pos.side_to_move();
+    const Bitboard check_mask{pos.check_mask(c) == bb::empty() ? bb::full() : pos.check_mask(c)};
+    Bitboard       bb{pos.occupancy(c, pc)};
+
+    bb.for_each_square(
+        [&](const Square from)
+        {
+            Bitboard atk{attacks<pc>(from, pos.occupancy()) & ~pos.occupancy(c) & check_mask};
+            atk.for_each_square([&](const Square to) { list.push_back(Move::make<NORMAL>(from, to)); });
+        });
+}
+
+inline void gen_castling(const Position& pos, MoveList& list)
+{
+    const Color          c      = pos.side_to_move();
+    const CastlingRights rights = pos.castling_rights();
+
+    if (pos.check_mask(c) || !rights.has_any_color(c))
+        return;
+
+    for (const auto side : {KINGSIDE, QUEENSIDE})
+    {
+        if (const auto type = CastlingType{c, side}; rights.has(type))
+        {
+            auto [k_from, k_to] = type.king_move();
+            auto [r_from, r_to] = type.rook_move();
+            //std::cout << pos << std::endl;
+            if (pos.piece_at(k_from) != Piece(c, KING))
+            {
+                std::cout << pos << std::endl;
+            }
+            assert(pos.piece_at(k_from) == Piece(c, KING));
+            bool            safe = (from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
+            const Direction dir  = direction_from(k_from, k_to);
+            assert(dir != NO_DIRECTION);
+            for (auto sq = k_from + dir; sq != k_to && safe; sq = sq + dir)
+            {
+                safe &= !pos.is_attacking_sq(sq, ~c);
+            }
+            if (safe)
+            {
+                list.push_back(Move::make<CASTLING>(k_from, k_to, type));
+            }
+        }
+    }
+}
+
+inline void gen_king_moves(const Position& pos, MoveList& list)
+{
+    const Color    c     = pos.side_to_move();
+    const Square   from  = pos.ksq(c);
+    const Bitboard moves = attacks<KING>(from, pos.occupancy());
+
+    (moves & (~pos.occupancy() | pos.occupancy(~c))) // unoccupied or capture
+        .for_each_square([&](const Square to) { list.push_back(Move::make<NORMAL>(from, to)); });
+
+    gen_castling(pos, list);
+}
+
+template <Color c>
+MoveList gen_moves(const Position& pos)
+{
+    MoveList  list;
+    const int n_checkers = pos.checkers(c).popcount();
+    assert(n_checkers <= 2);
+
+    if (n_checkers != 2)
+    {
+        gen_pawn_moves<c>(pos, list);
+        gen_pc_moves<BISHOP>(pos, list);
+        gen_pc_moves<KNIGHT>(pos, list);
+        gen_pc_moves<ROOK>(pos, list);
+        gen_pc_moves<QUEEN>(pos, list);
+    }
+    gen_king_moves(pos, list);
+    return list;
+}
+
+inline MoveList gen_moves(const Position& pos)
+{
+    if (pos.side_to_move() == WHITE)
+        return gen_moves<WHITE>(pos);
+    return gen_moves<BLACK>(pos);
+}
+
+
+
+
+inline auto make_legal_predicate(const Position& pos)
+{
+    return [&pos] (const Move move) { return pos.is_legal(move); };
+}
+
+inline MoveList gen_legal(const Position& pos)
+{
+    MoveList  all = gen_moves(pos);
+    MoveList  legal;
+    std::ranges::copy_if(all, std::back_inserter(legal), [&](const Move move) { return pos.is_legal(move); });
+    return legal;
+}
+
+/* TODO IMPORTANT decide weather to evaluate giving checks in qsearch */
+inline auto make_tactical_predicate(const Position& pos)
+{
+    return [&] (const Move move)
+    {
+        return pos.is_occupied(move.to_sq()) || move.type_of() == EN_PASSANT || move.type_of() == PROMOTION;
+    };
+}
+
+
+
+
+inline void perft(const Position& prev, const int ply, size_t& out)
+{
+    MoveList l = gen_legal(prev);
+
+    if (ply == 1)
+    {
+        out += l.size();
+        return;
+    }
+
+    for (const auto move : l)
+    {
+        Position next{prev};
+        next.do_move(move);
+        perft(next, ply - 1, out);
+    }
+}
+
+inline void perft_divide(const Position& prev, int depth) {
+    MoveList l = gen_moves(prev);
+    size_t total = 0;
+
+    for (auto mv : l)
+    {
+        Position next = prev;
+        next.do_move(mv);
+
+        size_t nodes = 0;
+        perft(next, depth - 1, nodes);
+
+
+        std::cout << next.piece_at(mv.from_sq()) << " " << mv.from_sq() << " " << mv.to_sq() << ": " << nodes << '\n';
+        total += nodes;
+    }
+
+
+    std::cout << "Total: " << total << '\n';
+}
+
+
+// Expensive function, should only be called for use input validation
+inline bool Position::is_valid(Move move) const
+{
+    MoveList legals = gen_legal(*this);
+    return std::ranges::contains(legals, move);
+}
+
+
+
+
+
 struct Positions
 {
     using PosRef      = Position&;
@@ -858,17 +1027,19 @@ struct Positions
         m_hashes.clear();
     }
 
+    template <bool validate = false>
     bool set_fen(const std::string& fen, const std::span<Move> moves = {})
     {
         clear();
         Position pos;
-        if (!pos.from_fen(fen))
+        if (!pos.from_fen(fen) && validate)
             return false;
         m_positions.push_back(pos);
         m_hashes.emplace_back(pos.hash(), 1);
         for (const auto m : moves)
         {
-            if (!m_positions.back().is_valid_move(m)) return false;
+            if (validate && !m_positions.back().is_valid(m))
+                return false;
             do_move(m);
         }
         m_start_size = m_positions.size();
@@ -876,6 +1047,7 @@ struct Positions
     }
 
 
+    template <bool validate = false>
     bool set_pos(const Position& pos, const std::span<Move> moves = {})
     {
         clear();
@@ -885,7 +1057,8 @@ struct Positions
         m_hashes.emplace_back(pos.hash(), 1);
         for (const auto m : moves)
         {
-            if (!m_positions.back().is_valid_move(m)) return false;
+            if (validate && !m_positions.back().is_valid(m))
+                return false;
             do_move(m);
         }
         m_start_size = m_positions.size();
@@ -956,5 +1129,6 @@ struct Positions
     std::vector<std::pair<hash_t, int>> m_hashes{};
     std::size_t                         m_start_size{1};
 };
+
 
 #endif

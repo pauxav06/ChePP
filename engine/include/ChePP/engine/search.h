@@ -415,7 +415,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // need to be careful though because can give the illusion of strong moves to the search tree, which is the reason
     // for the adjustment of the search score
     if (!is_root && !is_pv && !in_check && depth < 9 &&
-        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400) && !ss().excluded)
+        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400))
     {
         return static_eval;
     }
@@ -429,7 +429,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // to do inm case of anexcluded move that comes ffrom resear5ch where we retry without the tt
     if (!is_root && !is_pv && ss().position->move() != Move::null() && !in_check && depth >= 3 && static_eval >= beta &&
         (!tt_hit || tt_hit->bound != TT::Bound::UPPER || tt_hit->score > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
-        pos.occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3 && !ss().excluded) // add loss condition ?
+        pos.occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3) // add loss condition ?
     {
         const int reduction  = 3 + depth / 3 + std::clamp((static_eval - beta) / 100, 0, 4);
         int       null_depth = std::max((depth - 1) / 2, (depth - reduction - 1) / 2);
@@ -464,14 +464,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         return in_check ? mated_in(ply()) : 0;
     }
 
-    ScoredMoveStream move_stream{};
+    ScoredMoveList scored_moves;
     if (is_root && depth > 7)
     {
         Scorer<ScorerType::Root> search_scorer(m_parameters.root_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
-        move_stream = make_scored_stream(moves, search_scorer());
+        scored_moves = make_scored_list(moves, search_scorer());
     } else {
         Scorer<ScorerType::Search> search_scorer(m_parameters.search_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
-        move_stream = make_scored_stream(moves, search_scorer());
+        scored_moves = make_scored_list(moves, search_scorer());
     }
 
     // probcut, need to look at conditions and parameters more closely
@@ -482,9 +482,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         auto tactical = moves | std::views::filter(make_tactical_predicate(pos));
         Scorer<ScorerType::QSearch> search_scorer(m_parameters.qsearch_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
 
-
-
-        for (auto [move, s]: make_scored_stream(tactical, search_scorer()))
+        for (auto [move, s]: make_scored_list(tactical, search_scorer()))
         {
             if (move == tt_hit->move || s < -1'000'000LL) //check the scaling
             {
@@ -522,13 +520,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // Move loop
     // CHECK THE ORDERING
-    for (auto [m, s] : move_stream)
+    for (auto [m, s] : scored_moves)
     {
-
-        if (is_root)
-        {
-            std::cout<< m << std::endl;
-        }
 
         if (m == ss().excluded)
         {
@@ -565,7 +558,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 // Late Move Pruning. Relies on effective ordering of the moves.
                 // Reached if a certain number of quiet moves has been reached.
                 // Then ignore the following ones.
-                if (!is_pv && !in_check && depth <= 5)
+                if (!is_pv && !in_check && depth <= 7)
                 {
                     if (quiets.size() > m_cache.lmp.at(is_improving).at(move_idx))
                     {
@@ -577,7 +570,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 }
 
                 // Continuation pruning.
-                //  Weird but slows down the search at least in some position
+                //  Weird but slos down the search at least in some position
                 if (lmrDepth < 3 && ss().history.get_bonus(m) < -4'000 * depth) // CHECK SCALING
                 {
                     move_idx++;
@@ -628,7 +621,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         Move tt_move                  = tt_hit ? tt_hit->move : Move::none();
 
         // Singular extensions. Consider extending a TT move based on a singular search of reduced depth.
-        if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
+        if (false && !is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
             tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
             moves.size() > 1)
         {
@@ -700,7 +693,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             //reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
 
             // adjustment to avoid dropping into a Qsearch.
-            reduction = std::min(search_depth - 2, std::max(reduction, 1));
+            reduction = std::min(depth - 2, std::max(reduction, 1));
 
             assert(search_depth - reduction > 0);
             // do the search at reduced depth (picking up from where the extensions left us)
@@ -851,7 +844,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
         }
     }
 
-    if (false && pos.occupancy().popcount() <= 7)
+    if (pos.occupancy().popcount() <= 7)
     {
         auto wdl = pos.wdl_probe();
         if (wdl != TB_RESULT_FAILED)
@@ -891,7 +884,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
     int  best_eval = stand_pat;
     Move best_move = Move::none();
 
-    for (const auto [m, s] : make_scored_stream(tactical, scorer()))
+    for (const auto [m, s] : make_scored_list(tactical, scorer()))
     {
         if (!is_pv && pos.is_occupied(m.to_sq()) &&
             ((s < -5'000'000) || pos.piece_at(m.to_sq()).piece_value() + 2 * s + best_eval <
