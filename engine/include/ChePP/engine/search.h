@@ -29,6 +29,8 @@ inline std::function<int(bool, int, int)> default_lmr = [](const bool quiet, con
 inline std::function<int(bool, int)> default_lmp = [](const bool improving, const int d)
 { return improving ? static_cast<int>(4 + 4 * d * d / 4.5) : static_cast<int>(2.5 + 2 * d * d / 4.5); };
 
+
+
 struct SearchThread
 {
     // can be overridden by UCI default params, and themself overridden by user
@@ -47,6 +49,8 @@ struct SearchThread
         Scorer<ScorerType::Search>::Params search_scorer_params{};
         Scorer<ScorerType::Root>::Params root_scorer_params{};
         Scorer<ScorerType::QSearch>::Params qsearch_scorer_params{};
+
+        int tt_replacement_threshold{3};
     };
 
     struct Cache
@@ -139,6 +143,16 @@ struct SearchThread
         }
         return oss.str();
     }
+
+    auto make_replacement_policy() const
+    {
+        return [this] (const TT::Entry& old, const TT::Entry& candidate)
+        {
+            return candidate.generation != old.generation || candidate.hash != old.hash ||
+                (candidate.bound == TT::EXACT && old.bound != TT::EXACT) || candidate.depth > old.depth + m_parameters.tt_replacement_threshold;
+        };
+    }
+
 
     void IterativeDeepening();
     int  AspirationWindow(int depth, int prev_eval);
@@ -757,9 +771,9 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // std::cout << best_valid << " " << local_best << " " << best_eval << " " << evaluate() << std::endl;
 
-    tt_bound_t bound = (best_eval <= alpha_org) ? bound = UPPER : (best_eval >= beta) ? LOWER : EXACT;
+    TT::Bound bound = (best_eval <= alpha_org) ? bound = TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
-        g_tt.store(pos.hash(), depth, store_tt_score(best_eval, ply()), bound, local_best);
+        g_tt.store( make_replacement_policy() ,pos.hash(), depth, store_tt_score(best_eval, ply()), bound, local_best);
 
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
