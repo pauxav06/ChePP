@@ -290,7 +290,10 @@ public:
             m_params.handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
         }
         m_tt.init(m_params.hash_size);
-        m_pos.set_fen(start_fen);
+        if (!m_pos.set_fen<true>(start_fen))
+        {
+            throw std::runtime_error("Failed to set start fen");
+        }
     }
 
     void uci() const
@@ -324,7 +327,7 @@ public:
                 .ep_square = movegen.ep_square(),
                 .castling_rights = movegen.castling_rights()
             });
-            if (!move || !movegen.is_valid_move(*move)) {
+            if (!move || !movegen.is_valid(*move)) {
                 throw std::invalid_argument(std::format("invalid move {}", token));
             }
             moves.push_back(*move);
@@ -368,7 +371,7 @@ public:
             if (iss >> token && token == "moves") {
                 moves = parse_moves(iss, movegen);
             }
-            m_pos.set_fen(fen, moves);
+            m_pos.set_fen<true>(fen, moves);
         } catch (const std::exception& e) {
             std::cerr << "position command error: " << e.what() << '\n';
         }
