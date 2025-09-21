@@ -110,10 +110,10 @@ struct Scorer<ScorerType::Search> {
         int m_killer_2_bonus = 1300;
         int promotion_bonus = 1;
         int see_factor = 1;
-        int capture_hist_factor = 1;
+        int capture_hist_factor = 0;
         int hist_factor = 1;
         int cont_hist_factor = 1;
-        int prev_cont_hist_factor = 1;
+        int prev_cont_hist_factor = 0;
     };
 
     Scorer(const Params& params, const SearchStack::Node& ss, const Move tt_move)
@@ -122,18 +122,16 @@ struct Scorer<ScorerType::Search> {
     auto operator()() const {
         return [this](const Move m) -> BonusT {
             BonusT score = 0;
-            if (m == m_tt_move) score += m_params.m_tt_bonus;
-            if (m == m_ss.killer1) score += m_params.m_killer_1_bonus;
-            if (m == m_ss.killer2) score += m_params.m_killer_2_bonus;
-
             const auto victim = m.type_of() == EN_PASSANT ? PAWN : m_ss.position->piece_at(m.to_sq()).type();
-
-            if (m.type_of() == PROMOTION)
+            if (m == m_tt_move) score += m_params.m_tt_bonus;
+            else if (m == m_ss.killer1) score += m_params.m_killer_1_bonus;
+            else if (m == m_ss.killer2) score += m_params.m_killer_2_bonus;
+            else if (m.type_of() == PROMOTION)
                 score += (m.promotion_type().piece_value()) * m_params.promotion_bonus;
 
-            if (victim)
+            else if (victim)
                 score += m_ss.position->see(m) * m_params.see_factor + m_ss.capture_history.get_bonus(m);
-            else if (m.type_of() != PROMOTION) {
+            else {
                 score += m_ss.history.get_bonus(m);
                 if (m_ss.ply > 1 && m_ss.position->move() != Move::null()) score += m_ss.continuation_history.get_bonus(*m_ss.position, m);
                 if (m_ss.ply > 2 && m_ss.prev->position->move() != Move::null()) score += m_ss.prev->continuation_history.get_bonus(*m_ss.position, m);
@@ -200,16 +198,10 @@ struct Scorer<ScorerType::QSearch> {
     auto operator()() const {
         return [this](Move m) -> BonusT {
             BonusT score = 0;
-            if (m == m_tt_move) score += m_params.m_tt_bonus;
-            if (m == m_ss.killer1) score += m_params.m_killer_1_bonus;
-            if (m == m_ss.killer2) score += m_params.m_killer_2_bonus;
-
             const auto victim = m.type_of() == EN_PASSANT ? PAWN : m_ss.position->piece_at(m.to_sq()).type();
-
-            if (m.type_of() == PROMOTION)
-                score += (m.promotion_type().piece_value()) * m_params.promotion_bonus;
-
-            if (victim)
+            if (m == m_tt_move) score += m_params.m_tt_bonus;
+            else if (m.type_of() == PROMOTION) score += (m.promotion_type().piece_value()) * m_params.promotion_bonus;
+            else if  (victim)
                 score += m_ss.position->see(m) * m_params.see_factor + m_ss.capture_history.get_bonus(m);
 
             return score;

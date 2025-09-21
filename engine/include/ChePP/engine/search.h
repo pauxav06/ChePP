@@ -288,7 +288,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     const int  alpha_org = alpha;
     const bool is_root   = ply() == 0;
-    const bool in_check  = ss().position->checkers(ss().position->side_to_move()).value();
+    const bool in_check  = ss().position->in_check(ss().position->side_to_move());
 
     assert(depth >= 0);
 
@@ -439,7 +439,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // testing reverse futility pruning, basically if the evaluation is already crazy high, just fail high the node
     // need to be careful though because can give the illusion of strong moves to the search tree, which is the reason
     // for the adjustment of the search score
-    if (!is_root && !is_pv && !in_check && depth < 9 &&
+    if (false && !is_root && !is_pv && !in_check && depth < 9 &&
         static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400) && !ss().excluded)
     {
         return static_eval;
@@ -558,7 +558,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             captures.push_back(m);
 
         // Some pruning
-        if (!is_root && std::abs(best_eval) < MATED_IN_MAX_PLY && !first_move) // do not do that on pv no ?
+        if (!is_root && std::abs(best_eval) < MATE_IN_MAX_PLY && !first_move) // do not do that on pv no ?
         {
             // Pruning for quiets
 
@@ -939,8 +939,8 @@ inline int SearchThread::QSearch(int alpha, int beta)
             break;
     }
     TT::Bound bound = (best_eval >= beta) ? TT::LOWER : TT::UPPER;
-    if (best_move != Move::none())
-        m_tt->store(make_replacement_policy(), ss().position->hash(), 0, TT::store_score(best_eval, ply()), bound, best_move);
+    //if (best_move != Move::none())
+        //m_tt->store(make_replacement_policy(), ss().position->hash(), 0, TT::store_score(best_eval, ply()), bound, best_move);
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
 }
