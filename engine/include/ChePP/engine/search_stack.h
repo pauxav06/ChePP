@@ -26,7 +26,6 @@ public:
         Accumulator* accumulator{};
         bool is_repetition{false};
 
-        int eval{0};
         int static_eval{0};
         Move excluded{Move::none()};
         int double_extensions{0};
@@ -58,11 +57,11 @@ public:
         return m_nodes[i];
     }
 
-    void do_move(const Move move)
+    void do_move(const Move move, const bool update_nnue)
     {
         const int init_ply = ply();
         m_positions.do_move(move);
-        if (move != Move::none() && move != Move::null())
+        if (update_nnue && move != Move::none() && move != Move::null())
         {
             m_accumulators.do_move(m_positions[init_ply], m_positions[ply()]);
         }
@@ -70,11 +69,11 @@ public:
         update_last_node();
     }
 
-    void undo_move()
+    void undo_move(const bool update_nnue)
     {
         const Move move = m_positions.last().move();
         reset_last_node();
-        if (move != Move::none() && move != Move::null())
+        if (update_nnue && move != Move::none() && move != Move::null())
         {
             m_accumulators.undo_move();
         }
