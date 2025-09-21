@@ -229,25 +229,6 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
     return eval;
 }
 
-/* TODO IMPORTANT check signs, caused faulty mate reports*/
-inline auto store_tt_score(const int score, const int ply)
-{
-    if (score >= MATE_IN_MAX_PLY)
-        return score - ply;
-    if (score <= MATED_IN_MAX_PLY)
-        return score + ply;
-    return score;
-};
-
-inline auto read_tt_score(const int score, const int ply)
-{
-    if (score >= MATE_IN_MAX_PLY)
-        return score - ply;
-    if (score <= MATED_IN_MAX_PLY)
-        return score + ply;
-    return score;
-};
-
 inline int SearchThread::Negamax(int depth, int alpha, int beta)
 {
 
@@ -318,7 +299,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         const tt_entry_t& e = *tt_hit;
         if (e.m_depth >= depth)
         {
-            const int score = read_tt_score(e.m_score, ply());
+            const int score = TT::read_score(e.m_score, ply());
             if (e.m_bound == EXACT || (e.m_bound == LOWER && score >= alpha) || (e.m_bound == UPPER && score <= beta))
             {
                 m_statistics.tt_hits++;
