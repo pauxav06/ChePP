@@ -79,6 +79,7 @@ struct SearchThread
         : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos), m_pv_lines(parameters.n_pv)
     {
         init_cache();
+        std::cout << "Search thread initialilsed " << *ss().position << std::endl;
     }
     //control
     int                   m_thread_id;
@@ -178,51 +179,56 @@ inline void SearchThread::IterativeDeepening()
     int prev_eval = evaluate();
     PvLines prev_pv_lines = m_pv_lines;
     m_statistics.t_start = std::chrono::high_resolution_clock::now();
+    std::cout << *ss().position << std::endl;
 
-    for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
+    for (int i = 0; i < m_parameters.n_pv; ++i)
     {
-        m_pv_lines[0].line.clear();
-        m_pv_lines[0].score = 0;
-
-        const int eval = AspirationWindow(depth, prev_eval);
-        assert(ss().position);
-
-        std::ranges::reverse(m_pv_lines);
-
-        assert(eval > -INF && eval < INF);
-
-        if (!m_tm->should_stop()) // aspiration window got cancelled, we discard the result
+        for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
         {
-            prev_eval = eval;
-            prev_pv_lines = m_pv_lines;
+            m_pv_lines[i].line.clear();
+            m_pv_lines[i].score = 0;
 
-            if (m_thread_id == 0)
+            const int eval = AspirationWindow(depth, prev_eval);
+            assert(ss().position);
+
+            std::ranges::reverse(m_pv_lines);
+
+            assert(eval > -INF && eval < INF);
+
+            if (!m_tm->should_stop()) // aspiration window got cancelled, we discard the result
             {
-                std::string score;
-                if (eval >= MATE_IN_MAX_PLY || eval <= MATED_IN_MAX_PLY)
-                {
-                    score.append("mate ");
-                    score.append(std::to_string((MATE - eval) / 2));
-                }
-                else
-                {
-                    score.append("cp ");
-                    score.append(std::to_string(eval));
-                }
+                prev_eval = eval;
+                prev_pv_lines = m_pv_lines;
 
-                auto t_now = std::chrono::high_resolution_clock::now();
-                auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
-                time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
-                int nps = m_statistics.nodes / time_since_start.count();
-                std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
-                    score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(prev_pv_lines[0].line));
-                std::cout << uci_output << std::endl;
+                if (m_thread_id == 0)
+                {
+                    std::string score;
+                    if (eval >= MATE_IN_MAX_PLY || eval <= MATED_IN_MAX_PLY)
+                    {
+                        score.append("mate ");
+                        score.append(std::to_string((MATE - eval) / 2));
+                    }
+                    else
+                    {
+                        score.append("cp ");
+                        score.append(std::to_string(eval));
+                    }
 
-                TimeManager::UpdateInfo update_info;
-                update_info.eval = eval;
-                m_tm->adjust_time(update_info);
+                    auto t_now = std::chrono::high_resolution_clock::now();
+                    auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
+                    time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
+                    int nps = m_statistics.nodes / time_since_start.count();
+                    std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
+                        score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(prev_pv_lines[0].line));
+                    std::cout << uci_output << std::endl;
+
+                    TimeManager::UpdateInfo update_info;
+                    update_info.eval = eval;
+                    m_tm->adjust_time(update_info);
+                }
             }
         }
+        m_pv_lines = prev_pv_lines;
     }
 }
 
@@ -281,9 +287,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         depth++;
     }
 
-
-
-
     if (!is_root)
     {
         if (is_draw())
@@ -320,8 +323,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         if (e.depth >= depth)
         {
             const int score = TT::read_score(e.score, ply());
-        if (e.bound == TT::Bound::EXACT || (e.bound == TT::Bound::LOWER && score >= alpha) || (e.bound == TT::Bound::UPPER && score <= beta))
+            if (e.bound == TT::Bound::EXACT || (e.bound == TT::Bound::LOWER && score >= alpha) || (e.bound == TT::Bound::UPPER && score <= beta))
             {
+                if (e.bound == TT::Bound::EXACT && score >= beta)
+                {
+                    ss().history.apply_bonus(e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                    if (ply() > 1) ss().continuation_history.apply_bonus(pos, e.move, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                }
+
                 m_statistics.tt_hits++;
                 return score;
             }
@@ -426,7 +435,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         int       null_depth = std::max((depth - 1) / 2, (depth - reduction - 1) / 2);
         do_move(Move::null());
 
-        assert(null_depth >0); // do not drop in qsearch
+        assert(null_depth > 0); // do not drop in qsearch
         auto score = -Negamax(null_depth, -beta, -(beta - 1));
 
         undo_move();
@@ -612,7 +621,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         Move tt_move                  = tt_hit ? tt_hit->move : Move::none();
 
         // Singular extensions. Consider extending a TT move based on a singular search of reduced depth.
-        if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
+        if (false && !is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
             tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
             moves.size() > 1)
         {
@@ -681,7 +690,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
             // reduction -= m_history.get_hist_score(ss(), m) / 4'000; // Reduce or increase depending on history score
             // /* TODO fix scaling  rn it just sets it to 1 or max*/
-            reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
+            //reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
 
             // adjustment to avoid dropping into a Qsearch.
             reduction = std::min(depth - 2, std::max(reduction, 1));
@@ -698,7 +707,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             // Recall that search_depth is the new depth based on the extensions.
             bool deeper = score > best_eval + 70 + 12 * (search_depth - reduction);
 
-            search_depth += deeper;
+            //search_depth += deeper;
         }
 
         // Full depth null window
@@ -755,15 +764,15 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             }
             if (is_captured)
             {
-                //ss().capture_history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
+                ss().capture_history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
             }
             assert(local_best != Move::none());
             break;
         }
 
-        ss().history.decay(quiets, [] (const auto b) { return b - b / 5;});
-        if (ply() > 1) ss().continuation_history.decay(pos, quiets, [] (const auto b) { return b - b / 5;});
-        ss().capture_history.decay(captures, [] (const auto b) { return b - b / 5;});
+        ss().history.decay(quiets, [] (const auto b) { return b - b / 10;});
+        if (ply() > 1) ss().continuation_history.decay(pos, quiets, [] (const auto b) { return b - b / 10;});
+        ss().capture_history.decay(captures, [] (const auto b) { return b - b / 10;});
 
 
 
@@ -816,16 +825,9 @@ inline int SearchThread::QSearch(int alpha, int beta)
     if (is_draw())
         return 0;
 
-    auto filter = [&] (const Move move )
-    {
-        return in_check ?
-            make_legal_predicate(pos)(move) : // resolve checks
-            make_legal_predicate(pos)(move) && make_tactical_predicate(pos)(move); //only take captures/promotions
-    };
-
     auto moves = gen_legal(pos);
     if (moves.empty()) return in_check ? mated_in(ply()) : 0;
-    auto tactical = moves | std::views::filter(filter);
+    auto tactical = moves | std::views::filter(make_tactical_predicate(pos));
 
 
 
@@ -923,7 +925,6 @@ struct SearchThreadHandler
 {
     std::vector<std::unique_ptr<SearchThread>> threads{};
     std::vector<std::jthread>                  workers{};
-    TimeManager::Params                        time_manager;
 
     TimeManager                                m_tm{};
     TT*                                        m_tt;
@@ -936,6 +937,7 @@ struct SearchThreadHandler
         TT* tt,
         const Positions& pos)
     {
+        std::cout << "set position " << pos.last() << std::endl;
         threads.clear();
         threads.reserve(numThreads);
         workers.clear();
@@ -949,18 +951,23 @@ struct SearchThreadHandler
         m_tt = tt;
         for (size_t i = 0; i < numThreads; i++)
         {
-            threads.push_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos));
+            std::cout << "hello" << std::endl;
+            threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos));
         }
     }
 
     void start()
     {
+        workers.clear();
         m_tt->new_generation();
         m_tm.start();
 
         for (const auto& thread : threads)
         {
-            workers.emplace_back([t = thread.get()]() { t->IterativeDeepening(); });
+            std::cout << *thread->m_search_stack[thread->ply()].position << std::endl;
+            auto t = thread.get();
+            std::cout << "hello" << std::endl;
+            workers.emplace_back([t]() { t->IterativeDeepening(); });
         }
 
         for (auto& w : workers)

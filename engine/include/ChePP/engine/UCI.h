@@ -315,19 +315,22 @@ public:
         m_pos.set_fen(start_fen);
     }
 
-    void parse_moves(std::istringstream& iss, MoveList& moves) {
+    MoveList parse_moves(std::istringstream& iss, Position& movegen) {
         std::string token;
+        MoveList moves{};
         while (iss >> token) {
             auto move = Move::from_uci(token, {
-                m_pos.last().pieces(),
-                m_pos.last().ep_square(),
-                m_pos.last().castling_rights()
+                .pieces = movegen.pieces(),
+                .ep_square = movegen.ep_square(),
+                .castling_rights = movegen.castling_rights()
             });
-            if (!move) {
+            if (!move || !movegen.is_valid_move(*move)) {
                 throw std::invalid_argument(std::format("invalid move {}", token));
             }
             moves.push_back(*move);
+            movegen.do_move(*move);
         }
+        return moves;
     }
 
     void position(const std::string& cmd) {
@@ -339,36 +342,33 @@ public:
         assert(token == "position");
 
         m_pos.clear();
-        MoveList moves;
 
         std::string type;
         iss >> type;
+        MoveList moves;
+        std::string fen;
 
         try {
-            if (type == "startpos") {
-                if (!m_pos.set_fen(start_fen)) {
-                    throw std::invalid_argument("invalid startpos fen");
-                }
-
-                if (iss >> token && token == "moves") {
-                    parse_moves(iss, moves);
-                }
+            Position movegen;
+            if (type == "startpos")
+            {
+                fen = start_fen;
             }
-            else if (type == "fen") {
-                std::string fen, part;
+            else if (type == "fen")
+            {
+                std::string part;
                 for (int i = 0; i < 6 && iss >> part; ++i) {
                     if (i) fen += " ";
                     fen += part;
                 }
-
-                if (!m_pos.set_fen(fen)) {
-                    throw std::invalid_argument("invalid fen");
-                }
-
-                if (iss >> token && token == "moves") {
-                    parse_moves(iss, moves);
-                }
             }
+            if (!movegen.from_fen(fen)) {
+                throw std::invalid_argument("invalid fen");
+            }
+            if (iss >> token && token == "moves") {
+                moves = parse_moves(iss, movegen);
+            }
+            m_pos.set_fen(fen, moves);
         } catch (const std::exception& e) {
             std::cerr << "position command error: " << e.what() << '\n';
         }
@@ -387,7 +387,7 @@ public:
             else if (token == "winc")  iss >> constraints.inc[WHITE];
             else if (token == "binc")  iss >> constraints.inc[BLACK];
             else if (token == "movestogo") iss >> constraints.moves_to_go;
-            else if (token == "depth") { iss >> constraints.depth; ; }
+            else if (token == "depth") { iss >> constraints.depth;}
             else if (token == "movetime") { iss >> constraints.move_time; }
 
         }

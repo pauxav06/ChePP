@@ -1070,9 +1070,6 @@ struct VectorHandle {
     VectorHandle() : ptr(nullptr), index(0) {}
 
     T& operator*() const {
-        if (!ptr || index >= ptr->size()) {
-            throw std::out_of_range("Invalid VectorHandle dereference");
-        }
         return ptr->at(index);
     }
 
