@@ -205,6 +205,7 @@ inline void SearchThread::IterativeDeepening()
     {
         for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
         {
+            std::cout << ply();
 
             const int eval = AspirationWindow(depth, prev_eval);
             assert(ss().position);
@@ -223,7 +224,7 @@ inline void SearchThread::IterativeDeepening()
                         score.append("mate ");
                         score.append(std::to_string((MATE - eval) / 2));
                     }
-                    else if (eval <= MATE_IN_MAX_PLY)
+                    else if (eval <= MATED_IN_MAX_PLY)
                     {
                         score.append("mate ");
                         score.append(std::to_string((MATED - eval) / 2));
