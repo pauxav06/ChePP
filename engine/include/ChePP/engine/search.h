@@ -218,10 +218,15 @@ inline void SearchThread::IterativeDeepening()
                 if (m_thread_id == 0)
                 {
                     std::string score;
-                    if (eval >= MATE_IN_MAX_PLY || eval <= MATED_IN_MAX_PLY)
+                    if (eval >= MATE_IN_MAX_PLY)
                     {
                         score.append("mate ");
                         score.append(std::to_string((MATE - eval) / 2));
+                    }
+                    else if (eval <= MATE_IN_MAX_PLY)
+                    {
+                        score.append("mate ");
+                        score.append(std::to_string((MATED - eval) / 2));
                     }
                     else
                     {
