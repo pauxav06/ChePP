@@ -6,6 +6,7 @@
 #define CHEPP_SEARCH_STACK_H
 
 #include "nnue.h"
+#include "history.h"
 
 #include <cassert>
 #include <cstddef>
@@ -13,9 +14,7 @@
 
 #include "ChePP/engine/position.h"
 
-using HistoryT = EnumArray<Piece, EnumArray<Square, int>>;
-using ContinuationHistoryT = EnumArray<Piece, EnumArray<Square, EnumArray<Piece, EnumArray<Square, int>>>>;
-using RefutationMapT = std::unordered_map<Move, size_t>;
+
 
 class SearchStack {
 public:
@@ -24,8 +23,8 @@ public:
         Node* prev{};
         int ply{};
         Position* position{};
-        bool is_repetition{false};
         Accumulator* accumulator{};
+        bool is_repetition{false};
 
         int eval{0};
         int static_eval{0};
@@ -35,8 +34,9 @@ public:
         Move killer1{Move::none()};
         Move killer2{Move::none()};
 
-        HistoryT* continuation_history{};
-        HistoryT* history{};
+        ContinuationHistory continuation_history{};
+        History history{};
+        History capture_history{};
         RefutationMapT* refutation_nodes{};
     };
 
@@ -47,34 +47,6 @@ public:
     }
 
     [[nodiscard]] int ply() const { return m_positions.ply(); }
-
-    void update_last_node()
-    {
-        Node& node = m_nodes[ply()];
-        node.prev = &m_nodes[ply() - 1];
-        node.ply = ply();
-        node.position = &m_positions.last();
-        node.accumulator = &m_accumulators.last();
-        node.history = &m_history;
-        const Piece moved_piece = node.position->piece_at(node.position->move().to_sq());
-        const Square moved_to = node.position->move().to_sq();
-        node.continuation_history = &m_continuation_history.at(moved_piece).at(moved_to);
-        node.refutation_nodes = &m_refutation_nodes;
-        node.is_repetition = m_positions.is_repetition();
-    }
-
-    void reset_last_node()
-    {
-        Node& node = m_nodes[ply()];
-        node.prev = nullptr;
-        node.ply = 0;
-        node.position = nullptr;
-        node.accumulator = nullptr;
-        node.history = nullptr;
-        node.refutation_nodes = nullptr;
-        node.continuation_history = nullptr;
-        node.is_repetition = false;
-    }
 
     Node& operator[](const int i) {
         assert(i >= 0 && i <= ply());
@@ -111,12 +83,41 @@ public:
     }
 
 private:
+    void update_last_node()
+    {
+        Node& node = m_nodes[ply()];
+        node.prev = &m_nodes[ply() - 1];
+        node.ply = ply();
+        node.position = &m_positions.last();
+        node.accumulator = &m_accumulators.last();
+        node.continuation_history = ContinuationHistory(&m_continuation_history, node.position);
+        node.history = History(&m_history, node.position);
+        node.capture_history = History(&m_capture_history, node.position);
+        node.refutation_nodes = &m_refutation_nodes;
+        node.is_repetition = m_positions.is_repetition();
+    }
+
+    void reset_last_node()
+    {
+        Node& node = m_nodes[ply()];
+        node.prev = nullptr;
+        node.ply = 0;
+        node.position = nullptr;
+        node.accumulator = nullptr;
+        node.history = {};
+        node.continuation_history = {};
+        node.capture_history = {};
+        node.refutation_nodes = nullptr;
+        node.is_repetition = false;
+    }
+
     Positions m_positions;
     Accumulators m_accumulators;
     std::unique_ptr<Node[]> m_nodes;
 
-    HistoryT m_history{};
-    ContinuationHistoryT m_continuation_history{};
+    HistoryTable m_history{};
+    HistoryTable m_capture_history{};
+    ContinuationHistoryTable m_continuation_history{};
     RefutationMapT m_refutation_nodes{MAX_MOVES};
 };
 
