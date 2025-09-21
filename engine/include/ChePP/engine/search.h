@@ -205,8 +205,6 @@ inline void SearchThread::IterativeDeepening()
     {
         for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
         {
-            std::cout << ply();
-
             const int eval = AspirationWindow(depth, prev_eval);
             assert(ss().position);
 
@@ -560,7 +558,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             captures.push_back(m);
 
         // Some pruning
-        if (!is_root && best_eval > MATED_IN_MAX_PLY && !first_move) // do not do that on pv no ?
+        if (!is_root && std::abs(best_eval) < MATED_IN_MAX_PLY && !first_move) // do not do that on pv no ?
         {
             // Pruning for quiets
 
