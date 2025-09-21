@@ -1125,7 +1125,7 @@ struct Positions
   private:
     std::vector<Position>               m_positions{};
     std::vector<std::pair<hash_t, int>> m_hashes{};
-    std::size_t                         m_start_size{1};
+    std::size_t                         m_start_size{0};
 };
 
 
