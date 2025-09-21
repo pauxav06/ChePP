@@ -8,7 +8,8 @@
 TEST(ThreeFoldRepetitions, FourNullMoveIsDraw)
 {
 
-    Positions positions{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    Positions positions{};
+    positions.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     for (int i = 0; i < 4; i++)
     {
         ASSERT_EQ(positions.is_repetition(), false);
@@ -21,7 +22,8 @@ TEST(ThreeFoldRepetitions, FourNullMoveIsDraw)
 TEST(ThreeFoldRepetitions, TwoNightShuffleIsDraw)
 {
 
-    Positions positions{"rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"};
+    Positions positions{};
+    positions.set_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1");
     positions.do_move(Move::make<NORMAL>(G1, H3));
     positions.do_move(Move::make<NORMAL>(G8, H6));
 
@@ -38,7 +40,8 @@ TEST(ThreeFoldRepetitions, TwoNightShuffleIsDraw)
 
 TEST(FiftyMoveRule, FiftyRookShuffleIsDraw)
 {
-    Positions positions("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
+    Positions positions{};
+    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
 
     Square sq_from = A1;
     for (Square sq_to = B1; sq_to <= B1 + 24; ++sq_to)
@@ -51,7 +54,7 @@ TEST(FiftyMoveRule, FiftyRookShuffleIsDraw)
 
         sq_from = sq_to;
 
-        ASSERT_EQ(positions.is_repetition(), sq_to == (B1 + 24)) << "halfmoves clock: " << positions.last().halfmove_clock();
+        ASSERT_EQ(positions.is_50_move_rule(), sq_to == (B1 + 24)) << "halfmoves clock: " << positions.last().halfmove_clock();
     }
 
 
@@ -59,7 +62,8 @@ TEST(FiftyMoveRule, FiftyRookShuffleIsDraw)
 
 TEST(FiftyMoveRule, PawnMoveResetsFiftyRookShuffleIsDraw)
 {
-    Positions positions("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
+    Positions positions{};
+    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
 
     Square sq_from = A1;
     for (Square sq_to = B1; sq_to < B1 + 25; ++sq_to)
@@ -77,7 +81,7 @@ TEST(FiftyMoveRule, PawnMoveResetsFiftyRookShuffleIsDraw)
 
         sq_from = sq_to;
 
-        ASSERT_EQ(positions.is_repetition(), false) << "halfmoves clock: " << positions.last().halfmove_clock();
+        ASSERT_EQ(positions.is_50_move_rule(), false) << "halfmoves clock: " << positions.last().halfmove_clock();
     }
 
 }

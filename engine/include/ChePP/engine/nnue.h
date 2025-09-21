@@ -439,12 +439,24 @@ struct Accumulators
     AccRef                    last() { return m_accumulators.back(); }
     [[nodiscard]] ConstAccRef last() const { return m_accumulators.back(); }
 
+    [[nodiscard]] const Accumulator& operator[](const size_t i) const { return m_accumulators[i]; }
+    Accumulator& operator[](const size_t i) { return m_accumulators[i]; }
+
+    [[nodiscard]] uint32_t          ply() const { return static_cast<int>(m_accumulators.size() - 1); }
+
     void do_move(const Position& prev, const Position& next)
     {
         m_accumulators.emplace_back(m_accumulators.back(), next, prev);
     }
 
     void undo_move() { m_accumulators.pop_back(); }
+
+    using Handle = VectorHandle<Accumulator>;
+
+    Handle handle_to_last()
+    {
+        return VectorHandle{&m_accumulators, ply()};
+    }
 
   private:
     std::vector<Accumulator> m_accumulators{};

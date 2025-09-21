@@ -1061,4 +1061,37 @@ static_assert(std::ranges::random_access_range<ArrayStack<int, 8>>);
 
 
 
+template<typename T>
+struct VectorHandle {
+    std::vector<T>* ptr;
+    uint32_t index;
+
+    VectorHandle(std::vector<T>* p, uint32_t i) : ptr(p), index(i) {}
+    VectorHandle() : ptr(nullptr), index(0) {}
+
+    T& operator*() const {
+        if (!ptr || index >= ptr->size()) {
+            throw std::out_of_range("Invalid VectorHandle dereference");
+        }
+        return ptr->at(index);
+    }
+
+    T* operator->() const {
+        return &ptr->at(index);
+    }
+
+    explicit operator bool() const {
+        return ptr != nullptr && index < ptr->size();
+    }
+
+    bool operator==(const VectorHandle& other) const {
+        return ptr == other.ptr && index == other.index;
+    }
+    bool operator!=(const VectorHandle& other) const {
+        return !(*this == other);
+    }
+};
+
+
+
 #endif

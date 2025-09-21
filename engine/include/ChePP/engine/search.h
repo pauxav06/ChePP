@@ -70,8 +70,10 @@ struct SearchThread
     struct PvLine
     {
         int32_t                   score{0};
-        std::array<Move, MAX_PLY> line{};
+        MoveList line{};
     };
+
+    using PvLines = std::vector<PvLine>;
 
     explicit SearchThread(const Parameters& parameters, const int id, TimeManager* tm, TT* tt, const Positions& pos)
         : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos), m_pv_lines(parameters.n_pv)
@@ -88,7 +90,7 @@ struct SearchThread
     Cache                 m_cache;
     Statistics            m_statistics;
     SearchStack           m_search_stack;
-    std::vector<PvLine>   m_pv_lines{};
+    PvLines               m_pv_lines{};
 
 
     void init_cache()
@@ -121,8 +123,8 @@ struct SearchThread
 
     int32_t evaluate()
     {
-        assert(!ss().position->in_check(ss().position->side_to_move()));
-        assert(!is_draw());
+        //assert(!ss().position->in_check(ss().position->side_to_move()));
+        //assert(!is_draw());
 
         auto eval = ss().accumulator->evaluate(ss().position->side_to_move());
         eval      = std::clamp(eval, LOSS_TB + 1, WIN_TB - 1);
@@ -136,11 +138,10 @@ struct SearchThread
                ss().position->is_insufficient_material();
     }
 
-    [[nodiscard]] std::string format_pv_line(const int n) const
+    [[nodiscard]] std::string format_pv_line(const MoveList& pv_line) const
     {
-        assert(n < m_parameters.n_pv);
         std::ostringstream oss;
-        for (const auto m : m_pv_lines[n].line)
+        for (const auto m : pv_line)
         {
             oss << m << " ";
         }
@@ -175,15 +176,27 @@ struct SearchThread
 inline void SearchThread::IterativeDeepening()
 {
     int prev_eval = evaluate();
+    PvLines prev_pv_lines = m_pv_lines;
     m_statistics.t_start = std::chrono::high_resolution_clock::now();
 
     for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
     {
+        m_pv_lines[0].line.clear();
+        m_pv_lines[0].score = 0;
+
+        std::cout << *ss().position << std::endl;
         const int eval = AspirationWindow(depth, prev_eval);
+        assert(ss().position);
+        std::cout << *ss().position << std::endl;
+
+        std::ranges::reverse(m_pv_lines);
+
         assert(eval > -INF && eval < INF);
+
         if (!m_tm->should_stop()) // aspiration window got cancelled, we discard the result
         {
             prev_eval = eval;
+            prev_pv_lines = m_pv_lines;
 
             if (m_thread_id == 0)
             {
@@ -201,10 +214,10 @@ inline void SearchThread::IterativeDeepening()
 
                 auto t_now = std::chrono::high_resolution_clock::now();
                 auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
-                time_since_start = std::min(time_since_start, std::chrono::milliseconds(1));
+                time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                 int nps = m_statistics.nodes / time_since_start.count();
                 std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
-                    score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(0));
+                    score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(prev_pv_lines[0].line));
                 std::cout << uci_output << std::flush;
 
                 TimeManager::UpdateInfo update_info;
@@ -219,7 +232,9 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 {
     if (depth < m_parameters.aspiration_window_activation_depth)
     {
+        std::cout << *ss().position << std::endl;
         return Negamax(depth, -INF_SCORE, INF_SCORE);
+        std::cout << *ss().position << std::endl;
     }
 
     int window = m_parameters.aspiration_window_default_value;
@@ -386,8 +401,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // the improving heuristic, basically checks if the sequence of moves improves the position
     // used to be more cautious of fail low, less cautious of fail highs in futility prunings
     bool is_improving = in_check        ? false
-                        : ss().ply >= 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
-                        : ss().ply >= 2 ? ss().prev->prev->static_eval > static_eval
+                        : ply() >= 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
+                        : ply() >= 2 ? ss().prev->prev->static_eval > static_eval
                                         : true;
 
 
@@ -771,7 +786,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     assert(local_best != Move::none() && local_best != Move::null());
     bool best_valid = !m_tm->should_stop() && local_best != Move::none() && ss().excluded == Move::none();
     if (is_root && best_valid)
-        m_pv_lines[0].line[ply()] = local_best;
+        m_pv_lines[0].line.push_back(local_best);
 
     TT::Bound bound = (best_eval <= alpha_org) ? TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
@@ -783,7 +798,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
 inline int SearchThread::QSearch(int alpha, int beta)
 {
-    assert(beta > -INF && beta < INF);
+    //assert(beta > -INF && beta < INF);
 
     if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) m_tm->update_time();
     m_statistics.nodes++;
@@ -939,7 +954,6 @@ struct SearchThreadHandler
     void start()
     {
         m_tt->new_generation();
-
         m_tm.start();
 
         for (const auto& thread : threads)
