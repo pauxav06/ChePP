@@ -817,14 +817,14 @@ struct Move
     struct AlgebraicInfo
     {
         Piece piece;
-        bool needs_rank;
-        bool needs_file;
-        bool is_capture;
-        bool is_check;
-        bool is_mate;
+        bool needs_rank{};
+        bool needs_file{};
+        bool is_capture{};
+        bool is_check{};
+        bool is_mate{};
     };
 
-    std::string to_algebraic(const AlgebraicInfo& info) const
+    [[nodiscard]] std::string to_algebraic(const AlgebraicInfo& info) const
     {
         if (*this == none() || *this == null())
             return "--";
@@ -870,6 +870,16 @@ struct Move
 
     std::uint16_t m_data;
 };
+
+namespace std {
+    template <>
+    struct hash<Move> {
+        std::size_t operator()(const Move& m) const noexcept {
+            return std::hash<std::uint16_t>()(m.raw());
+        }
+    };
+}
+
 
 constexpr std::optional<Move> Move::from_uci(const std::string_view& sv, const UciInfo& info)
 {
@@ -924,6 +934,8 @@ constexpr int MAX_PLY = 255;
 constexpr int MATE_SCORE    = 32000;
 constexpr int INF_SCORE     = 32001;
 constexpr int INVALID_SCORE = 32002;
+
+constexpr int MAX_MOVES = 256;
 
 enum Score : int
 {

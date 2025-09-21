@@ -7,48 +7,31 @@
 
 #include <ranges>
 
-struct ScoredMove
-{
-    Move move{Move::none()};
-    int  score{0};
-
-    bool operator<(const ScoredMove& other) const { return score < other.score; }
-    bool operator>(const ScoredMove& other) const { return score > other.score; }
-};
-
 struct MoveList
 {
     static constexpr size_t max_moves = 256;
 
-    using value_type      = ScoredMove;
-    using iterator        = ScoredMove*;
-    using const_iterator  = const ScoredMove*;
+    using value_type      = Move;
+    using iterator        = Move*;
+    using const_iterator  = const Move*;
     using size_type       = std::size_t;
     using difference_type = std::ptrdiff_t;
     using reference       = value_type&;
     using const_reference = const value_type&;
 
-    MoveList() : m_moves(), m_size(0) {}
-
-    void add(const Move& m, const int score = 0)
+    void add(const Move m)
     {
         assert(m_size < max_moves && "MoveList overflow");
-        m_moves[m_size++] = {m, score};
+        m_moves[m_size++] = m;
     }
-    void add(const ScoredMove& mv)
-    {
-        assert(m_size < max_moves && "MoveList overflow");
-        m_moves[m_size++] = mv;
-    }
-    void push_back(const Move& m, const int score = 0) { add(m, score); }
-    void push_back(const ScoredMove& move) { add(move); }
+    void push_back(const Move m) { add(m); }
 
     reference operator[](const size_type index)
     {
         assert(index < m_size);
         return m_moves[index];
     }
-    const_reference operator[](const size_type index) const
+    value_type operator[](const size_type index) const
     {
         assert(index < m_size);
         return m_moves[index];
@@ -93,8 +76,6 @@ struct MoveList
         return m_moves[m_size - 1];
     }
 
-    void sort() { std::ranges::sort(*this, std::greater<>{}); }
-
     template <typename Pred>
     void filter(Pred pred)
     {
@@ -108,9 +89,81 @@ struct MoveList
     }
 
   private:
-    std::array<ScoredMove, max_moves> m_moves;
-    size_type                         m_size;
+    std::array<Move, max_moves> m_moves{};
+    size_type                   m_size{0};
 };
+
+struct ScoredMoveStream {
+    static constexpr size_t max_moves = MoveList::max_moves;
+    using ScoreT = int64_t;
+
+    ScoredMoveStream(const MoveList& moves) : m_size(moves.size()) {
+        for (size_t i = 0; i < m_size; ++i) {
+            m_moves[i]  = moves[i];
+            m_scores[i] = 0;
+        }
+        m_remaining = m_size;
+    }
+
+    void assign_score(size_t idx, ScoreT score) {
+        assert(idx < m_size);
+        m_scores[idx] = score;
+    }
+
+    bool has_next() const { return m_remaining > 0; }
+    bool empty() const { return m_remaining == 0; }
+
+    std::pair<Move, ScoreT> next() {
+        assert(has_next());
+
+        size_t best_idx = 0;
+        int32_t best_score = m_scores[0];
+        for (size_t i = 1; i < m_remaining; ++i) {
+            if (m_scores[i] > best_score) {
+                best_score = m_scores[i];
+                best_idx = i;
+            }
+        }
+
+        --m_remaining;
+        std::swap(m_moves[best_idx], m_moves[m_remaining]);
+        std::swap(m_scores[best_idx], m_scores[m_remaining]);
+
+        return {m_moves[m_remaining], m_scores[m_remaining]};
+    }
+
+    size_t remaining() const { return m_remaining; }
+    size_t size() const { return m_size; }
+
+    ScoreT score(size_t idx) const { return m_scores[idx]; }
+
+
+
+    struct iterator {
+        iterator(ScoredMoveStream* stream, size_t remaining)
+            : m_stream(stream), m_remaining(remaining) {}
+
+        std::pair<Move, ScoreT> operator*() { return m_stream->next(); }
+        iterator& operator++() { return *this; }
+        bool operator!=(const iterator& other) const { return m_remaining != other.m_remaining; }
+
+    private:
+        ScoredMoveStream* m_stream;
+        size_t m_remaining;
+    };
+
+    iterator begin() { return iterator(this, m_remaining); }
+    iterator end()   { return iterator(this, 0); }
+
+
+private:
+    std::array<Move, max_moves> m_moves{};
+    std::array<ScoreT, max_moves> m_scores{};
+    size_t m_size{0};
+    size_t m_remaining{0};
+};
+
+
 
 inline void make_all_promotions(MoveList& list, const Square from, const Square to)
 {
@@ -278,7 +331,7 @@ inline MoveList gen_moves(const Position& pos)
 inline MoveList gen_legal(const Position& pos)
 {
     MoveList moves = gen_moves(pos);
-    moves.filter([&](const ScoredMove& mv) { return pos.is_legal(mv.move); });
+    moves.filter([&](const Move mv) { return pos.is_legal(mv); });
     return moves;
 }
 
@@ -288,12 +341,12 @@ inline MoveList filter_tactical(const Position& pos, const MoveList& list)
 {
     MoveList ret;
     std::ranges::copy_if(list, std::back_inserter(ret),
-                         [&](const ScoredMove& mv)
+                         [&](const Move mv)
                          {
-                             return pos.is_occupied(mv.move.to_sq()) || mv.move.type_of() == EN_PASSANT ||
-                                    mv.move.type_of() == PROMOTION ||
-                                    (false && ( pos.checkers(pos.side_to_move()) || attacks(pos.piece_type_at(mv.move.from_sq()), mv.move.to_sq(),
-                                            pos.occupancy() & ~Bitboard(mv.move.from_sq()), pos.side_to_move())
+                             return pos.is_occupied(mv.to_sq()) || mv.type_of() == EN_PASSANT ||
+                                    mv.type_of() == PROMOTION ||
+                                    (false && ( pos.checkers(pos.side_to_move()) || attacks(pos.piece_type_at(mv.from_sq()), mv.to_sq(),
+                                            pos.occupancy() & ~Bitboard(mv.from_sq()), pos.side_to_move())
                                         .is_set(pos.ksq(~pos.side_to_move()))));
                          });
     return ret;
@@ -309,7 +362,7 @@ inline void perft(const Position& prev, const int ply, size_t& out)
         return;
     }
 
-    for (const auto [move, score] : l)
+    for (const auto move : l)
     {
         Position next{prev};
         next.do_move(move);
