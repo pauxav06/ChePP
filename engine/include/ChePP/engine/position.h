@@ -1021,6 +1021,7 @@ struct Positions
     {
         m_positions.clear();
         m_hashes.clear();
+        m_start_size = 0;
     }
 
     template <bool validate = false>
@@ -1062,7 +1063,7 @@ struct Positions
         return true;
     }
 
-    [[nodiscard]] uint32_t ply() const { return static_cast<int>(m_positions.size() - m_start_size); }
+    [[nodiscard]] uint32_t ply() const { return static_cast<uint32_t>(m_positions.size() - m_start_size); }
 
     std::span<Position> positions()
     {
