@@ -73,18 +73,20 @@ struct SearchThread
         std::array<Move, MAX_PLY> line{};
     };
 
-    explicit SearchThread(const Parameters& parameters, const int id, TimeManager& tm, TT& tt, const Positions& pos)
+    explicit SearchThread(const Parameters& parameters, const int id, TimeManager* tm, TT* tt, const Positions& pos)
         : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos), m_pv_lines(parameters.n_pv)
     {
         init_cache();
     }
-
+    //control
     int                   m_thread_id;
     Parameters            m_parameters;
+    //shared states
+    TimeManager*          m_tm;
+    TT*                   m_tt;
+    //thread local states
     Cache                 m_cache;
     Statistics            m_statistics;
-    TimeManager&          m_tm;
-    TT&                   m_tt;
     SearchStack           m_search_stack;
     std::vector<PvLine>   m_pv_lines{};
 
@@ -175,11 +177,11 @@ inline void SearchThread::IterativeDeepening()
     int prev_eval = evaluate();
     m_statistics.t_start = std::chrono::high_resolution_clock::now();
 
-    for (int depth = 1; m_tm.update_depth(depth), !m_tm.should_stop(); ++depth)
+    for (int depth = 1; m_tm->update_depth(depth), !m_tm->should_stop(); ++depth)
     {
         const int eval = AspirationWindow(depth, prev_eval);
         assert(eval > -INF && eval < INF);
-        if (!m_tm.should_stop()) // aspiration window got cancelled, we discard the result
+        if (!m_tm->should_stop()) // aspiration window got cancelled, we discard the result
         {
             prev_eval = eval;
 
@@ -227,7 +229,7 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 
     while (eval <= alpha || eval >= beta)
     {
-        if (m_tm.should_stop())
+        if (m_tm->should_stop())
             break;
 
         window *= m_parameters.aspiration_window_multiplicative_factor;
@@ -297,7 +299,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // Probe the TT to see if we have a candidate score
     /* IMPORTANT TO REDO AFTER TT CHANGES*/
-    auto tt_hit = ss().excluded ? std::nullopt : m_tt.probe(pos.hash());
+    auto tt_hit = ss().excluded ? std::nullopt : m_tt->probe(pos.hash());
     if (tt_hit)
     {
         do_move(tt_hit->move);
@@ -745,19 +747,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         // here the search result is actually valid, and since we searched pv node first,
         // we can accept the result as valid
-        if (m_tm.should_stop() && is_root && local_best != Move::none())
+        if (m_tm->should_stop() && is_root && local_best != Move::none())
         {
             break;
         }
     }
 
-    if (m_thread_id == 0 && is_root)
-    {
-        TimeManager::UpdateInfo info{};
-        info.eval           = absolute_eval(best_eval, pos.side_to_move());
-        info.nodes_searched = m_statistics.nodes;
-        m_tm.send_update_info(info);
-    }
 
     if (local_best == Move::none())
     {
@@ -766,15 +761,13 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     }
 
     assert(local_best != Move::none() && local_best != Move::null());
-    bool best_valid = !m_tm.should_stop() && local_best != Move::none() && ss().excluded == Move::none();
+    bool best_valid = !m_tm->should_stop() && local_best != Move::none() && ss().excluded == Move::none();
     if (is_root && best_valid)
-        best_move = local_best;
-
-    // std::cout << best_valid << " " << local_best << " " << best_eval << " " << evaluate() << std::endl;
+        m_pv_lines[0].line[ply()] = local_best;
 
     TT::Bound bound = (best_eval <= alpha_org) ? bound = TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
-        g_tt.store( make_replacement_policy() ,pos.hash(), depth, store_tt_score(best_eval, ply()), bound, local_best);
+        m_tt->store( make_replacement_policy() ,pos.hash(), depth, TT::store_score(best_eval, ply()), bound, local_best);
 
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
@@ -784,7 +777,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
 {
     assert(beta > -INF && beta < INF);
 
-    if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) m_tm.update_time();
+    if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) m_tm->update_time();
     m_statistics.nodes++;
 
     const Position& pos = *ss().position;
@@ -805,13 +798,13 @@ inline int SearchThread::QSearch(int alpha, int beta)
             make_legal_predicate(pos)(move) && make_tactical_predicate(pos)(move); //only take captures/promotions
     };
 
-    const auto moves = gen_legal(pos);
+    auto moves = gen_legal(pos);
     if (moves.empty()) return in_check ? mated_in(ply()) : 0;
-    const auto tactical = moves | std::views::filter(filter);
+    auto tactical = moves | std::views::filter(filter);
 
 
 
-    auto tt_hit = m_tt.probe(pos.hash());
+    auto tt_hit = m_tt->probe(pos.hash());
     tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
     const Move tt_move = tt_hit ? tt_hit->move : Move::none();
     if (!is_pv && tt_hit)
@@ -860,17 +853,15 @@ inline int SearchThread::QSearch(int alpha, int beta)
     if (stand_pat > alpha) alpha = stand_pat;
 
     Scorer<ScorerType::QSearch> scorer(m_parameters.qsearch_scorer_params, ss(), tt_move);
-    ScoredMoveList scored_moves = make_scored_list(moves, scorer());
-
 
     int  best_eval = stand_pat;
     Move best_move = Move::none();
+
     for (const auto [m, s] : make_scored_list(tactical, scorer()))
     {
-        // std::cout << m << std::endl;
         if (!is_pv && pos.is_occupied(m.to_sq()) &&
             ((s < -5'000'000) || pos.piece_at(m.to_sq()).piece_value() + 2 * s + best_eval <
-                                     alpha)) // see pruning on captures, we don't want to look at hopeless captures
+                                     alpha))
         {
             continue;
         }
@@ -896,9 +887,9 @@ inline int SearchThread::QSearch(int alpha, int beta)
         if (alpha >= beta)
             break;
     }
-    tt_bound_t bound = (best_eval >= beta) ? LOWER : UPPER;
+    TT::Bound bound = (best_eval >= beta) ? TT::LOWER : TT::UPPER;
     if (best_move != Move::none())
-        g_tt.store(pos.hash(), 0, store_tt_score(best_eval, ply()), bound, best_move);
+        m_tt->store(make_replacement_policy(), pos.hash(), 0, TT::store_score(best_eval, ply()), bound, best_move);
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
 }
@@ -908,23 +899,25 @@ struct SearchThreadHandler
     std::vector<std::unique_ptr<SearchThread>> threads{};
     std::vector<std::jthread>                  workers{};
     TimeManager                                m_tm{};
+    TT*                                        m_tt;
 
-    void set(const size_t numThreads, const SearchThread::Parameters& params, const TimeManager& tm, const Positions& pos)
+    void set(const size_t numThreads, const SearchThread::Parameters& params, const TimeManager& tm, TT* tt, const Positions& pos)
     {
         threads.clear();
         threads.reserve(numThreads);
         workers.clear();
         workers.reserve(threads.size());
         m_tm = tm;
+        m_tt = tt;
         for (size_t i = 0; i < numThreads; i++)
         {
-            threads.push_back(std::make_unique<SearchThread>(params, i, m_tm, pos));
+            threads.push_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos));
         }
     }
 
     void start()
     {
-        g_tt.new_generation();
+        m_tt.new_generation();
 
         m_tm.start();
 
@@ -952,7 +945,7 @@ struct SearchThreadHandler
 
         for (const auto& t : threads)
         {
-            move_votes[t->m_pv_lines[0][0].raw()]++;
+            move_votes[t->m_pv_lines[0].line[0].raw()]++;
         }
 
         const auto it =
