@@ -99,6 +99,25 @@ struct TT
     void new_generation() { m_generation++; }
 
 
+    static int store_score(const int score, const int ply)
+    {
+        if (score >= MATE_IN_MAX_PLY)
+            return score - ply;
+        if (score <= MATED_IN_MAX_PLY)
+            return score + ply;
+        return score;
+    };
+
+    static int read_score(const int score, const int ply)
+    {
+        if (score >= MATE_IN_MAX_PLY)
+            return score - ply;
+        if (score <= MATED_IN_MAX_PLY)
+            return score + ply;
+        return score;
+    };
+
+
   private:
     [[nodiscard]] size_t index(const hash_t hash) const { return hash & (m_size - 1); }
 
