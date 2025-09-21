@@ -6,21 +6,31 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 if(MSVC)
     add_compile_options(
-            /O2
             /W4
             /permissive-
             /Zi
             /arch:AVX2
     )
+
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(/O2)
+    else()
+        add_compile_options(/O)
+    endif()
 else()
     add_compile_options(
-            -O3
             -g
             -march=native
             -Wall
             -Wextra
             -pedantic
     )
+
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(-O3)
+    else()
+        add_compile_options(-O)
+    endif()
 endif()
 
 

@@ -245,12 +245,16 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     assert(depth >= 0);
 
+    // quiescence search supposed to prevent horizon effect
     if (depth <= 0)
         return QSearch(alpha, beta);
 
     // increase depth if we are in check
+    if (in_check)
+    {
+        depth++;
+    }
 
-    // quiescence search supposed to prevent horizon effect
 
     m_statistics.nodes++;
 
@@ -278,29 +282,26 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
-    if (in_check)
-    {
-        depth++;
-    }
 
     const bool is_pv = beta - alpha > 1;
 
-    // try to use the TT
+    // Probe the TT to see if we have a candidate score
+    /* IMPORTANT TO REDO AFTER TT CHANGES*/
     auto tt_hit = ss().excluded ? std::nullopt : g_tt.probe(pos.hash());
     if (tt_hit)
     {
-        do_move(tt_hit->m_move);
+        do_move(tt_hit->move);
         if (is_draw())
             tt_hit = std::nullopt;
         undo_move();
     }
     if (!is_pv && tt_hit)
     {
-        const tt_entry_t& e = *tt_hit;
-        if (e.m_depth >= depth)
+        const TT::Entry& e = *tt_hit;
+        if (e.depth >= depth)
         {
-            const int score = TT::read_score(e.m_score, ply());
-            if (e.m_bound == EXACT || (e.m_bound == LOWER && score >= alpha) || (e.m_bound == UPPER && score <= beta))
+            const int score = TT::read_score(e.score, ply());
+        if (e.bound == TT::Bound::EXACT || (e.bound == TT::Bound::LOWER && score >= alpha) || (e.bound == TT::Bound::UPPER && score <= beta))
             {
                 m_statistics.tt_hits++;
                 return score;
@@ -308,6 +309,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
+    // Check for tablebases
     if (!is_root && pos.occupancy().popcount() <= 7)
     {
         auto wdl = pos.wdl_probe();
@@ -366,9 +368,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
-    int static_eval = in_check ? 0 : tt_hit ? tt_hit->m_score : evaluate();
+    int static_eval = in_check ? 0 : tt_hit ? tt_hit->score : evaluate(); // Important static_eval is 0 if in check
     assert(static_eval > -INF);
 
+    // careful need to manage eval properly
     ss().eval = static_eval;
 
 
@@ -378,6 +381,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                         : ss().ply >= 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
                         : ss().ply >= 2 ? ss().prev->prev->static_eval > static_eval
                                         : true;
+
 
     // testing reverse futility pruning, basically if the evaluation is already crazy high, just fail high the node
     // need to be careful though because can give the illusion of strong moves to the search tree, which is the reason
@@ -393,14 +397,17 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // if eval comes from tt, is upper bounded and not higher that beta, we cant assume anything on score
     // evaluating is not worth it so we just skip
     // only do it if there are enough pieces to not avoid zugzwang blindness
+
+    // to do inm case of anexcluded move that comes ffrom resear5ch where we retry without the tt
     if (!is_root && !is_pv && ss().position->move() != Move::null() && !in_check && depth >= 3 && static_eval >= beta &&
-        (!tt_hit || tt_hit->m_bound != UPPER || tt_hit->m_score > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
+        (!tt_hit || tt_hit->bound != TT::Bound::UPPER || tt_hit->score > beta) && std::abs(static_eval) < MATE_IN_MAX_PLY &&
         pos.occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 3) // add loss condition ?
     {
         const int reduction  = 3 + depth / 3 + std::clamp((static_eval - beta) / 100, 0, 4);
         int       null_depth = std::max((depth - 1) / 2, (depth - reduction - 1) / 2);
         do_move(Move::null());
 
+        assert(null_depth >0); // do not drop in qsearch
         auto score = -Negamax(null_depth, -beta, -(beta - 1));
 
         undo_move();
@@ -426,10 +433,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     ScoredMoveList scored_moves;
     if (is_root && depth > 7)
     {
-        Scorer<ScorerType::Root> search_scorer(m_parameters.root_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
+        Scorer<ScorerType::Root> search_scorer(m_parameters.root_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
         scored_moves = make_scored_list(moves, search_scorer());
     } else {
-        Scorer<ScorerType::Search> search_scorer(m_parameters.search_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
+        Scorer<ScorerType::Search> search_scorer(m_parameters.search_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
         scored_moves = make_scored_list(moves, search_scorer());
     }
 
@@ -439,17 +446,17 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         int prob_beta = beta + 150;
 
         auto tactical = moves | std::views::filter(make_tactical_predicate(pos));
-        Scorer<ScorerType::QSearch> search_scorer(m_parameters.qsearch_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
+        Scorer<ScorerType::QSearch> search_scorer(m_parameters.qsearch_scorer_params, ss(), tt_hit ? tt_hit->move : Move::none());
 
         for (auto [move, s]: make_scored_list(tactical, search_scorer()))
         {
-            if (move == tt_hit->m_move || s < -1'000'000ULL)
+            if (move == tt_hit->move || s < -1'000'000ULL) //check the scaling
             {
                 continue;
             }
             do_move(move);
 
-            auto score = -QSearch(-prob_beta, -prob_beta + 1);
+            auto score = -QSearch(-prob_beta, -(prob_beta - 1));
 
             if (score >= prob_beta)
             {
@@ -478,6 +485,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     MoveList captures{};
 
     // Move loop
+    // CHECK THE ORDERING
     for (auto [m, s] : scored_moves)
     {
 
@@ -487,6 +495,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             continue;
         }
 
+        assert((move_idx==0 && first_move) || (move_idx > 0 && !first_move));
+
         bool is_quiet = !pos.is_occupied(m.to_sq()) && m.type_of() != EN_PASSANT && m.type_of() != PROMOTION;
         if (is_quiet)
             quiets.push_back(m);
@@ -495,7 +505,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             captures.push_back(m);
 
         // Some pruning
-        if (!is_root && best_eval > MATED && local_best != Move::none())
+        if (!is_root && best_eval > MATED_IN_MAX_PLY && local_best != Move::none())
         {
             // Pruning for quiets
 
@@ -527,7 +537,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
                 // Continuation pruning.
                 //  Weird but slos down the search at least in some position
-                if (false && lmrDepth < 3 && ss().history.get_bonus(m) < -4'000 * depth)
+                if (lmrDepth < 3 && ss().history.get_bonus(m) < -4'000 * depth) // CHECK SCALING
                 {
                     move_idx++;
                     first_move = false;
@@ -574,21 +584,21 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         bool allow_singular_extension = false;
         bool double_extend            = false;
         bool negative_extension       = false;
-        Move tt_move                  = tt_hit ? tt_hit->m_move : Move::none();
+        Move tt_move                  = tt_hit ? tt_hit->move : Move::none();
 
         // Extend the search if the move comes from TT.
-        if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && tt_hit->m_bound == LOWER &&
-            tt_hit->m_depth >= depth - 3 && std::abs(read_tt_score(tt_hit->m_score, ply())) < MATE_IN_MAX_PLY &&
+        if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
+            tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
             moves.size() > 1)
         {
-            int tt_score       = read_tt_score(tt_hit->m_score, ply());
+            int tt_score       = TT::read_score(tt_hit->score, ply());
             int singular_beta  = tt_score - depth;
             int singular_depth = (depth - 1) / 2;
-
+            assert(singular_depth > 0);
             ss().excluded      = tt_move;
             int singular_score = Negamax(singular_depth, singular_beta - 1, singular_beta);
             ss().excluded      = Move::none();
-
+            assert(singular_beta > MATED);
             if (singular_score < singular_beta)
             {
                 allow_singular_extension = true;
