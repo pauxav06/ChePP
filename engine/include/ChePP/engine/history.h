@@ -128,18 +128,21 @@ struct ContinuationHistory
 
     [[nodiscard]] BonusT get_bonus(const Position& current, const Move move) const
     {
+        if (previous->move() == Move::null()) return 0;
         return m_hist->get_bonus(*previous, current, move);
     }
 
     template <BonusFn F>
     void apply_bonus(const Position& current, const Move move, const F& bonus)
     {
+        if (previous->move() == Move::null()) return;
         m_hist->apply_bonus(*previous, current, move, bonus);
     }
 
     template <BonusFn F>
     void decay(const Position& current, const MoveList& moves, const F& decay)
     {
+        if (previous->move() == Move::null()) return;
         m_hist->decay(*previous, current, moves, decay);
     }
 
