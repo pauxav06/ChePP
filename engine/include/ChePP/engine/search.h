@@ -621,12 +621,16 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                     ss().double_extensions = ss().prev() ? ss().prev()->double_extensions + 1 : 1;
                 }
             }
-            else if (tt_score >= beta)
+            else if (tt_score >= beta &&  singular_score >= beta) //  a more aggressive formulation would be singular_beta >= beta
             {
-                return tt_score;
+                //Multicut. Idea is that if the SE search failed high then there are multiple good moves.
+                //Therefore, good chance that they lead to a cutnode down the line so cut now anyway. Note that this is a guess
+                return singular_beta;
             }
-            else if (tt_score <= singular_score || !is_pv) /* TODO should we negative extend ALL non PV nodes? */
+            // tt_score <= singular_score ?
+            else if (tt_score >= beta && !is_pv) /* TODO should we negative extend ALL non PV nodes? For now restrict to non pv.*/
             {
+                // Softer multicut. If the tt beats the alpha and the se seracch failed high but not high enough
                 negative_extension = true;
             }
         }
