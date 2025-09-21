@@ -751,7 +751,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                     ss().killer1 = m;
                 }
                 ss().history.apply_bonus(m, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
-                ss().continuation_history.apply_bonus(pos, m, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
+                if (ply() > 1) ss().continuation_history.apply_bonus(pos, m, [depth] (const auto b) { return std::min(b + depth * depth, 1000); });
             }
             if (is_captured)
             {
@@ -761,9 +761,9 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             break;
         }
 
-        //ss().history.decay(quiets, [] (const auto b) { return b - b / 5;});
-        //ss().continuation_history.decay(pos, quiets, [] (const auto b) { return b - b / 5;});
-        //ss().capture_history.decay(captures, [] (const auto b) { return b - b / 5;});
+        ss().history.decay(quiets, [] (const auto b) { return b - b / 5;});
+        if (ply() > 1) ss().continuation_history.decay(pos, quiets, [] (const auto b) { return b - b / 5;});
+        ss().capture_history.decay(captures, [] (const auto b) { return b - b / 5;});
 
 
 
@@ -792,7 +792,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     TT::Bound bound = (best_eval <= alpha_org) ? TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
-        m_tt->store( make_replacement_policy() ,pos.hash(), depth, TT::store_score(best_eval, ply()), bound, local_best);
+        m_tt->store(make_replacement_policy() ,pos.hash(), depth, TT::store_score(best_eval, ply()), bound, local_best);
 
     assert(best_eval > -INF && best_eval < INF);
     return best_eval;
