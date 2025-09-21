@@ -322,6 +322,13 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
+    MoveList moves = gen_legal(ss().position());
+
+    if (moves.empty())
+    {
+        return in_check ? mated_in(ply()) : 0;
+    }
+
 
     const bool is_pv = beta - alpha > 1;
 
@@ -419,8 +426,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // the improving heuristic, basically checks if the sequence of moves improves the position
     // used to be more cautious of fail low, less cautious of fail highs in futility prunings
     bool is_improving = in_check        ? false
-                        : ply() >= 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
-                        : ply() >= 2 ? ss().prev->prev->static_eval > static_eval
+                        : ply() > 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
+                        : ply() > 2 ? ss().prev->prev->static_eval > static_eval
                                         : true;
 
 
@@ -470,12 +477,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     }
 
     // generate all legal moves
-    MoveList moves = gen_legal(ss().position());
 
-    if (moves.empty())
-    {
-        return in_check ? mated_in(ply()) : 0;
-    }
 
     ScoredMoveStream scored_moves;
     if (is_root && depth > 7)
@@ -535,8 +537,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // CHECK THE ORDERING
     for (auto [m, s] : scored_moves)
     {
-        std::cout<< std::format("Here we are") << std::endl;
-
         if (m == ss().excluded)
         {
             assert(moves.size() > 1);
@@ -585,7 +585,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
                 // Continuation pruning.
                 //  Weird but slos down the search at least in some position
-                if (lmrDepth < 3 && ss().history.get_bonus(m) < -4'000 * depth) // CHECK SCALING
+                if (false && lmrDepth < 3 && ss().history.get_bonus(m) < -400 * depth) // CHECK SCALING
                 {
                     move_idx++;
                     first_move = false;
@@ -635,9 +635,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         Move tt_move                  = tt_hit ? tt_hit->move : Move::none();
 
         // Singular extensions. Consider extending a TT move based on a singular search of reduced depth.
-        if (false && !is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
-            tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
-            moves.size() > 1 && !first_move)
+        if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
+            tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY && !first_move)
         {
             int tt_score       = TT::read_score(tt_hit->score, ply());
             int singular_beta  = tt_score - depth;
@@ -704,7 +703,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
             // reduction -= m_history.get_hist_score(ss(), m) / 4'000; // Reduce or increase depending on history score
             // /* TODO fix scaling  rn it just sets it to 1 or max*/
-            //reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
+            reduction -= 2 * (m == ss().killer1 || m == ss().killer2); // Reduce if the move is killer
 
             // adjustment to avoid dropping into a Qsearch.
             reduction = std::min(depth - 2, std::max(reduction, 1));
@@ -721,7 +720,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             // Recall that search_depth is the new depth based on the extensions.
             bool deeper = score > best_eval + 70 + 12 * (search_depth - reduction);
 
-            //search_depth += deeper;
+            search_depth += deeper;
         }
 
         // Full depth null window
@@ -840,6 +839,12 @@ inline int SearchThread::QSearch(int alpha, int beta)
         return 0;
 
     auto moves = gen_legal(ss().position());
+
+    if (moves.empty())
+    {
+        return ss().position->in_check(ss().position->side_to_move()) ? mated_in(ply()) : 0;
+    }
+
     if (moves.empty()) return in_check ? mated_in(ply()) : 0;
     auto tactical = moves | std::views::filter(make_tactical_predicate(ss().position()));
 
