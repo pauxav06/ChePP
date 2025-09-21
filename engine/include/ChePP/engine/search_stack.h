@@ -40,8 +40,15 @@ public:
     };
 
     explicit SearchStack(const Positions& positions)
-    : m_positions(positions), m_accumulators(positions.last()), m_nodes(std::make_unique<Node[]>(MAX_PLY))
+    : m_positions(positions),
+    m_accumulators(positions.last()),
+    m_nodes(std::make_unique<Node[]>(MAX_PLY)),
+    m_history(std::make_unique<HistoryTable>()),
+    m_capture_history(std::make_unique<HistoryTable>()),
+    m_continuation_history(std::make_unique<ContinuationHistoryTable>())
     {
+        std::cout << "created search stack " << this << std::endl;
+        std::cout << m_positions[ply()] << std::endl;
         update_last_node();
     }
 
@@ -88,9 +95,9 @@ private:
         node.ply = ply();
         node.accumulator = m_accumulators.handle_to_last();
         node.position = m_positions.handle_to_last();
-        node.continuation_history = ContinuationHistory(&m_continuation_history, node.position);
-        node.history = History(&m_history, node.position);
-        node.capture_history = History(&m_capture_history, node.position);
+        node.continuation_history = ContinuationHistory(m_continuation_history.get(), node.position);
+        node.history = History(m_history.get(), node.position);
+        node.capture_history = History(m_capture_history.get(), node.position);
         node.refutation_nodes = &m_refutation_nodes;
         node.is_repetition = m_positions.is_repetition();
     }
@@ -113,9 +120,9 @@ private:
     Accumulators m_accumulators;
     std::unique_ptr<Node[]> m_nodes;
 
-    HistoryTable m_history{};
-    HistoryTable m_capture_history{};
-    ContinuationHistoryTable m_continuation_history{};
+    std::unique_ptr<HistoryTable> m_history{};
+    std::unique_ptr<HistoryTable> m_capture_history{};
+    std::unique_ptr<ContinuationHistoryTable> m_continuation_history{};
     RefutationMapT m_refutation_nodes{MAX_MOVES};
 };
 

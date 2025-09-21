@@ -485,6 +485,7 @@ inline bool Position::is_quiet(const Move move) const
 
 inline bool Position::is_valid_move(const Move move) const
 {
+    std::cout << to_string() << move << std::endl;
     if (move == Move::null())
         return true;
 
@@ -516,7 +517,7 @@ inline bool Position::is_valid_move(const Move move) const
                     return false;
             }
             if (!(pseudo_attack<PAWN>(from, us) & Bitboard(to)))
-                return false;
+                //return false;
             break;
 
         case KNIGHT.value():
@@ -843,6 +844,14 @@ struct Positions
         m_hashes.reserve(MAX_PLY + 1);
     }
 
+    Positions(const Positions& positions)
+    {
+        m_positions.reserve(positions.m_positions.size());
+        m_hashes.reserve(positions.m_hashes.size());
+        std::ranges::copy(positions.m_positions, std::back_inserter(m_positions));
+        std::ranges::copy(positions.m_hashes, std::back_inserter(m_hashes));
+    }
+
     void clear()
     {
         m_positions.clear();
@@ -855,7 +864,7 @@ struct Positions
         Position pos;
         if (!pos.from_fen(fen))
             return false;
-        m_positions.emplace_back(pos);
+        m_positions.push_back(pos);
         m_hashes.emplace_back(pos.hash(), 1);
         for (const auto m : moves)
         {
