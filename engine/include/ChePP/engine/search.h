@@ -872,7 +872,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
 
         undo_move();
 
-        if (m_tm.should_stop())
+        if (m_tm->should_stop())
         {
             break;
         }
@@ -898,16 +898,29 @@ struct SearchThreadHandler
 {
     std::vector<std::unique_ptr<SearchThread>> threads{};
     std::vector<std::jthread>                  workers{};
+    TimeManager::Params                        time_manager;
+
     TimeManager                                m_tm{};
     TT*                                        m_tt;
 
-    void set(const size_t numThreads, const SearchThread::Parameters& params, const TimeManager& tm, TT* tt, const Positions& pos)
+    void set(
+        const size_t numThreads,
+        const SearchThread::Parameters& params,
+        const TimeManager::Params& tm_params,
+        const TimeManager::UCIConstraints& tm_constraints,
+        TT* tt,
+        const Positions& pos)
     {
         threads.clear();
         threads.reserve(numThreads);
         workers.clear();
         workers.reserve(threads.size());
-        m_tm = tm;
+        const TimeManager::InitInfo tm_init{
+            .side = pos.last().side_to_move(),
+            .moves_played =(pos.last().full_move_clock() / 2),
+            .static_eval = Accumulator(pos.last()).evaluate(pos.last().side_to_move())
+        };
+        m_tm = TimeManager{tm_params, tm_init, tm_constraints};
         m_tt = tt;
         for (size_t i = 0; i < numThreads; i++)
         {
@@ -917,7 +930,7 @@ struct SearchThreadHandler
 
     void start()
     {
-        m_tt.new_generation();
+        m_tt->new_generation();
 
         m_tm.start();
 

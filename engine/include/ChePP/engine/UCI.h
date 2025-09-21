@@ -250,6 +250,7 @@ class UCIEngine {
         int hash_size{};
         int threads{};
         std::string tb_path{};
+        TimeManager::Params tm{};
         SearchThread::Parameters tunables;
         EngineParameterHandler handler{};
     };
@@ -260,11 +261,17 @@ class UCIEngine {
     Positions m_pos{};
     std::jthread m_worker;
     SearchThreadHandler m_handler{};
-
+    TT m_tt{}; // lifetime for the whole life of the engine
 
 public:
     explicit UCIEngine(const bool enable_tuning) {
-        m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512);
+        m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this] ()
+        {
+            m_tt.reset();
+            m_tt.init(m_params.hash_size);
+            std::cout << std::format("info string Hash Resized to {}", m_params.hash_size) << std::endl;
+            return true;
+        });
         m_params.handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
         m_params.handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this] ()
         {
@@ -273,17 +280,16 @@ public:
             return val;
 
         });
-
-        m_params.handler.add<EngineParamButton>("Clear Hash", []() {
-            g_tt.reset();
+        m_params.handler.add<EngineParamButton>("Clear Hash", [this]() {
+            m_tt.reset();
             std::cout << "info string Hash cleared" << std::endl;
             return true;
         });
         if (enable_tuning)
         {
             m_params.handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
-
         }
+        m_tt.init(m_params.hash_size);
         m_pos.set_fen(start_fen);
     }
 
@@ -304,7 +310,7 @@ public:
     void ucinewgame()
     {
         if (m_state != Waiting) return;
-        g_tt.reset();
+        m_tt.reset();
         m_pos.clear();
         m_pos.set_fen(start_fen);
     }
@@ -386,14 +392,7 @@ public:
 
         }
 
-        TimeManager::Params tm_params{};
-        TimeManager::InitInfo init_info{};
-        init_info.moves_played = (m_pos.last().full_move_clock() - 1) * 2;
-        init_info.side = m_pos.last().side_to_move();
-
-        TimeManager tm{ tm_params, init_info, constraints };
-
-        m_handler.set(m_params.threads, m_params.tunables, tm, m_pos);
+        m_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos);
         m_worker = std::jthread([&]()
         {
             m_handler.start();
