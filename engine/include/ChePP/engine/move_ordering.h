@@ -22,26 +22,14 @@ concept MoveScorer = requires(F f, Move m) {
     { f(m) } -> std::convertible_to<BonusT>;
 };
 
-template <std::ranges::range R, MoveScorer ScoreFn>
-ScoredMoveList make_scored_list(R&& moves, ScoreFn&& scorer) {
-    ScoredMoveList out;
-    for (auto&& m : moves) {
-        out.push_back({m, static_cast<int64_t>(scorer(m))});
-    }
-    return out;
-}
+
 
 struct ScoredMoveStream {
-    explicit ScoredMoveStream(const MoveList& moves) {
-        for (size_t i = 0; i < moves.size(); ++i)
-            m_list.push_back({moves[i], 0});
+    explicit ScoredMoveStream(const ScoredMoveList& moves) : m_list(moves) {
         m_remaining = m_list.size();
     }
+    ScoredMoveStream() = default;
 
-    void assign_score(size_t idx, int64_t score) {
-        assert(idx < m_list.size());
-        m_list[idx].score = score;
-    }
 
     bool has_next() const { return m_remaining > 0; }
     bool empty() const { return m_remaining == 0; }
@@ -67,24 +55,46 @@ struct ScoredMoveStream {
     size_t size() const { return m_list.size(); }
 
     struct iterator {
-        iterator(ScoredMoveStream* s, size_t r) : m_stream(s), m_rem(r) {}
-        std::pair<Move, int64_t> operator*() const { return m_stream->next(); }
-        iterator& operator++() { return *this; }
-        bool operator!=(const iterator& o) const { return m_rem != o.m_rem; }
+        using value_type = std::pair<Move, int64_t>;
+        using reference = value_type&;
+        using pointer = value_type*;
+        using difference_type = std::ptrdiff_t;
+        using iterator_category = std::input_iterator_tag;
+
+        iterator(ScoredMoveStream* stream) : m_stream(stream) {}
+
+        value_type operator*() const {
+            return m_stream->next();
+        }
+
+        iterator& operator++() {
+            return *this;
+        }
+
+        bool operator!=(const iterator& other) const {
+            return m_stream->has_next();
+        }
+
     private:
         ScoredMoveStream* m_stream;
-        size_t m_rem;
     };
 
-    iterator begin() { return iterator(this, m_remaining); }
-    iterator end()   { return iterator(this, 0); }
+    iterator begin() { return iterator(this); }
+    iterator end()   { return iterator(nullptr); }
 
 private:
     ScoredMoveList m_list;
     size_t m_remaining{0};
 };
 
-
+template <std::ranges::range R, MoveScorer ScoreFn>
+ScoredMoveStream make_scored_stream(R&& moves, ScoreFn&& scorer) {
+    ScoredMoveList out;
+    for (auto&& m : moves) {
+        out.push_back({m, static_cast<int64_t>(scorer(m))});
+    }
+    return ScoredMoveStream{out};
+}
 
 enum class ScorerType { Root, Search, QSearch };
 
