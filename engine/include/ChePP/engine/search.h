@@ -430,6 +430,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         }
     }
 
+    // Internal iterative reduction. If we are not on a TT hit we search at a reduced depth to populate TT, and hope that the extension mechanism works well.
+    if (!tt_hit && !is_root && depth >= 4)
+    {
+        depth -= 1;
+    }
+
     // generate all legal moves
     MoveList moves = gen_legal(pos);
 
@@ -513,7 +519,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             captures.push_back(m);
 
         // Some pruning
-        if (!is_root && best_eval > MATED_IN_MAX_PLY && local_best != Move::none())
+        if (!is_root && best_eval > MATED_IN_MAX_PLY && local_best != Move::none() && !is_pv) // do not do that on pv no ?
         {
             // Pruning for quiets
 
@@ -594,7 +600,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         bool negative_extension       = false;
         Move tt_move                  = tt_hit ? tt_hit->move : Move::none();
 
-        // Extend the search if the move comes from TT.
+        // Singular extensions. Consider extending a TT move based on a singular search of reduced depth.
         if (!is_root && !is_pv && depth >= 6 && tt_move != Move::none() && (tt_hit->bound == TT::Bound::LOWER || tt_hit->bound == TT::Bound::EXACT) &&
             tt_hit->depth >= depth - 3 && std::abs(TT::read_score(tt_hit->score, ply())) < MATE_IN_MAX_PLY &&
             moves.size() > 1)
@@ -626,7 +632,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             // tt_score <= singular_score ?
             else if (tt_score >= beta && !is_pv) /* TODO should we negative extend ALL non PV nodes? For now restrict to non pv.*/
             {
-                // Softer multicut. If the tt beats the alpha and the SE search failed high but not high enough to beat the search alpha then good
+                // Softer multicut. If the tt beats the alpha and the SE search failed high
+                // but not high enough to beat the search beta then good chance that cutnode later on. Still a guess need to check.
                 negative_extension = true;
             }
         }
@@ -647,7 +654,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         do_move(m);
 
-        bool fullsearch = !is_pv || move_idx > 0;
+        bool fullsearch = !is_pv || move_idx > 0; // Condition for full depth null window.
 
         // LMR. Moves that are late enough are searched at reduced depth depending on factors.
         // If they beat alpha, they are researched full depth but reduced window.
@@ -667,11 +674,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
             // adjustment to avoid dropping into a Qsearch.
             reduction = std::min(depth - 2, std::max(reduction, 1));
-            search_depth -= reduction;
 
-            assert(search_depth > 0);
+            assert(search_depth - reduction > 0);
             // do the search at reduced depth (picking up from where the extensions left us)
-            score = -Negamax(search_depth - 1, -alpha - 1, -alpha);
+            score = -Negamax(search_depth - reduction - 1, -alpha - 1, -alpha);
             assert(score != -INF);
 
             // go full depth if score beat alpha
