@@ -31,7 +31,6 @@ inline std::function<int(bool, int)> default_lmp = [](const bool improving, cons
 
 struct SearchThread
 {
-
     // can be overridden by UCI default params, and themself overridden by user
     struct Parameters
     {
@@ -44,6 +43,10 @@ struct SearchThread
 
         std::function<int(bool, int)>      lmp{default_lmp};
         std::function<int(bool, int, int)> lmr{default_lmr};
+
+        Scorer<ScorerType::Search>::Params search_scorer_params{};
+        Scorer<ScorerType::Root>::Params root_scorer_params{};
+        Scorer<ScorerType::QSearch>::Params qsearch_scorer_params{};
     };
 
     struct Cache
@@ -372,11 +375,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     ss().eval = static_eval;
 
+
     // the improving heuristic, basically checks if the sequence of moves improves the position
     // used to be more cautious of fail low, less cautious of fail highs in futility prunings
     bool is_improving = in_check        ? false
                         : ss().ply >= 4 ? ss().prev->prev->prev->prev->static_eval > static_eval
-                        : ss().ply >= 2 ? is_improving = ss().prev->prev->static_eval > static_eval
+                        : ss().ply >= 2 ? ss().prev->prev->static_eval > static_eval
                                         : true;
 
     // testing reverse futility pruning, basically if the evaluation is already crazy high, just fail high the node
@@ -417,29 +421,20 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // generate all legal moves
     MoveList moves = gen_legal(pos);
-    ScoredMoveStream scored_moves{moves};
 
     if (moves.empty())
     {
         return in_check ? mated_in(ply()) : 0;
     }
 
-    // score the moves to sort them
+    ScoredMoveList scored_moves;
     if (is_root && depth > 7)
     {
-        for (size_t i = 0; i < moves.size(); i++)
-        {
-            size_t score = ss().refutation_nodes->at(moves[i]);
-            if (tt_hit && moves[i] == tt_hit->m_move)
-            {
-                score = std::numeric_limits<size_t>::max();
-            }
-            scored_moves.assign_score(i, score);
-        }
-    }
-    else
-    {
-        score_moves(ss(), moves, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
+        Scorer<ScorerType::Root> search_scorer(m_parameters.root_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
+        scored_moves = make_scored_list(moves, search_scorer());
+    } else {
+        Scorer<ScorerType::Search> search_scorer(m_parameters.search_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
+        scored_moves = make_scored_list(moves, search_scorer());
     }
 
     // probcut, need to look at conditions and parameters more closely
@@ -447,11 +442,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     {
         int prob_beta = beta + 150;
 
-        MoveList tactical = filter_tactical(pos, moves);
-        ScoredMoveStream scored_tactical{tactical};
-        score_moves(ss(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
+        auto tactical = moves | std::views::filter(make_tactical_predicate(pos));
+        Scorer<ScorerType::QSearch> search_scorer(m_parameters.qsearch_scorer_params, ss(), tt_hit ? tt_hit->m_move : Move::none());
 
-        for (auto [move, s] : scored_tactical)
+        for (auto [move, s]: make_scored_list(tactical, search_scorer()))
         {
             if (move == tt_hit->m_move || s < -1'000'000ULL)
             {
@@ -537,7 +531,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
                 // Continuation pruning.
                 //  Weird but slos down the search at least in some position
-                if (false && lmrDepth < 3 && m_history.get_hist_score(ss(), m) < -4'000 * depth)
+                if (false && lmrDepth < 3 && ss().history.get_bonus(m) < -4'000 * depth)
                 {
                     move_idx++;
                     first_move = false;
@@ -642,7 +636,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         if (depth >= 3 && !in_check && move_idx > 2 * (1 + is_pv) &&
             (true || !allow_singular_extension) /* TODO should we reduce singular moves ?) */)
         {
-            int reduction = std::min(lmr_table(is_quiet)[depth][move_idx], depth - 1);
+            int reduction = std::min(m_cache.lmr.at(is_quiet).at(depth).at(move_idx), depth - 1);
 
             reduction += !is_improving; // Increase the reduction for non improvment
             reduction += !is_pv;        // Increase reduction if non PV

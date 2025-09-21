@@ -1002,5 +1002,62 @@ struct Date {
 
 inline constexpr auto start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
+template <typename T, std::size_t N>
+struct ArrayStack {
+    using value_type      = T;
+    using size_type       = std::size_t;
+    using difference_type = std::ptrdiff_t;
+    using reference       = T&;
+    using const_reference = const T&;
+    using iterator        = T*;
+    using const_iterator  = const T*;
+
+    void push_back(const T& v) {
+        assert(m_size < N && "ArrayStack overflow");
+        m_data[m_size++] = v;
+    }
+
+    reference operator[](size_type i) {
+        assert(i < m_size);
+        return m_data[i];
+    }
+    const_reference operator[](size_type i) const {
+        assert(i < m_size);
+        return m_data[i];
+    }
+
+    void clear() { m_size = 0; }
+    void shrink(size_type n) {
+        assert(n <= m_size);
+        m_size -= n;
+    }
+
+    [[nodiscard]] size_type size() const noexcept { return m_size; }
+    [[nodiscard]] static constexpr size_type capacity() noexcept { return N; }
+    [[nodiscard]] bool empty() const noexcept { return m_size == 0; }
+
+    [[nodiscard]] iterator begin() noexcept { return m_data.data(); }
+    [[nodiscard]] iterator end()   noexcept { return m_data.data() + m_size; }
+    [[nodiscard]] const_iterator begin() const noexcept { return m_data.data(); }
+    [[nodiscard]] const_iterator end()   const noexcept { return m_data.data() + m_size; }
+    [[nodiscard]] const_iterator cbegin() const noexcept { return m_data.data(); }
+    [[nodiscard]] const_iterator cend()   const noexcept { return m_data.data() + m_size; }
+
+    [[nodiscard]] T* data() noexcept { return m_data.data(); }
+    [[nodiscard]] const T* data() const noexcept { return m_data.data(); }
+
+    [[nodiscard]] reference front() { assert(!empty()); return m_data[0]; }
+    [[nodiscard]] reference back()  { assert(!empty()); return m_data[m_size - 1]; }
+    [[nodiscard]] const_reference front() const { assert(!empty()); return m_data[0]; }
+    [[nodiscard]] const_reference back()  const { assert(!empty()); return m_data[m_size - 1]; }
+
+protected:
+    std::array<T, N> m_data{};
+    size_type        m_size{0};
+};
+
+static_assert(std::ranges::contiguous_range<ArrayStack<int, 8>>);
+static_assert(std::ranges::random_access_range<ArrayStack<int, 8>>);
+
 
 #endif
