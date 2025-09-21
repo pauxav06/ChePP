@@ -148,7 +148,8 @@ struct SearchThread
         while (true)
         {
             if (!positions.last().is_valid(move)) break;
-            if (!positions.is_repetition() || positions.last().halfmove_clock() >= 100)
+            if (!positions.is_repetition() || positions.last().halfmove_clock() >= 100) break;
+            if (positions.ply() >= MAX_PLY)break;
             moves.push_back(move);
             positions.do_move(move);
             auto tt_hit = m_tt->probe(positions.last().hash());
