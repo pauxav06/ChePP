@@ -36,6 +36,7 @@ struct HistoryTable
     {
         for (const auto move : moves)
         {
+            //std::cout << move << std::endl;
             if (move == Move::null() || move == Move::none()) continue;
             m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()) =
                 decay(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
