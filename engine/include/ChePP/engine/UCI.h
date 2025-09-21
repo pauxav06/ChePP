@@ -282,6 +282,7 @@ public:
         if (enable_tuning)
         {
             m_params.handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
+
         }
         m_pos.set_fen(start_fen);
     }
