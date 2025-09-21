@@ -95,12 +95,12 @@ struct Scorer;
 template <>
 struct Scorer<ScorerType::Search> {
     struct Params {
-        int m_tt_bonus = 1000;
-        int m_killer_1_bonus = 200;
-        int m_killer_2_bonus = 150;
-        int promotion_bonus = 500;
-        int see_factor = 10;
-        int capture_hist_factor = 5;
+        int m_tt_bonus = 1500;
+        int m_killer_1_bonus = 1400;
+        int m_killer_2_bonus = 1300;
+        int promotion_bonus = 1;
+        int see_factor = 1;
+        int capture_hist_factor = 1;
         int hist_factor = 1;
         int cont_hist_factor = 1;
         int prev_cont_hist_factor = 1;
@@ -143,8 +143,8 @@ private:
 template <>
 struct Scorer<ScorerType::Root> {
     struct Params {
-        int m_tt_bonus = 2000;
-        int max_root_bonus = 2000;
+        int m_tt_bonus = 1500;
+        int max_root_bonus = 1300;
     };
 
     Scorer(const Params& params, const SearchStack::Node& ss, Move tt_move)
@@ -176,11 +176,11 @@ private:
 template <>
 struct Scorer<ScorerType::QSearch> {
     struct Params {
-        int m_tt_bonus = 800;
-        int m_killer_1_bonus = 100;
-        int m_killer_2_bonus = 50;
-        int promotion_bonus = 300;
-        int see_factor = 5;
+        int m_tt_bonus = 1500;
+        int m_killer_1_bonus = 1400;
+        int m_killer_2_bonus = 1300;
+        int promotion_bonus = 1;
+        int see_factor = 1;
         int capture_hist_factor = 2;
     };
 

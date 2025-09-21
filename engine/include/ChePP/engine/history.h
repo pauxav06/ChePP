@@ -19,12 +19,14 @@ struct HistoryTable
 {
     [[nodiscard]] BonusT get_bonus(const Position& position, const Move move) const
     {
+        if (move == Move::null()) return 0;
         return m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq());
     }
 
     template <BonusFn F>
     void apply_bonus(const Position& position, const Move move, const F& bonus)
     {
+        if (move == Move::null()) return;
         m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()) =
             bonus(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
     }
@@ -34,6 +36,7 @@ struct HistoryTable
     {
         for (const auto move : moves)
         {
+            if (move == Move::null() || move == Move::none()) continue;
             m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()) =
                 decay(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
         }
