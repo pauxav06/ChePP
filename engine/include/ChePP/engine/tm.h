@@ -76,6 +76,7 @@ struct TimeManager {
 
     // called by iterative deepening
     void adjust_time(const UpdateInfo& info) {
+        return;
         if (info.changed)
         {
             m_state.same_move_streak = 0;
@@ -88,6 +89,7 @@ struct TimeManager {
 
     void new_killer()
     {
+        return;
         m_state.adjusted_time_ms *= m_params.killer_factor;
         m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
     }
@@ -114,6 +116,7 @@ private:
 
     [[nodiscard]] int estimate_moves_to_go() const {
         assert(m_constraints.moves_to_go < 0);
+        return 30;
         const int baseline = m_params.baseline_moves_to_go;
         int estimate = baseline;
         estimate -= std::min(std::abs(m_init_info.static_eval / 100), 10); // if high eval we will probably finish sooner
