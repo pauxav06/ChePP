@@ -201,6 +201,7 @@ inline void SearchThread::IterativeDeepening()
 
                 auto t_now = std::chrono::high_resolution_clock::now();
                 auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
+                time_since_start = std::min(time_since_start, std::chrono::milliseconds(1));
                 int nps = m_statistics.nodes / time_since_start.count();
                 std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                     score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(0));
@@ -208,7 +209,7 @@ inline void SearchThread::IterativeDeepening()
 
                 TimeManager::UpdateInfo update_info;
                 update_info.eval = eval;
-                m_tm.adjust_time(update_info);
+                m_tm->adjust_time(update_info);
             }
         }
     }
@@ -246,7 +247,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0)
     {
-        m_tm.update_time();
+        m_tm->update_time();
     }
 
     const Position& pos = *ss().position;
@@ -261,6 +262,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     if (depth <= 0)
         return QSearch(alpha, beta);
 
+    m_statistics.nodes++;
+
     // increase depth if we are in check
     if (in_check)
     {
@@ -268,7 +271,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     }
 
 
-    m_statistics.nodes++;
 
 
     if (!is_root)
@@ -300,13 +302,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // Probe the TT to see if we have a candidate score
     /* IMPORTANT TO REDO AFTER TT CHANGES*/
     auto tt_hit = ss().excluded ? std::nullopt : m_tt->probe(pos.hash());
-    if (tt_hit)
-    {
-        do_move(tt_hit->move);
-        if (is_draw())
-            tt_hit = std::nullopt;
-        undo_move();
-    }
+    if (tt_hit) tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
     if (!is_pv && tt_hit)
     {
         const TT::Entry& e = *tt_hit;
@@ -462,7 +458,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
         for (auto [move, s]: make_scored_list(tactical, search_scorer()))
         {
-            if (move == tt_hit->move || s < -1'000'000ULL) //check the scaling
+            if (move == tt_hit->move || s < -1'000'000LL) //check the scaling
             {
                 continue;
             }
@@ -708,11 +704,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
         if (is_root)
         {
             assert(ss().refutation_nodes);
+            bool present = ss().refutation_nodes->contains(m);
+            assert(present || depth == 1);
+            if (!present) ss().refutation_nodes->emplace(m, 0);
             ss().refutation_nodes->at(m) += end - begin;
         }
 
         // if we out of time we just return 0 and it will be discarded down the line
-        if (m_tm.should_stop())
+        if (m_tm->should_stop())
         {
             return 0;
         }
@@ -768,7 +767,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     if (is_root && best_valid)
         m_pv_lines[0].line[ply()] = local_best;
 
-    TT::Bound bound = (best_eval <= alpha_org) ? bound = TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
+    TT::Bound bound = (best_eval <= alpha_org) ? TT::UPPER : (best_eval >= beta) ? TT::LOWER : TT::EXACT;
     if (best_valid)
         m_tt->store( make_replacement_policy() ,pos.hash(), depth, TT::store_score(best_eval, ply()), bound, local_best);
 
@@ -808,7 +807,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
 
 
     auto tt_hit = m_tt->probe(pos.hash());
-    tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
+    if (tt_hit) tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
     const Move tt_move = tt_hit ? tt_hit->move : Move::none();
     if (!is_pv && tt_hit)
     {

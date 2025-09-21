@@ -65,7 +65,6 @@ public:
         {
             m_accumulators.do_move(m_positions[init_ply], m_positions[ply()]);
         }
-        Node& node = m_nodes[ply()];
         update_last_node();
     }
 

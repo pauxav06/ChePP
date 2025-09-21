@@ -228,4 +228,26 @@ inline void perft(const Position& prev, const int ply, size_t& out)
     }
 }
 
+inline void perft_divide(const Position& prev, int depth) {
+    MoveList l = gen_moves(prev);
+    size_t total = 0;
+
+    for (auto mv : l)
+    {
+        Position next = prev;
+        next.do_move(mv);
+
+        size_t nodes = 0;
+        perft(next, depth - 1, nodes);
+
+
+        std::cout << next.piece_at(mv.from_sq()) << " " << mv.from_sq() << " " << mv.to_sq() << ": " << nodes << '\n';
+        total += nodes;
+    }
+
+
+    std::cout << "Total: " << total << '\n';
+}
+
+
 #endif

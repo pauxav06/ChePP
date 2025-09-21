@@ -13,55 +13,6 @@
 #include "network_net.h"
 #include "position.h"
 
-template <typename T, size_t MaxSize>
-class ArrayStack
-{
-    std::array<T, MaxSize> data{};
-    size_t                 topIndex = 0;
-
-  public:
-    bool empty() const { return topIndex == 0; }
-    bool full() const { return topIndex == MaxSize; }
-
-    bool push_back(const T& value)
-    {
-        if (full())
-            return false;
-        data[topIndex++] = value;
-        return true;
-    }
-
-    bool pop()
-    {
-        if (empty())
-            return false;
-        --topIndex;
-        return true;
-    }
-
-    T& top()
-    {
-        if (empty())
-            throw std::underflow_error("Stack empty");
-        return data[topIndex - 1];
-    }
-
-    const T& top() const
-    {
-        if (empty())
-            throw std::underflow_error("Stack empty");
-        return data[topIndex - 1];
-    }
-
-    size_t size() const { return topIndex; }
-
-    auto begin() { return data.begin(); }
-    auto end() { return data.begin() + topIndex; }
-
-    auto begin() const { return data.begin(); }
-    auto end() const { return data.begin() + topIndex; }
-};
-
 struct FeatureTransformer
 {
     static constexpr auto MaxChanges = 32;
@@ -191,7 +142,7 @@ struct Accumulator
     }
 
 
-    [[nodiscard]] void evaluate_uci(const Color view) const
+    void evaluate_uci(const Color view) const
     {
         for (size_t i = 0; i < 8; i++)
         {

@@ -1,12 +1,10 @@
 #ifndef HISTORY_H
 #define HISTORY_H
 
+#include "movegen.h"
 #include "position.h"
 
-#include <algorithm>
 #include <functional>
-#include <memory>
-#include <ratio>
 #include <cassert>
 
 using BonusT = int;

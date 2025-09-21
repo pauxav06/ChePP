@@ -31,7 +31,7 @@ public:
 
     [[nodiscard]] const std::string& name() { return m_name; };
     [[nodiscard]] virtual std::string uci_declare() const = 0;
-    virtual bool parse(const std::string& value)
+    virtual bool parse([[maybe_unused]] const std::string& value)
     {
         return m_cb();
     };
@@ -264,7 +264,7 @@ class UCIEngine {
     TT m_tt{}; // lifetime for the whole life of the engine
 
 public:
-    explicit UCIEngine(const bool enable_tuning) {
+    explicit UCIEngine(const bool enable_tuning = false) {
         m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this] ()
         {
             m_tt.reset();
