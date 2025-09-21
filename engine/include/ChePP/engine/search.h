@@ -618,7 +618,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 if (singular_score < singular_beta - 20 && ss().double_extensions <= 5)
                 {
                     double_extend          = true;
-                    ss().double_extensions = ss().prev() ? ss().prev()->double_extensions + 1 : 1;
+                    ss().double_extensions = ss().prev ? ss().prev->double_extensions + 1 : 1;
                 }
             }
             else if (tt_score >= beta &&  singular_score >= beta) //  a more aggressive formulation would be singular_beta >= beta
@@ -734,13 +734,12 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                     ss().killer2 = ss().killer1;
                     ss().killer1 = m;
                 }
-                m_history.update_cont_hist(ss(), quiets, m, depth);
-                m_history.update_hist(ss(), quiets, m, depth);
-                m_history.update_pawn_hist(ss(), quiets, m, depth);
+                ss().history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
+                ss().continuation_history.apply_bonus(pos, m, [depth] (const auto b) { return b + depth * depth; });
             }
             if (is_captured)
             {
-                m_history.update_capture_hist(ss(), captures, m, depth);
+                ss().capture_history.apply_bonus(m, [depth] (const auto b) { return b + depth * depth; });
             }
             assert(local_best != Move::none());
             break;
