@@ -126,6 +126,4 @@ struct TT
     std::vector<Entry> m_table;
 };
 
-inline TT g_tt;
-
 #endif // TT_H

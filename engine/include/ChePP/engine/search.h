@@ -73,8 +73,8 @@ struct SearchThread
         std::array<Move, MAX_PLY> line{};
     };
 
-    explicit SearchThread(const Parameters& parameters, const int id, TimeManager& tm, const Positions& pos)
-        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_search_stack(pos), m_pv_lines(parameters.n_pv)
+    explicit SearchThread(const Parameters& parameters, const int id, TimeManager& tm, TT& tt, const Positions& pos)
+        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos), m_pv_lines(parameters.n_pv)
     {
         init_cache();
     }
@@ -84,6 +84,7 @@ struct SearchThread
     Cache                 m_cache;
     Statistics            m_statistics;
     TimeManager&          m_tm;
+    TT&                   m_tt;
     SearchStack           m_search_stack;
     std::vector<PvLine>   m_pv_lines{};
 
@@ -113,8 +114,8 @@ struct SearchThread
     [[nodiscard]] int                      ply() const { return m_search_stack.ply(); }
     [[nodiscard]] SearchStack::Node&       ss() { return m_search_stack[m_search_stack.ply()]; }
     [[nodiscard]] const SearchStack::Node& ss() const { return m_search_stack[m_search_stack.ply()]; }
-    void                                   do_move(const Move move) { m_search_stack.do_move(move); }
-    void                                   undo_move() { m_search_stack.undo_move(); }
+    void                                   do_move(const Move move, const bool update_nnue = true) { m_search_stack.do_move(move, update_nnue); }
+    void                                   undo_move(const bool update_nnue = true) { m_search_stack.undo_move(update_nnue); }
 
     int32_t evaluate()
     {
@@ -151,6 +152,15 @@ struct SearchThread
             return candidate.generation != old.generation || candidate.hash != old.hash ||
                 (candidate.bound == TT::EXACT && old.bound != TT::EXACT) || candidate.depth > old.depth + m_parameters.tt_replacement_threshold;
         };
+    }
+
+    [[nodiscard]] bool causes_draw(const Move move)
+    {
+        bool ret = false;
+        do_move(move, false);
+        if (is_draw()) ret = true;
+        undo_move(false);
+        return ret;
     }
 
 
@@ -762,19 +772,15 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
 inline int SearchThread::QSearch(int alpha, int beta)
 {
-    // std::cout << "Qsearch" << std::endl;
-    if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0)
-    {
-        m_tm.update_time();
-    }
+    assert(beta > -INF && beta < INF);
 
+    if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) m_tm.update_time();
     m_statistics.nodes++;
 
-    bool is_pv = beta - alpha > 1;
+    const Position& pos = *ss().position;
+    const bool is_pv = beta - alpha > 1;
+    const bool in_check = pos.in_check(pos.side_to_move());
 
-    const Position& pos = m_positions.last();
-
-    // assert((pos.checkers(WHITE) | pos.checkers(BLACK)) == Bitboard::empty());
 
     if (ply() >= MAX_PLY)
         return evaluate();
@@ -782,39 +788,30 @@ inline int SearchThread::QSearch(int alpha, int beta)
     if (is_draw())
         return 0;
 
-    // std::cout << positions().back() << evaluate() << " " << alpha << " " << beta  << std::endl;
-
-    const MoveList moves = gen_legal(pos);
-    if (moves.empty())
+    auto filter = [&] (const Move move )
     {
-        if (pos.checkers(pos.side_to_move()))
-        {
-            return mated_in(ply());
-        }
-        return 0;
-    }
+        return in_check ?
+            make_legal_predicate(pos)(move) : // resolve checks
+            make_legal_predicate(pos)(move) && make_tactical_predicate(pos)(move); //only take captures/promotions
+    };
 
-    auto tt_hit = g_tt.probe(pos.hash());
-    if (tt_hit)
-    {
-        do_move(tt_hit->m_move);
-        if (is_draw())
-            tt_hit = std::nullopt;
-        undo_move();
-    }
+    const auto moves = gen_legal(pos);
+    if (moves.empty()) return in_check ? mated_in(ply()) : 0;
+    const auto tactical = moves | std::views::filter(filter);
+
+
+
+    auto tt_hit = m_tt.probe(pos.hash());
+    tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
+    const Move tt_move = tt_hit ? tt_hit->move : Move::none();
     if (!is_pv && tt_hit)
     {
-        const tt_entry_t& e     = *tt_hit;
-        const int         score = read_tt_score(e.m_score, ply());
-        if (score <= -INF || score >= INF)
-            std::cout << "alert " << e.m_score << " " << score << std::endl;
+        const auto& e     = *tt_hit;
+        const int         score = TT::read_score(e.score, ply());
         assert(score > -INF && score < INF);
-        if (e.m_bound == EXACT)
+        if (e.bound == TT::EXACT || (e.bound == TT::LOWER && score >= alpha) || (e.bound == TT::UPPER && score <= beta)) {
             return score;
-        if (e.m_bound == LOWER && score >= alpha)
-            return score;
-        if (e.m_bound == UPPER && score <= beta)
-            return score;
+        }
     }
 
     if (pos.occupancy().popcount() <= 7)
@@ -847,24 +844,18 @@ inline int SearchThread::QSearch(int alpha, int beta)
     }
 
     const int stand_pat = evaluate();
-    ss().eval           = stand_pat;
+    ss().static_eval           = stand_pat;
 
-    // assert(beta > -INF && beta < INF);
-    if (stand_pat >= beta)
-        return beta;
-    if (stand_pat > alpha)
-        alpha = stand_pat;
+    if (stand_pat >= beta) return beta;
+    if (stand_pat > alpha) alpha = stand_pat;
 
-    // std::cout << "qsearch move loop "  << std::endl;
-    MoveList tactical = filter_tactical(pos, moves);
-    // std::ranges::for_each(tactical, [&](auto m) {std::cout << m.move << std::endl;});
+    Scorer<ScorerType::QSearch> scorer(m_parameters.qsearch_scorer_params, ss(), tt_move);
+    ScoredMoveList scored_moves = make_scored_list(moves, scorer());
 
-    score_moves(ss(), tactical, tt_hit ? tt_hit->m_move : Move::none(), m_history, ss());
-    tactical.sort();
 
     int  best_eval = stand_pat;
     Move best_move = Move::none();
-    for (auto [m, s] : tactical)
+    for (const auto [m, s] : make_scored_list(tactical, scorer()))
     {
         // std::cout << m << std::endl;
         if (!is_pv && pos.is_occupied(m.to_sq()) &&

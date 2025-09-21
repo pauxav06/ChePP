@@ -36,6 +36,8 @@ inline void add_promotions(MoveList& list, const Bitboard bb, const int delta)
     bb.for_each_square([&](const Square to) { make_all_promotions(list, to - delta, to); });
 }
 
+
+
 template <Color c>
 void gen_pawn_moves(const Position& pos, MoveList& list)
 {
@@ -180,6 +182,9 @@ inline MoveList gen_moves(const Position& pos)
     return gen_moves<BLACK>(pos);
 }
 
+
+
+
 inline auto make_legal_predicate(const Position& pos)
 {
     return [&pos] (const Move move) { return pos.is_legal(move); };
@@ -187,13 +192,11 @@ inline auto make_legal_predicate(const Position& pos)
 
 inline MoveList gen_legal(const Position& pos)
 {
-    MoveList moves = gen_moves(pos);
-    MoveList legal{};
-    std::ranges::copy_if(moves, std::back_inserter(legal), make_legal_predicate(pos));
+    MoveList  all = gen_moves(pos);
+    MoveList  legal;
+    std::ranges::copy_if(all, std::back_inserter(legal), [&](const Move move) { return pos.is_legal(move); });
     return legal;
 }
-
-
 
 /* TODO IMPORTANT decide weather to evaluate giving checks in qsearch */
 inline auto make_tactical_predicate(const Position& pos)
@@ -203,6 +206,7 @@ inline auto make_tactical_predicate(const Position& pos)
         return pos.is_occupied(move.to_sq()) || move.type_of() == EN_PASSANT || move.type_of() == PROMOTION;
     };
 }
+
 
 
 
