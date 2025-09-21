@@ -259,6 +259,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     m_statistics.nodes++;
 
+
     if (!is_root)
     {
         if (is_draw())
