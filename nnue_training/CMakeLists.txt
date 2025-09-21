@@ -4,24 +4,29 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-
 if(MSVC)
     add_compile_options(
-            /O2
             /W4
             /permissive-
             /Zi
             /arch:AVX2
     )
+
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(/O2)
+    endif()
 else()
     add_compile_options(
-            -O3
             -g
             -march=native
             -Wall
             -Wextra
             -pedantic
     )
+
+    if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
+        add_compile_options(-O3)
+    endif()
 endif()
 
 file(GLOB_RECURSE DATAGEN_SOURCES
