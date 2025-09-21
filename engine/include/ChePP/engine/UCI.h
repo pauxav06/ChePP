@@ -371,7 +371,10 @@ public:
             if (iss >> token && token == "moves") {
                 moves = parse_moves(iss, movegen);
             }
-            m_pos.set_fen<true>(fen, moves);
+            if (!m_pos.set_fen<true>(fen, moves))
+            {
+                throw std::invalid_argument("failed to set position");
+            }
         } catch (const std::exception& e) {
             std::cerr << "position command error: " << e.what() << '\n';
         }
