@@ -184,10 +184,8 @@ inline void SearchThread::IterativeDeepening()
         m_pv_lines[0].line.clear();
         m_pv_lines[0].score = 0;
 
-        std::cout << *ss().position << std::endl;
         const int eval = AspirationWindow(depth, prev_eval);
         assert(ss().position);
-        std::cout << *ss().position << std::endl;
 
         std::ranges::reverse(m_pv_lines);
 
@@ -232,9 +230,7 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 {
     if (depth < m_parameters.aspiration_window_activation_depth)
     {
-        std::cout << *ss().position << std::endl;
         return Negamax(depth, -INF_SCORE, INF_SCORE);
-        std::cout << *ss().position << std::endl;
     }
 
     int window = m_parameters.aspiration_window_default_value;
