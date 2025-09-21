@@ -559,8 +559,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
                 // Futility Pruning, probably needs nore conditions
                 if (!is_pv && !in_check && lmrDepth <= 6)
                 {
-                    const int margin = futility_margin_for_depth(depth);
-                    if (static_eval + margin + 100 * is_improving <= alpha)
+                    const int margin = 60 + 70 * depth + 100 * is_improving ;
+                    if (static_eval + margin <= alpha)
                     {
                         skip_quiets = true; // skip this node continue the search now skipping quiets
                         move_idx++;
@@ -630,7 +630,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
             // tt_score <= singular_score ?
             else if (tt_score >= beta && !is_pv) /* TODO should we negative extend ALL non PV nodes? For now restrict to non pv.*/
             {
-                // Softer multicut. If the tt beats the alpha and the se seracch failed high but not high enough
+                // Softer multicut. If the tt beats the alpha and the SE search failed high but not high enough to beat the search alpha then good
                 negative_extension = true;
             }
         }
