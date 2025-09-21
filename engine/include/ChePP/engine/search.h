@@ -297,7 +297,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
 
     // Probe the TT to see if we have a candidate score
     /* IMPORTANT TO REDO AFTER TT CHANGES*/
-    auto tt_hit = ss().excluded ? std::nullopt : g_tt.probe(pos.hash());
+    auto tt_hit = ss().excluded ? std::nullopt : m_tt.probe(pos.hash());
     if (tt_hit)
     {
         do_move(tt_hit->move);
@@ -382,7 +382,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     assert(static_eval > -INF);
 
     // careful need to manage eval properly
-    ss().eval = static_eval;
+    ss().static_eval = static_eval;
 
 
     // the improving heuristic, basically checks if the sequence of moves improves the position
@@ -397,7 +397,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta)
     // need to be careful though because can give the illusion of strong moves to the search tree, which is the reason
     // for the adjustment of the search score
     if (!is_root && !is_pv && !in_check && depth < 9 &&
-        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->eval / 400))
+        static_eval >= beta + ((depth - is_improving) * 77 - ss().prev->static_eval / 400))
     {
         return static_eval;
     }
