@@ -29,6 +29,7 @@ public:
         int static_eval{0};
         Move excluded{Move::none()};
         int double_extensions{0};
+        int extensions{0};
         Move best_move{Move::none()};
 
         Move killer1{Move::none()};
@@ -99,6 +100,8 @@ private:
         node.capture_history = History(m_capture_history.get(), node.position);
         node.refutation_nodes = &m_refutation_nodes;
         node.is_repetition = m_positions.is_repetition();
+        node.extensions = node.prev ? m_nodes[ply() - 1].extensions : 0;
+        node.double_extensions = node.prev ? m_nodes[ply() - 1].double_extensions : 0;
     }
 
     void reset_last_node()
@@ -113,6 +116,8 @@ private:
         node.capture_history = {};
         node.refutation_nodes = nullptr;
         node.is_repetition = false;
+        node.double_extensions = 0;
+        node.extensions = 0;
     }
 
     Positions m_positions;

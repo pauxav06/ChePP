@@ -1002,21 +1002,6 @@ struct Positions
     using PosRef      = Position&;
     using ConstPosRef = const Position&;
 
-    explicit Positions()
-    {
-        m_positions.reserve(MAX_PLY + 1);
-        m_hashes.reserve(MAX_PLY + 1);
-    }
-
-    Positions(const Positions& positions)
-    {
-        m_positions.reserve(positions.m_positions.capacity());
-        m_hashes.reserve(positions.m_hashes.capacity());
-        std::ranges::copy(positions.m_positions, std::back_inserter(m_positions));
-        std::ranges::copy(positions.m_hashes, std::back_inserter(m_hashes));
-        m_start_size = positions.m_start_size;
-    }
-
     void clear()
     {
         m_positions.clear();
@@ -1119,7 +1104,7 @@ struct Positions
 
     Handle handle_to_last()
     {
-        return VectorHandle{&m_positions, static_cast<unsigned>(ply() + m_start_size - 1)};
+        return VectorHandle{&m_positions, static_cast<unsigned>(m_positions.size() - 1)};
     }
 
   private:
