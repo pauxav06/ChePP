@@ -7,17 +7,17 @@
 #include <functional>
 #include <cassert>
 
-using BonusT = int;
+using MoveScoreT = int;
 
 template <typename F>
-concept BonusFn = requires(F f, BonusT x) {
-    { f(x) } -> std::convertible_to<BonusT>;
+concept BonusFn = requires(F f, MoveScoreT x) {
+    { f(x) } -> std::convertible_to<MoveScoreT>;
 };
 
 
 struct HistoryTable
 {
-    [[nodiscard]] BonusT get_bonus(const Position& position, const Move move) const
+    [[nodiscard]] MoveScoreT get_bonus(const Position& position, const Move move) const
     {
         if (move == Move::null()) return 0;
         return m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq());
@@ -31,19 +31,7 @@ struct HistoryTable
             bonus(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
     }
 
-    template <BonusFn F>
-    void decay(const Position& position, const MoveList& moves, const F& decay)
-    {
-        for (const auto move : moves)
-        {
-            //std::cout << move << std::endl;
-            if (move == Move::null() || move == Move::none()) continue;
-            m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()) =
-                decay(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
-        }
-    }
-
-    EnumArray<Piece, EnumArray<Square, int>> m_hist;
+    EnumArray<Piece, EnumArray<Square, MoveScoreT>> m_hist;
 };
 
 
@@ -55,13 +43,13 @@ struct ContinuationHistoryTable
         return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
     }
 
-    const HistoryTable& get_relevant_history(const Position& position) const
+    [[nodiscard]] const HistoryTable& get_relevant_history(const Position& position) const
     {
         const Move move = position.move();
         return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
     }
 
-    [[nodiscard]] BonusT get_bonus(const Position& previous, const Position& current, const Move move) const
+    [[nodiscard]] MoveScoreT get_bonus(const Position& previous, const Position& current, const Move move) const
     {
         return get_relevant_history(previous).get_bonus(current, move);
     }
@@ -70,12 +58,6 @@ struct ContinuationHistoryTable
     void apply_bonus(const Position& previous, const Position& current, const Move move, const F& bonus)
     {
         get_relevant_history(previous).apply_bonus(current, move, bonus);
-    }
-
-    template <BonusFn F>
-    void decay(const Position& previous, const Position& current, const MoveList& moves, const F& decay)
-    {
-        get_relevant_history(previous).decay(current, moves, decay);
     }
 
     EnumArray<Piece, EnumArray<Square, HistoryTable>> m_hist;
@@ -94,7 +76,7 @@ struct History
 
     ~History() = default;
 
-    [[nodiscard]] BonusT get_bonus(const Move move) const
+    [[nodiscard]] MoveScoreT get_bonus(const Move move) const
     {
         return m_hist->get_bonus(*position, move);
     }
@@ -104,11 +86,6 @@ struct History
         m_hist->apply_bonus(*position, move, bonus);
     }
 
-    template <BonusFn F>
-    void decay(const MoveList& moves, const F& decay)
-    {
-        m_hist->decay(*position, moves, decay);
-    }
 
     HistoryTable* m_hist = nullptr;
     Positions::Handle position{};
@@ -117,9 +94,6 @@ struct History
 
 struct ContinuationHistory
 {
-    using Bonus = std::function<int(int)>;
-    using Decay = std::function<int(int)>;
-
     ContinuationHistory() = default;
     ContinuationHistory(ContinuationHistoryTable* hist, const Positions::Handle& prev) : m_hist(hist), previous(prev) {}
 
@@ -130,26 +104,24 @@ struct ContinuationHistory
 
     ~ContinuationHistory() = default;
 
-    [[nodiscard]] BonusT get_bonus(const Position& current, const Move move) const
+    [[nodiscard]] MoveScoreT get_bonus(const Position& current, const Move move) const
     {
-        if (previous->move() == Move::null()) return 0;
+        if (!valid()) return 0;
         return m_hist->get_bonus(*previous, current, move);
     }
 
     template <BonusFn F>
     void apply_bonus(const Position& current, const Move move, const F& bonus)
     {
-        if (previous->move() == Move::null()) return;
+        if (!valid()) return;
         m_hist->apply_bonus(*previous, current, move, bonus);
     }
 
-    template <BonusFn F>
-    void decay(const Position& current, const MoveList& moves, const F& decay)
+    [[nodiscard]] bool valid() const
     {
-        if (previous->move() == Move::null()) return;
-        m_hist->decay(*previous, current, moves, decay);
+        if (previous) assert(previous->move() != Move::none());
+        return m_hist != nullptr && previous && previous->move() != Move::null();
     }
-
 
     ContinuationHistoryTable* m_hist = nullptr;
     Positions::Handle previous{};

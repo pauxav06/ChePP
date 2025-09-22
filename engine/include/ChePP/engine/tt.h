@@ -38,8 +38,8 @@ struct TT
 
         Entry() noexcept = default;
         Entry(const hash_t hash, const int depth, const int score, const Bound bound, const int generation,
-              const Move move)
-            : hash(hash), depth(depth), score(static_cast<int16_t>(score)), move(move), bound(bound),
+              const Move move, int static_eval)
+            : hash(hash), depth(depth), score(static_cast<int16_t>(score)), move(move), bound(bound), static_eval(static_eval),
               generation(generation)
         {
         }
@@ -49,6 +49,7 @@ struct TT
         int16_t  score{};
         Move     move{};
         Bound    bound{};
+        int16_t  static_eval{};
         uint8_t  generation{};
         uint8_t  repetitions{0};
     };
@@ -59,6 +60,7 @@ struct TT
         m_size = floor_power_of_two(mb * 1024 * 1024 / sizeof(Entry));
         m_table.resize(m_size);
         std::ranges::fill(m_table, Entry());
+        std::cout << "Init tt with " << m_size << " entries" << std::endl;
     }
 
     void reset()
@@ -87,9 +89,9 @@ struct TT
 
     template <typename PolicyF>
     requires ReplacementPolicy<PolicyF, Entry>
-    void store(PolicyF replacement_policy, const hash_t hash, const int depth, const int score, Bound bound, const Move move)
+    void store(PolicyF replacement_policy, const hash_t hash, const int depth, const int score, Bound bound, const Move move, int static_eval)
     {
-        if (const auto entry = Entry(hash, depth, score, bound, m_generation, move);
+        if (const auto entry = Entry(hash, depth, score, bound, m_generation, move, static_eval);
             replacement_policy(m_table[index(hash)], entry))
         {
             m_table[index(hash)] = entry;

@@ -455,7 +455,7 @@ struct Accumulators
 
     Handle handle_to_last()
     {
-        return VectorHandle{&m_accumulators, ply()};
+        return VectorHandle{&m_accumulators, static_cast<unsigned>(m_accumulators.size() - 1)};
     }
 
   private:
