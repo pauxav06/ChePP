@@ -2,7 +2,7 @@
 // Created by paul on 7/30/25.
 //
 
-#include <ChePP/engine/movegen.h>
+#include <ChePP/engine/position.h>
 #include <gtest/gtest.h>
 
 TEST(ThreeFoldRepetitions, FourNullMoveIsDraw)
@@ -41,7 +41,7 @@ TEST(ThreeFoldRepetitions, TwoNightShuffleIsDraw)
 TEST(FiftyMoveRule, FiftyRookShuffleIsDraw)
 {
     Positions positions{};
-    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
+    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w - - 0 1");
 
     Square sq_from = A1;
     for (Square sq_to = B1; sq_to <= B1 + 24; ++sq_to)
@@ -63,7 +63,7 @@ TEST(FiftyMoveRule, FiftyRookShuffleIsDraw)
 TEST(FiftyMoveRule, PawnMoveResetsFiftyRookShuffleIsDraw)
 {
     Positions positions{};
-    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w KQkq - 0 1");
+    positions.set_fen("K1k5/pppppppp/8/8/8/8/8/R7 w - - 0 1");
 
     Square sq_from = A1;
     for (Square sq_to = B1; sq_to < B1 + 25; ++sq_to)

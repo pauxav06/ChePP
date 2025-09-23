@@ -2,8 +2,13 @@
 
 int main() {
     UCIEngine engine{false};
-    engine.loop();
-
+    std::istringstream bench_input(
+        "ucinewgame\n"
+        "position startpos\n"
+        "go depth 20\n"
+        "quit\n"
+    );
+    engine.loop(std::cin);
     return 0;
 }
 

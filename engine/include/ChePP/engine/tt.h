@@ -37,14 +37,14 @@ struct TT
     {
 
         Entry() noexcept = default;
-        Entry(const hash_t hash, const int depth, const int score, const Bound bound, const int generation,
+        Entry(const Zobrist::Hash hash, const int depth, const int score, const Bound bound, const int generation,
               const Move move, int static_eval)
             : hash(hash), depth(depth), score(static_cast<int16_t>(score)), move(move), bound(bound), static_eval(static_eval),
               generation(generation)
         {
         }
 
-        hash_t   hash{};
+        Zobrist::Hash   hash{};
         uint16_t depth{};
         int16_t  score{};
         Move     move{};
@@ -69,13 +69,13 @@ struct TT
         std::ranges::fill(m_table, Entry());
     }
 
-    void prefetch(const hash_t hash) const noexcept
+    void prefetch(const Zobrist::Hash hash) const noexcept
     {
         const size_t idx = index(hash);
         __builtin_prefetch(&m_table[idx], 0, 3);
     }
 
-    [[nodiscard]] std::optional<Entry> probe(const hash_t hash) const
+    [[nodiscard]] std::optional<Entry> probe(const Zobrist::Hash hash) const
     {
 
         const Entry& cur = m_table[index(hash)];
@@ -87,14 +87,17 @@ struct TT
     }
 
 
-    template <typename PolicyF>
-    requires ReplacementPolicy<PolicyF, Entry>
-    void store(PolicyF replacement_policy, const hash_t hash, const int depth, const int score, Bound bound, const Move move, int static_eval)
+    void store(const Zobrist::Hash hash, const int depth, const int score, Bound bound, const Move move, int static_eval)
     {
-        if (const auto entry = Entry(hash, depth, score, bound, m_generation, move, static_eval);
-            replacement_policy(m_table[index(hash)], entry))
+        const auto candidate = Entry(hash, depth, score, bound, m_generation, move, static_eval);
+        auto& old = m_table[index(hash)];
+
+        bool replace = !old.hash || (old.generation != candidate.generation || old.depth <= candidate.depth);
+        if (!replace) return;
+        if (candidate.move || old.hash != candidate.hash) old.move = move;
+        if (candidate.bound == TT::EXACT || candidate.hash != old.hash || candidate.depth + 4 > old.depth)
         {
-            m_table[index(hash)] = entry;
+            old = candidate;
         }
     }
 
@@ -121,7 +124,7 @@ struct TT
 
 
   private:
-    [[nodiscard]] size_t index(const hash_t hash) const { return hash & (m_size - 1); }
+    [[nodiscard]] size_t index(const Zobrist::Hash hash) const { return hash & (m_size - 1); }
 
     int                m_generation{0};
     std::size_t        m_size{0};

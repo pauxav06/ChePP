@@ -18,36 +18,39 @@
 
 class SearchStack {
 public:
+    // null pointers indicate the desired information does not exist and should be checked
     struct Node
     {
         Node* prev{};
         int ply{};
+
         Positions::Handle position{};
         Accumulators::Handle accumulator{};
-        bool is_repetition{false};
 
+        bool is_repetition{false};
         int static_eval{0};
+
         Move excluded{Move::none()};
+        int single_extensions{0};
         int double_extensions{0};
-        int extensions{0};
+
         Move best_move{Move::none()};
 
         Move killer1{Move::none()};
         Move killer2{Move::none()};
-
-        ContinuationHistory continuation_history{};
-        History history{};
-        History capture_history{};
-        RefutationMapT* refutation_nodes{};
+        History* continuation_history{};
+        History* history{};
+        CaptureHistory* capture_history{};
+        RefutationHistory* refutation_history{};
     };
 
     explicit SearchStack(const Positions& positions)
     : m_positions(positions),
     m_accumulators(positions.last()),
     m_nodes(std::make_unique<Node[]>(MAX_PLY)),
-    m_history(std::make_unique<HistoryTable>()),
-    m_capture_history(std::make_unique<HistoryTable>()),
-    m_continuation_history(std::make_unique<ContinuationHistoryTable>())
+    m_history(std::make_unique<History>()),
+    m_capture_history(std::make_unique<CaptureHistory>()),
+    m_continuation_history(std::make_unique<ContinuationHistory>())
     {
         update_last_node();
     }
@@ -93,15 +96,20 @@ private:
         Node& node = m_nodes[ply()];
         node.prev = ply() == 0 ? nullptr : &m_nodes[ply() - 1];
         node.ply = ply();
+
         node.accumulator = m_accumulators.handle_to_last();
         node.position = m_positions.handle_to_last();
-        node.continuation_history = ContinuationHistory(m_continuation_history.get(), node.position);
-        node.history = History(m_history.get(), node.position);
-        node.capture_history = History(m_capture_history.get(), node.position);
-        node.refutation_nodes = &m_refutation_nodes;
         node.is_repetition = m_positions.is_repetition();
-        node.extensions = node.prev ? m_nodes[ply() - 1].extensions : 0;
+
+        node.single_extensions = node.prev ? m_nodes[ply() - 1].single_extensions : 0;
         node.double_extensions = node.prev ? m_nodes[ply() - 1].double_extensions : 0;
+
+        node.history = m_history.get();
+        node.capture_history = m_capture_history.get();
+        node.continuation_history =
+            !node.prev || node.position->move() == Move::null() ? nullptr :
+            &m_continuation_history->get_relevant_history(node.position());
+        node.refutation_history = &m_refutation_nodes;
     }
 
     void reset_last_node()
@@ -109,25 +117,24 @@ private:
         Node& node = m_nodes[ply()];
         node.prev = nullptr;
         node.ply = 0;
-        node.position = {};
-        node.accumulator = {};
-        node.history = {};
-        node.continuation_history = {};
-        node.capture_history = {};
-        node.refutation_nodes = nullptr;
+        node.position = Positions::Handle{nullptr, 0};
+        node.accumulator = Accumulators::Handle{nullptr, 0};
+        node.history = nullptr;
+        node.capture_history = nullptr;
+        node.refutation_history = nullptr;
         node.is_repetition = false;
         node.double_extensions = 0;
-        node.extensions = 0;
+        node.single_extensions = 0;
     }
 
     Positions m_positions;
     Accumulators m_accumulators;
     std::unique_ptr<Node[]> m_nodes;
 
-    std::unique_ptr<HistoryTable> m_history{};
-    std::unique_ptr<HistoryTable> m_capture_history{};
-    std::unique_ptr<ContinuationHistoryTable> m_continuation_history{};
-    RefutationMapT m_refutation_nodes{MAX_MOVES};
+    std::unique_ptr<History> m_history{};
+    std::unique_ptr<CaptureHistory> m_capture_history{};
+    std::unique_ptr<ContinuationHistory> m_continuation_history{};
+    RefutationHistory m_refutation_nodes{MAX_MOVES};
 };
 
 

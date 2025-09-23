@@ -2,7 +2,7 @@
 // Created by paul on 7/29/25.
 //
 
-#include <ChePP/engine/movegen.h>
+#include <ChePP/engine/position.h>
 #include <gtest/gtest.h>
 
 struct perft_test_case_t
