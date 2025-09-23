@@ -16,8 +16,8 @@ struct TimeManager {
 
     struct UCIConstraints {
         int move_time{-1};
-        EnumArray<Color, int> time{-1, -1};
-        EnumArray<Color, int> inc{-1, -1};
+        EnumArray<int, Color> time{-1, -1};
+        EnumArray<int, Color> inc{-1, -1};
         int moves_to_go{-1};
         int depth = 99;
     };
@@ -128,7 +128,7 @@ private:
     void compute_base_time() {
         // first we check if we have a fixed time to search
         if (m_constraints.move_time > 0) {
-            m_state.max_time_ms = m_constraints.move_time;
+            m_state.max_time_ms = clamp_time(m_constraints.move_time - m_params.max_time);
             m_state.adjusted_time_ms = m_constraints.move_time;
             return;
         }

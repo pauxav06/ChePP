@@ -242,7 +242,8 @@ class UCIEngine {
     {
         Waiting,
         Searching,
-        Pondering
+        Pondering,
+        Terminated,
     };
 
     struct Parameters
@@ -252,7 +253,6 @@ class UCIEngine {
         std::string tb_path{};
         TimeManager::Params tm{};
         SearchThread::Parameters tunables;
-        EngineParameterHandler handler{};
     };
 
 
@@ -260,39 +260,40 @@ class UCIEngine {
     State m_state{Waiting};
     Positions m_pos{};
     std::jthread m_worker;
-    SearchThreadHandler m_handler{};
+    SearchThreadHandler m_thread_handler{};
+    EngineParameterHandler m_param_handler{};
     TT m_tt{}; // lifetime for the whole life of the engine
 
 public:
     explicit UCIEngine(const bool enable_tuning = false) {
-        m_params.handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this] ()
+        m_param_handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this] ()
         {
             m_tt.reset();
             m_tt.init(m_params.hash_size);
             std::cout << std::format("info string Hash Resized to {}", m_params.hash_size) << std::endl;
             return true;
         });
-        m_params.handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
-        m_params.handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this] ()
+        m_param_handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
+        m_param_handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this] ()
         {
             const bool val = init_tb(m_params.tb_path);
             if (val) std::cout << "info string set tb path" << std::endl;
             return val;
 
         });
-        m_params.handler.add<EngineParamButton>("Clear Hash", [this]() {
+        m_param_handler.add<EngineParamButton>("Clear Hash", [this]() {
             m_tt.reset();
             std::cout << "info string Hash cleared" << std::endl;
             return true;
         });
-        if (enable_tuning)
+        if (enable_tuning) // to tune magic values
         {
-            m_params.handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
+            m_param_handler.add<EngineParamSpin>("AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
         }
         m_tt.init(m_params.hash_size);
-        if (!m_pos.set_fen<true>(start_fen))
+        if (auto err = m_pos.set_fen<true>(start_fen); !err)
         {
-            throw std::runtime_error("Failed to set start fen");
+            throw std::runtime_error("Failed to set start fen: " + err.error());
         }
     }
 
@@ -301,7 +302,7 @@ public:
         if (m_state != Waiting) return;
         std::cout << "id name ChePP\n";
         std::cout << "id author Paul\n";
-        m_params.handler.print_uci_options(std::cout);
+        m_param_handler.print_uci_options(std::cout);
         std::cout << "uciok" << std::endl;
     }
 
@@ -318,7 +319,7 @@ public:
         m_pos.set_fen(start_fen);
     }
 
-    MoveList parse_moves(std::istringstream& iss, Position& movegen) {
+    std::expected<MoveList, std::string> parse_moves(std::istringstream& iss, Position& movegen) {
         std::string token;
         MoveList moves{};
         while (iss >> token) {
@@ -328,7 +329,7 @@ public:
                 .castling_rights = movegen.castling_rights()
             });
             if (!move || !movegen.is_valid(*move)) {
-                throw std::invalid_argument(std::format("invalid move {}", token));
+                return std::unexpected(std::format("invalid move {}", token));
             }
             moves.push_back(*move);
             movegen.do_move(*move);
@@ -351,38 +352,45 @@ public:
         MoveList moves;
         std::string fen;
 
-        try {
-            Position movegen;
-            if (type == "startpos")
+        Position movegen;
+        if (type == "startpos")
+        {
+            fen = std::string(start_fen);
+        }
+        else if (type == "fen")
+        {
+            std::string part;
+            for (int i = 0; i < 6 && iss >> part; ++i) {
+                if (i) fen += " ";
+                fen += part;
+            }
+        }
+        if (auto err = movegen.from_fen(fen); !err) {
+            std::cerr << "Invalid fen: " << err.error() << std::endl;
+            return;
+        }
+        if (iss >> token && token == "moves") {
+            auto err = parse_moves(iss, movegen);
+            if (!err)
             {
-                fen = start_fen;
+                std::cerr << "Invalid move: " << err.error() << std::endl;
+                return;
             }
-            else if (type == "fen")
-            {
-                std::string part;
-                for (int i = 0; i < 6 && iss >> part; ++i) {
-                    if (i) fen += " ";
-                    fen += part;
-                }
-            }
-            if (!movegen.from_fen(fen)) {
-                throw std::invalid_argument("invalid fen");
-            }
-            if (iss >> token && token == "moves") {
-                moves = parse_moves(iss, movegen);
-            }
-            if (!m_pos.set_fen<true>(fen, moves))
-            {
-                throw std::invalid_argument("failed to set position");
-            }
-        } catch (const std::exception& e) {
-            std::cerr << "position command error: " << e.what() << '\n';
+            moves = *err;
+        }
+        if (auto err = m_pos.set_fen<true>(fen, moves); !err)
+        {
+            std::cerr << "Invalid fen: " << err.error() << std::endl;
+            return;
         }
     }
+
+
 
     void go(const std::string& cmd)
     {
         if (m_state != Waiting) return;
+
         TimeManager::UCIConstraints constraints;
         std::istringstream iss(cmd);
         std::string token;
@@ -398,10 +406,10 @@ public:
 
         }
 
-        m_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos);
+        m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos);
         m_worker = std::jthread([&]()
         {
-            m_handler.start();
+            m_thread_handler.start();
             m_state = Waiting;
         });
 
@@ -419,36 +427,39 @@ public:
 
     void stop()
     {
-        m_handler.stop_all();
+        m_thread_handler.stop_all();
         if (m_worker.joinable()) m_worker.join();
     }
+    void handle_command(const std::string& line) {
+        if (line == "uci") {
+            uci();
+        } else if (line == "isready") {
+            isready();
+        } else if (line == "ucinewgame") {
+            ucinewgame();
+        } else if (line.rfind("position", 0) == 0) {
+            position(line);
+        } else if (line.rfind("go", 0) == 0) {
+            go(line);
+        } else if (line.rfind("setoption", 0) == 0) {
+            if (!m_param_handler.handle_setoption(line))
+                std::cerr << "info string Unknown option or invalid value\n" << std::endl;
+        } else if (line == "evaluate" || line == "eval") {
+            eval();
+        } else if (line == "print") {
+            std::cout << m_pos.last() << std::endl;
+        } else if (line == "stop") {
+            stop();
+        } else if (line == "quit") {
+            stop();
+            m_state = Terminated;
+        }
+    }
 
-    int loop() {
+    int loop(std::istream& in) {
         std::string line;
-        while (std::getline(std::cin, line)) {
-            if (line == "uci") {
-                uci();
-            } else if (line == "isready") {
-                isready();
-            } else if (line == "ucinewgame") {
-                ucinewgame();
-            } else if (line.rfind("position", 0) == 0) {
-                position(line);
-            } else if (line.rfind("go", 0) == 0) {
-                go(line);
-            } else if (line.rfind("setoption", 0) == 0) {
-                if (!m_params.handler.handle_setoption(line))
-                    std::cerr << "info string Unknown option or invalid value\n" << std::endl;
-            } else if (line == "evaluate" || line == "eval") {
-                eval();
-            } else if (line  == "print") {
-                std::cout << m_pos.last() << std::endl;
-            } else if (line == "stop") {
-                stop();
-            } else if (line == "quit") {
-                stop();
-                break;
-            }
+        while (m_state != Terminated && std::getline(in, line)) {
+            handle_command(line);
         }
         return 0;
     }

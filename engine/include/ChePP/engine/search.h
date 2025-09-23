@@ -3,7 +3,6 @@
 
 #include "history.h"
 #include "move_ordering.h"
-#include "movegen.h"
 #include "nnue.h"
 #include "tm.h"
 #include "tt.h"
@@ -50,9 +49,7 @@ struct SearchThread
         std::function<int(bool, int)>      lmp{default_lmp};
         std::function<int(bool, int, int)> lmr{default_lmr};
 
-        Scorer<ScorerType::Search>::Params search_scorer_params{};
-        Scorer<ScorerType::Root>::Params root_scorer_params{};
-        Scorer<ScorerType::QSearch>::Params qsearch_scorer_params{};
+        MoveSelector::Params            scoring_parameters{};
 
         int max_history = 16384;
         int max_counter_history = 16384;
@@ -97,7 +94,7 @@ struct SearchThread
     Cache                 m_cache;
     Statistics            m_statistics;
     SearchStack           m_search_stack;
-    PvLine                m_pv_line{};
+    Move                  best_move;
 
 
     void init_cache()
@@ -178,18 +175,6 @@ struct SearchThread
         return oss.str();
     }
 
-    auto make_replacement_policy() const
-    {
-        return [this] (const TT::Entry& old, const TT::Entry& candidate)
-        {
-
-            bool replace = !old.hash || (old.generation != candidate.generation) || old.depth <= candidate.depth;
-            if (!replace) return false;
-            if (candidate.move || old.hash != candidate.hash) return true;
-            if (candidate.bound == TT::EXACT || candidate.hash != old.hash || candidate.depth + 4 > old.depth) return true;
-        };
-    }
-
     [[nodiscard]] bool causes_draw(const Move move)
     {
         bool ret = false;
@@ -247,7 +232,7 @@ inline void SearchThread::IterativeDeepening()
                     auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                     time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                     int nps = m_statistics.nodes / time_since_start.count();
-                    auto pv = get_pv(ss().position(), ss().best_move);
+                    auto pv = get_pv(ss().position(), best_move);
                     std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                         score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(pv));
                     std::cout << uci_output << std::endl;
@@ -265,28 +250,41 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 {
     if (depth < m_parameters.aspiration_window_activation_depth)
     {
-        return Negamax(depth, -INF_SCORE, INF_SCORE, false);
+        int eval = Negamax(depth, -INF_SCORE, INF_SCORE, false);
+        best_move = ss().best_move;
+        return eval;
     }
 
     int window = m_parameters.aspiration_window_default_value;
     int alpha  = prev_eval - window;
     int beta   = prev_eval + window;
 
-    auto eval = Negamax(depth, alpha, beta, false);
+    int eval = Negamax(depth, alpha, beta, false);
 
     while (eval <= alpha || eval >= beta)
     {
         if (m_tm->should_stop())
-            break;
+            return eval;
 
-        window *= m_parameters.aspiration_window_multiplicative_factor;
-        alpha = std::clamp(eval - window, -INF_SCORE, INF_SCORE);
-        beta  = std::clamp(eval + window, -INF_SCORE, INF_SCORE);
+        if (eval <= alpha)
+        {
+            window = window * m_parameters.aspiration_window_multiplicative_factor;
+            alpha = std::clamp(eval - window, -INF_SCORE, INF_SCORE);
+        }
+        else if (eval >= beta)
+        {
+            window = window * m_parameters.aspiration_window_multiplicative_factor;
+            beta  = std::clamp(eval + window, -INF_SCORE, INF_SCORE);
+            best_move = ss().best_move;
+        }
 
         eval = Negamax(depth, alpha, beta, false);
     }
+
+    best_move = ss().best_move;
     return eval;
 }
+
 
 inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 {
@@ -306,6 +304,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
     const bool is_pv = beta - alpha > 1;
     const bool is_root   = ply() == 0;
     const bool in_check  = ss().position->in_check(ss().position->side_to_move());
+    Positions::Handle pos = ss().position;
     bool improving = false;
     int eval = 0;
 
@@ -342,25 +341,26 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
     }
 
     // Probe the TT to see if we have a candidate score
-    auto tt_hit = ss().excluded ? std::nullopt : m_tt->probe(ss().position->hash());
-    int tt_score = tt_hit ? TT::read_score(tt_hit->score, ply()) : 0;
+    auto tt_hit = m_tt->probe(ss().position->hash());
     Move tt_move = tt_hit ? tt_hit->move : Move::none();
-    if (tt_hit && tt_move) tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
-    if (!is_pv && tt_hit && tt_hit->depth >= depth && tt_move)
+    if (!tt_move) tt_hit = std::nullopt;
+    if (tt_hit) tt_hit = causes_draw(tt_move) ? std::nullopt : tt_hit;
+    int tt_score = tt_hit ? TT::read_score(tt_hit->score, ply()) : 0;
+    if (!is_pv && tt_hit && !ss().excluded && tt_hit->depth >= depth)
     {
-        const int score = TT::read_score(tt_score, ply());
-        if (tt_hit->bound == TT::Bound::EXACT || (tt_hit->bound == TT::Bound::LOWER && score >= alpha) || (tt_hit->bound == TT::Bound::UPPER && score <= beta))
+        if (tt_hit->bound == TT::Bound::EXACT || (tt_hit->bound == TT::Bound::LOWER && tt_score >= alpha) || (tt_hit->bound == TT::Bound::UPPER && tt_score <= beta))
         {
             m_statistics.tt_hits++;
             return tt_score;
         }
 
     }
-
-
-
     ss().static_eval = eval = tt_hit ? tt_hit->static_eval : evaluate();
-    improving = !in_check && (ply() >= 2 && ss().static_eval > ss().prev->prev->static_eval);
+    if (ss().excluded) tt_hit = std::nullopt;
+
+
+    improving = !in_check;
+    if (ply() > 1) improving &= ss().static_eval > ss().prev->prev->static_eval;
 
 
     if (in_check || ss().excluded)
@@ -377,18 +377,20 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         }
 
         if (ply() >= 2 && depth < 9 && eval >= beta
-            && ss().position->occupancy().popcount() > 4 //disable when scores get near mate
-            && eval - ((depth - improving) * 77) - ss().prev->prev->static_eval/400 >= beta)
+            && pos->occupancy().popcount() > 4 //disable when nnue uses last bucket with high evals
+            && eval - ((depth - improving) * 77) - ss().prev->static_eval/400 >= beta
+            && std::abs(eval) < MATED_IN_MAX_PLY && (!tt_move))
         {
             return eval;
         }
 
 
         if (cutnode && ss().static_eval > (beta - 76 * improving)
-            && ss().position->occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 1
-            && depth >= 3 && ss().position->move() != Move::null()
-            && (!tt_hit || tt_hit->bound == TT::LOWER || eval >= beta))
+            && pos->occupancy(KNIGHT, BISHOP, ROOK, QUEEN).popcount() >= 1
+            && depth >= 3 && (!tt_hit || tt_hit->bound == TT::LOWER || eval >= beta))
         {
+            assert(pos->move().is_ok());
+
             int reduction = 3 + depth / 3;
 
             do_move(Move::null());
@@ -412,14 +414,19 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         {
 
             int score = 0;
-            auto list = gen_legal(ss().position())
-            | std::views::filter(make_tactical_predicate(ss().position()));
+            MoveSelector move_selector{
+                gen_moves(pos()) |
+                std::views::filter(make_legal_predicate(pos())) |
+                std::views::filter(make_tactical_predicate(pos())),
+                MoveSelector::Stage::ProbCut,
+                ss(),
+                m_parameters.scoring_parameters,
+                tt_move
+            };
 
-            Scorer<ScorerType::QSearch> scorer(m_parameters.qsearch_scorer_params, ss(), tt_move);
-
-            for (const auto [m, s] : ScoredMoveStream(list, scorer()))
+            for (const auto [m, s] : move_selector)
             {
-                if (s < scorer.m_params.good_capture_bonus) continue;
+                if (s < move_selector.params().good_capture) continue;
                 if (m == ss().excluded) continue;
 
                 do_move(m);
@@ -434,7 +441,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
                 if (score >= rbeta)
                 {
-                    m_tt->store(make_replacement_policy(), ss().position->hash(), depth - 3, score, TT::UPPER, m, ss().static_eval);
+                    m_tt->store(ss().position->hash(), depth - 3, score, TT::UPPER, m, ss().static_eval);
                     return score;
                 }
             }
@@ -457,29 +464,38 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
     Move best_move = Move::none();
 
 
-    MoveList moves = gen_legal(ss().position());
-
-    if (moves.empty())
-    {
-        return in_check ? mated_in(ply()) : 0;
-    }
+    MoveList moves = gen_moves(ss().position());
 
     bool skip_quiets = false;
 
-    auto get_move_stream = [&] (const MoveList& move_list)
-    {
-        if (false && is_root && depth > 7)
-            return ScoredMoveStream(move_list, Scorer<ScorerType::Root>(m_parameters.root_scorer_params, ss(), tt_move)());
-        return ScoredMoveStream(move_list, Scorer<ScorerType::Search>(m_parameters.search_scorer_params, ss(), tt_move)());
+    MoveSelector::Stage stage = is_root && depth > 7 ? MoveSelector::Stage::Root : MoveSelector::Stage::Search;
+    MoveSelector selector{
+        moves
+        | std::views::filter(make_legal_predicate(pos())),
+        stage,
+        ss(),
+        m_parameters.scoring_parameters,
+        tt_move
     };
 
-    MoveList quiet_list;
+    struct ExploredMove
+    {
+        Move move;
+        bool alpha_raise;
+        bool beta_cutoff;
+        int score;
+    };
 
-    for (const auto [m, s] : get_move_stream(moves))
+    ArrayStack<ExploredMove, MoveList::capacity()> explored_quiets;
+    ArrayStack<ExploredMove, MoveList::capacity()> explored_tacticals;
+
+
+    for (const auto [m, s] : selector)
     {
         if (m == ss().excluded) continue;
 
         bool is_quiet = ss().position->is_quiet(m);
+        auto& explored = is_quiet ? explored_quiets : explored_tacticals;
         int extension = 0;
 
 
@@ -487,7 +503,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         if (is_quiet && skip_quiets) continue;
 
-        if (!is_root && best_score > MATED)
+        if (false && !is_root && best_score > MATED)
         {
 
             int lmr_depth = m_cache.lmr.at(is_quiet).at(std::min(depth, MAX_PLY - 1)).at(std::min(move_count, MAX_MOVES - 1));
@@ -495,18 +511,18 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
             if (is_quiet)
             {
-                if (false && !in_check && !is_pv && depth <= 7 && quiet_list.size() > m_cache.lmp.at(improving).at(depth))
+                if (!in_check && !is_pv && depth <= 7 && explored_quiets.size() > m_cache.lmp.at(improving).at(depth))
                 {
                     skip_quiets = true;
                     continue;
                 }
 
-                if (false && lmr_depth < 3 && !refutation_move && s < -4000 * depth)
+                if (lmr_depth < 3 && !refutation_move && s < -4000 * depth)
                 {
                     continue;
                 }
 
-                if (false && lmr_depth <= 6 && !in_check && eval + 217 + 71 * depth <= alpha)
+                if (lmr_depth <= 6 && !in_check && eval + 217 + 71 * depth <= alpha)
                 {
                     skip_quiets = true;
                 }
@@ -514,7 +530,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
             }
             else
             {
-                if (false && depth <= 6 && ss().position->see(m) < -15 * depth * depth)
+                if (depth <= 6 && ss().position->see(m) < -15 * depth * depth)
                 {
                     continue;
                 }
@@ -525,7 +541,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         if (!is_root && depth >= (6 + is_pv) && (m == tt_move)
             && tt_hit->bound == TT::LOWER && abs(tt_score) < MATE
-            && tt_hit->depth >= depth - 3)
+            && tt_hit->depth >= depth - 3 && !ss().excluded)
         {
             int singular_beta = tt_score - depth;
             int singular_depth = (depth - 1) / 2;
@@ -534,9 +550,9 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
             int singular_score = Negamax(singular_depth, singular_beta - 1,  singular_beta, cutnode);
             ss().excluded = Move::none();
 
-            if (singular_score < singular_beta && ss().extensions < 5) {
+            if (singular_score < singular_beta && ss().single_extensions < 5) {
                 extension = 1;
-                ss().extensions++;
+                ss().single_extensions++;
                 if (!is_pv && singular_score < singular_beta - 20 && ss().double_extensions < 2){
                     extension = 2;
                     ss().double_extensions++;
@@ -564,10 +580,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
             ss().best_move = m;
         }
 
-        if (is_quiet)
-        {
-            quiet_list.push_back(m);
-        }
+        explored.push_back({m, false, false, 0});
 
         bool do_full_search = !is_root || move_count > 1;
 
@@ -609,8 +622,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         if (is_root)
         {
-            if (!ss().refutation_nodes->contains(m)) ss().refutation_nodes->emplace(m, 0);
-            ss().refutation_nodes->at(m) += end - start;
+            if (!ss().refutation_history->contains(m)) ss().refutation_history->emplace(m, 0);
+            ss().refutation_history->at(m) += end - start;
         }
 
         if (m_tm->should_stop() && !is_root)
@@ -621,14 +634,17 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         if (score > best_score)
         {
+            explored.back().score = score;
             best_score = score;
             best_move = m;
             if (score > alpha)
             {
+                explored.back().alpha_raise = true;
                 alpha = score;
 
                 if (alpha >= beta)
                 {
+                    explored.back().beta_cutoff = true;
                     if (is_quiet)
                     {
                         if (ss().killer1 != m)
@@ -649,26 +665,35 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
     }
 
+    if (move_count == 0)
     {
-        auto get_bonus_fn = [&] (const Move move)
-        {
-            return [=](const MoveScoreT b) -> MoveScoreT {
-                if (move == best_move) return std::clamp(b + depth * depth, -16000, 16000);
-                return std::clamp(b - b / 5, -16000, 16000);
-            };
-        };
+        best_score = ss().excluded ? alpha : in_check ? mated_in(ply()) : 0;
+    }
 
-        for (const auto m : quiet_list)
+
+    {
+
+        for (const auto [m, raise, cutoff, s] : explored_quiets)
         {
-            ss().history.apply_bonus(best_move, get_bonus_fn(m));
-            if (ply() > 1) ss().continuation_history.apply_bonus(ss().position(), m,  get_bonus_fn(m));
-            if (ply() > 2) ss().prev->continuation_history.apply_bonus(ss().position(), m,  get_bonus_fn(m));
+            int bonus = cutoff ? depth * depth : raise ? depth : - depth;
+            ss().history->at(ss().position(), m) << bonus;
+            if (ss().continuation_history) ss().continuation_history->at(ss().position(), m) << bonus;
+            if (ss().prev && ss().prev->continuation_history) ss().prev->continuation_history->at(ss().position(), m) << bonus;
+        }
+
+        auto explored_captures = explored_tacticals
+        | std::views::filter( [this] (auto e) { return ss().position->is_capture(e.move); });
+        for (const auto [m, raise, cutoff, s] : explored_captures)
+        {
+            int bonus = cutoff ? depth * depth : raise ? depth : - depth;
+            ss().capture_history->at(ss().position(), m) << bonus;
+
         }
     }
 
     TT::Bound bound = (best_score <= alpha_org) ? TT::UPPER : (best_score >= beta) ? TT::LOWER : TT::EXACT;
     if (!ss().excluded)
-        m_tt->store(make_replacement_policy() ,ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, best_move, ss().static_eval);
+        m_tt->store(ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, best_move, ss().static_eval);
 
     if (alpha != alpha_org)
     {
@@ -713,20 +738,24 @@ inline int SearchThread::QSearch(int alpha, int beta)
         }
     }
 
-
-    auto moves = gen_legal(ss().position());
-    if (moves.empty()) return in_check ? mated_in(ply()) : 0;
-    auto tactical = moves | std::views::filter(make_tactical_predicate(ss().position()));
-    Scorer<ScorerType::QSearch> scorer(m_parameters.qsearch_scorer_params, ss(), tt_move);
+    MoveSelector selector{
+        gen_moves(ss().position())
+        | std::views::filter(make_tactical_predicate(ss().position()))
+        | std::views::filter(make_legal_predicate(ss().position())),
+        MoveSelector::Stage::QSearch,
+        ss(),
+        m_parameters.scoring_parameters,
+        tt_move
+    };
 
     int  best_eval = stand_pat;
     Move best_move = Move::none();
     int move_count = 0;
     int score = -INF;
 
-    for (const auto [m, s] : ScoredMoveStream(tactical, scorer()))
+    for (const auto [m, s] : selector)
     {
-        if (s < scorer.m_params.good_capture_bonus && move_count > 1)
+        if (s < selector.params().good_capture && move_count > 1)
         {
             continue;
         }
@@ -825,12 +854,9 @@ struct SearchThreadHandler
 
     [[nodiscard]] Move get_best_move() const
     {
-        std::unordered_map<uint16_t, int> move_votes;
+        std::unordered_map<Move, int> move_votes;
 
-        for (const auto& t : threads)
-        {
-            move_votes[t->ss().best_move.raw()]++;
-        }
+        for (const auto& t : threads) move_votes[t->best_move]++;
 
         const auto it =
             std::ranges::max_element(move_votes, [](const auto& a, const auto& b) { return a.second < b.second; });

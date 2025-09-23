@@ -1,13 +1,13 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
-#include "prng.h"
-
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cassert>
 #include <cstdint>
+#include <expected>
+#include <format>
 #include <iostream>
 #include <optional>
 #include <span>
@@ -15,16 +15,89 @@
 #include <string>
 #include <string_view>
 #include <sys/stat.h>
-#include <format>
 #include <unordered_set>
 #include <vector>
 
-struct Position;
+template <typename T, std::size_t N>
+struct ArrayStack
+{
+    using value_type      = T;
+    using size_type       = std::size_t;
+    using difference_type = std::ptrdiff_t;
+    using reference       = T&;
+    using const_reference = const T&;
+    using iterator        = T*;
+    using const_iterator  = const T*;
+
+    void push_back(const T& v)
+    {
+        assert(m_size < N && "ArrayStack overflow");
+        m_data[m_size++] = v;
+    }
+
+    reference operator[](size_type i)
+    {
+        assert(i < m_size);
+        return m_data[i];
+    }
+    const_reference operator[](size_type i) const
+    {
+        assert(i < m_size);
+        return m_data[i];
+    }
+
+    void clear() { m_size = 0; }
+    void shrink(size_type n)
+    {
+        assert(n <= m_size);
+        m_size -= n;
+    }
+
+    [[nodiscard]] size_type                  size() const noexcept { return m_size; }
+    [[nodiscard]] static constexpr size_type capacity() noexcept { return N; }
+    [[nodiscard]] bool                       empty() const noexcept { return m_size == 0; }
+
+    [[nodiscard]] iterator       begin() noexcept { return m_data.data(); }
+    [[nodiscard]] iterator       end() noexcept { return m_data.data() + m_size; }
+    [[nodiscard]] const_iterator begin() const noexcept { return m_data.data(); }
+    [[nodiscard]] const_iterator end() const noexcept { return m_data.data() + m_size; }
+    [[nodiscard]] const_iterator cbegin() const noexcept { return m_data.data(); }
+    [[nodiscard]] const_iterator cend() const noexcept { return m_data.data() + m_size; }
+
+    [[nodiscard]] T*       data() noexcept { return m_data.data(); }
+    [[nodiscard]] const T* data() const noexcept { return m_data.data(); }
+
+    [[nodiscard]] reference front()
+    {
+        assert(!empty());
+        return m_data[0];
+    }
+    [[nodiscard]] reference back()
+    {
+        assert(!empty());
+        return m_data[m_size - 1];
+    }
+    [[nodiscard]] const_reference front() const
+    {
+        assert(!empty());
+        return m_data[0];
+    }
+    [[nodiscard]] const_reference back() const
+    {
+        assert(!empty());
+        return m_data[m_size - 1];
+    }
+
+  protected:
+    std::array<T, N> m_data{};
+    size_type        m_size{0};
+};
 
 // a custom enum of consecutive integers 0 ... N and a NONE value N + 1
+// values will overflow if they go passed the NONE value
 template <typename DerivedT, typename UnderlyingT, std::size_t COUNT,
           const std::array<std::string_view, COUNT + 1>& repr, bool EnableInc = false, bool EnableArithmetic = false>
-    requires std::is_integral_v<UnderlyingT>
+    requires(std::is_integral_v<UnderlyingT> && std::is_unsigned_v<UnderlyingT>)
 struct EnumBase
 {
     static constexpr bool EnableInc_v        = EnableInc;
@@ -46,8 +119,9 @@ struct EnumBase
 
     constexpr EnumBase() : m_val(NONE_VALUE) {};
 
-    template <typename int_type, std::enable_if_t<std::is_integral_v<int_type>, int> = 0>
-    constexpr explicit EnumBase(int_type v) : m_val(std::min(static_cast<ValueT>(v), NONE_VALUE))
+    template <typename int_type>
+        requires std::is_integral_v<int_type>
+    constexpr explicit EnumBase(int_type v) : m_val(static_cast<ValueT>(v % TOTAL_V))
     {
     }
 
@@ -57,7 +131,7 @@ struct EnumBase
     [[nodiscard]] static constexpr std::size_t count() noexcept { return COUNT_V; }
     [[nodiscard]] static constexpr std::size_t total() noexcept { return TOTAL_V; }
 
-    [[nodiscard]] constexpr std::string_view to_string() const { return repr.at(index()); }
+    [[nodiscard]] constexpr std::string to_string() const { return std::string(repr.at(index())); }
 
     [[nodiscard]] static constexpr std::optional<DerivedT> from_string(const std::string_view& sv)
     {
@@ -144,43 +218,111 @@ struct EnumBase
     ValueT m_val = NONE_VALUE;
 };
 
+// a type safe wrapper around a multi dimesional array
+template <typename T, typename... Enums>
+struct EnumArray;
 
-// simple wrapper around an array but indexed by an enum
-template <typename Enum, typename T,
-          std::enable_if_t<std::is_base_of_v<EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::repr_v,
-                                                      Enum::EnableInc_v, Enum::EnableArithmetic_v>,
-                                             Enum>,
-                           int> = 0>
-struct EnumArray
+template <typename T, typename Enum>
+    requires(std::is_base_of_v<EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::repr_v, Enum::EnableInc_v,
+                                        Enum::EnableArithmetic_v>,
+                               Enum> &&
+             Enum::count() > 0)
+struct EnumArray<T, Enum>
 {
     static constexpr std::size_t count = Enum::count();
-    static_assert(count > 0, "enum_array requires non-zero count");
 
     using ValueT     = T;
     using indexT     = std::size_t;
-    using ContainerT = std::array<T, count>;
+    using ContainerT = std::array<ValueT, count>;
 
-    constexpr ValueT&       operator[](const Enum e) noexcept { return m_data[e.index()]; }
-    constexpr const ValueT& operator[](const Enum e) const noexcept { return m_data[e.index()]; }
+    ContainerT data;
 
-    constexpr ValueT&                     at(const Enum e) { return m_data.at(e.index()); }
-    [[nodiscard]] constexpr const ValueT& at(const Enum e) const { return m_data.at(e.index()); }
+    // Access
+    constexpr ValueT&       operator[](Enum e) noexcept { return data[e.index()]; }
+    constexpr const ValueT& operator[](Enum e) const noexcept { return data[e.index()]; }
 
-    constexpr ValueT&                     at_index(const indexT idx) { return m_data.at(idx); }
-    [[nodiscard]] constexpr const ValueT& at_index(const indexT idx) const { return m_data.at(idx); }
+    constexpr ValueT&                     at(Enum e) { return data.at(e.index()); }
+    [[nodiscard]] constexpr const ValueT& at(Enum e) const { return data.at(e.index()); }
+
+    constexpr ValueT&                     at_index(indexT idx) { return data.at(idx); }
+    [[nodiscard]] constexpr const ValueT& at_index(indexT idx) const { return data.at(idx); }
 
     [[nodiscard]] static constexpr indexT size() noexcept { return count; }
-    constexpr auto                        begin() noexcept { return m_data.begin(); }
-    constexpr auto                        end() noexcept { return m_data.end(); }
-    [[nodiscard]] constexpr auto          begin() const noexcept { return m_data.begin(); }
-    [[nodiscard]] constexpr auto          end() const noexcept { return m_data.end(); }
 
-    constexpr void fill(const ValueT& v) { m_data.fill(v); }
+    constexpr auto               begin() noexcept { return data.begin(); }
+    constexpr auto               end() noexcept { return data.end(); }
+    [[nodiscard]] constexpr auto begin() const noexcept { return data.begin(); }
+    [[nodiscard]] constexpr auto end() const noexcept { return data.end(); }
+    [[nodiscard]] constexpr auto cbegin() const noexcept { return data.cbegin(); }
+    [[nodiscard]] constexpr auto cend() const noexcept { return data.cend(); }
 
-    ContainerT m_data;
+    constexpr void fill(const ValueT& v) { data.fill(v); }
+
+    template <typename Func>
+    constexpr void fill_pred(Func&& f)
+    {
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            Enum e(static_cast<typename Enum::ValueT>(i));
+            auto val = f(e);
+            static_assert(std::is_same_v<decltype(val), ValueT>, "Predicate must return same type as ValueT");
+            data[i] = val;
+        }
+    }
 };
 
-static constexpr std::array<std::string_view, 9> file_repr{"a", "b", "c", "d", "e", "f", "g", "h", "-"};
+template <typename T, typename FirstEnum, typename... RestEnums>
+    requires(std::is_base_of_v<EnumBase<FirstEnum, typename FirstEnum::ValueT, FirstEnum::COUNT_V, FirstEnum::repr_v,
+                                        FirstEnum::EnableInc_v, FirstEnum::EnableArithmetic_v>,
+                               FirstEnum> &&
+             FirstEnum::count() > 0)
+struct EnumArray<T, FirstEnum, RestEnums...>
+{
+    static constexpr std::size_t count = FirstEnum::count();
+    using SubArrayT                    = EnumArray<T, RestEnums...>;
+    using ContainerT                   = std::array<SubArrayT, count>;
+
+    ContainerT data;
+
+    SubArrayT&       operator[](FirstEnum e) noexcept { return data[e.index()]; }
+    const SubArrayT& operator[](FirstEnum e) const noexcept { return data[e.index()]; }
+
+    SubArrayT&       at(FirstEnum e) { return data.at(e.index()); }
+    const SubArrayT& at(FirstEnum e) const noexcept { return data.at(e.index()); }
+
+    [[nodiscard]] static constexpr std::size_t size() noexcept { return count; }
+
+    constexpr auto begin() noexcept { return data.begin(); }
+    constexpr auto end() noexcept { return data.end(); }
+    constexpr auto begin() const noexcept { return data.begin(); }
+    constexpr auto end() const noexcept { return data.end(); }
+    constexpr auto cbegin() const noexcept { return data.cbegin(); }
+    constexpr auto cend() const noexcept { return data.cend(); }
+
+    constexpr void fill(const T& v)
+    {
+        for (auto& sub : data)
+            sub.fill(v);
+    }
+
+    template <typename Func>
+    constexpr void fill_pred(Func&& f)
+    {
+        for (std::size_t i = 0; i < count; ++i)
+        {
+            FirstEnum e(static_cast<FirstEnum::ValueT>(i));
+            data[i].fill_pred(
+                [&f, e](auto... restEnums)
+                {
+                    auto val = f(e, restEnums...);
+                    static_assert(std::is_same_v<decltype(val), T>, "Predicate must return same type as T");
+                    return val;
+                });
+        }
+    }
+};
+
+inline constexpr std::array<std::string_view, 9> file_repr{"a", "b", "c", "d", "e", "f", "g", "h", "-"};
 
 struct File : EnumBase<File, uint8_t, 8, file_repr, true, true>
 {
@@ -201,6 +343,7 @@ struct File : EnumBase<File, uint8_t, 8, file_repr, true, true>
         {
             return std::nullopt;
         }
+
         return File{sv.at(0) - 'a'};
     }
 };
@@ -215,7 +358,7 @@ constexpr File FILE_G{6};
 constexpr File FILE_H{7};
 constexpr File NO_FILE{8};
 
-static constexpr std::array<std::string_view, 9> rank_repr = {"1", "2", "3", "4", "5", "6", "7", "8", "-"};
+inline constexpr std::array<std::string_view, 9> rank_repr = {"1", "2", "3", "4", "5", "6", "7", "8", "-"};
 
 struct Rank : EnumBase<Rank, uint8_t, 8, rank_repr, true, true>
 {
@@ -248,7 +391,7 @@ constexpr Rank NO_RANK{8};
 
 using Coordinates = std::pair<File, Rank>;
 
-static constexpr std::array<std::string_view, 65> square_repr{
+inline constexpr std::array<std::string_view, 65> square_repr{
     "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a3",
     "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a5", "b5",
     "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a7", "b7", "c7",
@@ -364,7 +507,7 @@ constexpr Square H8{FILE_H, RANK_8};
 
 constexpr Square NO_SQUARE{64};
 
-static constexpr std::array<std::string_view, 7> piece_type_repr = {"p", "n", "b", "r", "q", "k", "-"};
+inline constexpr std::array<std::string_view, 7> piece_type_repr = {"p", "n", "b", "r", "q", "k", "-"};
 
 struct PieceType : EnumBase<PieceType, uint8_t, 6, piece_type_repr, true, true>
 {
@@ -383,21 +526,25 @@ constexpr PieceType QUEEN{4};
 constexpr PieceType KING{5};
 constexpr PieceType NO_PIECE_TYPE{6};
 
-inline EnumArray<PieceType, PieceType::PieceValueT> piece_type_value{100, 300, 325, 500, 900, 20000};
+inline EnumArray<PieceType::PieceValueT, PieceType> piece_type_value{100, 300, 325, 500, 900, 20000};
 
 [[nodiscard]] constexpr PieceType::PieceValueT PieceType::piece_value() const
 {
     return piece_type_value.at(*this);
 }
 
-static constexpr std::array<std::string_view, 3> color_repr = {"w", "b", "-"};
+inline constexpr std::array<std::string_view, 3> color_repr = {"w", "b", "-"};
 
 struct Color : EnumBase<Color, uint8_t, 2, color_repr>
 {
     using base = EnumBase;
     using base::EnumBase;
-    constexpr Color operator!() const { return Color{m_val ^ 1}; }
-    constexpr Color operator~() const { return !(*this); }
+
+    constexpr Color operator~() const { return Color{m_val ^ 1}; }
+    constexpr Color opposite() const { return ~(*this); }
+    // Prevent misuse of boolean context or !
+    constexpr bool     operator!() const     = delete;
+    explicit constexpr operator bool() const = delete;
 
     [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string_view& sv)
     {
@@ -415,7 +562,7 @@ constexpr Color WHITE{0};
 constexpr Color BLACK{1};
 constexpr Color NO_COLOR{2};
 
-static constexpr std::array<std::string_view, 13> piece_repr = {"P", "p", "N", "n", "B", "b", "R",
+inline constexpr std::array<std::string_view, 13> piece_repr = {"P", "p", "N", "n", "B", "b", "R",
                                                                 "r", "Q", "q", "K", "k", "-"};
 
 struct Piece : EnumBase<Piece, uint8_t, 12, piece_repr, true, true>
@@ -507,7 +654,7 @@ enum CastlingSide : uint8_t
     QUEENSIDE = 1,
 };
 
-static constexpr std::array<std::string_view, 5> castling_type_repr = {"K", "Q", "k", "q", "-"};
+inline constexpr std::array<std::string_view, 5> castling_type_repr = {"K", "Q", "k", "q", "-"};
 
 struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
 {
@@ -523,13 +670,13 @@ struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
 
     [[nodiscard]] constexpr std::pair<Square, Square> king_move() const
     {
-        constexpr EnumArray<CastlingType, std::pair<Square, Square>> king_moves{
+        constexpr EnumArray<std::pair<Square, Square>, CastlingType> king_moves{
             std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
         return king_moves.at(*this);
     }
     [[nodiscard]] constexpr std::pair<Square, Square> rook_move() const
     {
-        constexpr EnumArray<CastlingType, std::pair<Square, Square>> rook_moves{
+        constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
             std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
         return rook_moves.at(*this);
     }
@@ -604,7 +751,7 @@ struct CastlingRights
 
     [[nodiscard]] constexpr MaskT mask() const { return m_mask; }
 
-    static const EnumArray<Square, CastlingRights> lost_table;
+    static const EnumArray<CastlingRights, Square> lost_table;
 
     [[nodiscard]] constexpr CastlingRights lost_from_move(Move move) const;
 
@@ -614,13 +761,12 @@ struct CastlingRights
         return it == repr.end() ? std::nullopt : std::optional{CastlingRights(std::distance(repr.begin(), it))};
     }
 
-
     MaskT m_mask;
 };
 
-constexpr EnumArray<Square, CastlingRights> CastlingRights::lost_table = []
+constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = []
 {
-    EnumArray<Square, CastlingRights> t{};
+    EnumArray<CastlingRights, Square> t{};
     for (Square sq = A1; sq <= H8; ++sq)
     {
         t.at(sq) = sq == E1   ? CastlingRights{WHITE_KINGSIDE, WHITE_QUEENSIDE}
@@ -655,15 +801,13 @@ constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUE
 
 constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
-
-constexpr std::array<std::string_view, 4> result_repr = {"1-0", "0-1", "1/2-1/2", "*"};
-struct Result : EnumBase<Result, int, 3, result_repr>
+inline constexpr std::array<std::string_view, 4> result_repr = {"1-0", "0-1", "1/2-1/2", "*"};
+struct Result : EnumBase<Result, uint8_t, 3, result_repr>
 {
     using base = EnumBase;
     using base::EnumBase;
 
-    explicit constexpr Result(const Color c) : EnumBase(c.value())
-    {}
+    explicit constexpr Result(const Color c) : EnumBase(c.value()) {}
 };
 
 constexpr Result WIN_WHITE{0};
@@ -699,6 +843,14 @@ namespace bit
         return n;
     }
 
+    template <std::unsigned_integral T>
+    constexpr int pop_msb(T& bb) noexcept
+    {
+        int n = std::numeric_limits<T>::digits - 1 - std::countl_zero(bb);
+        bb &= ~(static_cast<T>(1) << n);
+        return n;
+    }
+
     template <typename T, std::enable_if_t<std::is_unsigned_v<T>, int> = 0>
     constexpr T shift_left(const T value, const unsigned shift)
     {
@@ -714,7 +866,6 @@ namespace bit
     }
 
 } // namespace bit
-
 
 enum move_type_t : uint16_t
 {
@@ -803,25 +954,23 @@ struct Move
 
     struct UciInfo
     {
-        const EnumArray<Square, Piece>& pieces;
-        Square ep_square;
-        CastlingRights castling_rights;
+        const EnumArray<Piece, Square>& pieces;
+        Square                          ep_square;
+        CastlingRights                  castling_rights;
     };
 
     static constexpr std::optional<Move> from_uci(const std::string_view& sv, const UciInfo& info);
 
-
     friend std::ostream& operator<<(std::ostream& os, const Move mv) { return os << mv.to_string(); }
-
 
     struct AlgebraicInfo
     {
         Piece piece;
-        bool needs_rank{};
-        bool needs_file{};
-        bool is_capture{};
-        bool is_check{};
-        bool is_mate{};
+        bool  needs_rank{};
+        bool  needs_file{};
+        bool  is_capture{};
+        bool  is_check{};
+        bool  is_mate{};
     };
 
     [[nodiscard]] std::string to_algebraic(const AlgebraicInfo& info) const
@@ -858,12 +1007,10 @@ struct Move
             oss << "=" << Piece{info.piece.color(), promotion_type()}.type();
         }
 
-
         if (info.is_check)
         {
             oss << (info.is_mate ? "#" : "+");
         }
-
 
         return oss.str();
     }
@@ -871,15 +1018,11 @@ struct Move
     std::uint16_t m_data;
 };
 
-namespace std {
-    template <>
-    struct hash<Move> {
-        std::size_t operator()(const Move& m) const noexcept {
-            return std::hash<std::uint16_t>()(m.raw());
-        }
-    };
-}
-
+template <>
+struct std::hash<Move>
+{
+    std::size_t operator()(const Move& m) const noexcept { return std::hash<std::uint16_t>()(m.raw()); }
+};
 
 constexpr std::optional<Move> Move::from_uci(const std::string_view& sv, const UciInfo& info)
 {
@@ -912,8 +1055,7 @@ constexpr std::optional<Move> Move::from_uci(const std::string_view& sv, const U
         {
             auto type = CastlingType{bit::get_lsb(copy.mask())};
             if (const auto [k_from, k_to] = type.king_move();
-            info.pieces.at(*from).color() == type.color() &&
-                *from == k_from && *to == k_to)
+                info.pieces.at(*from).color() == type.color() && *from == k_from && *to == k_to)
             {
                 return make<CASTLING>(k_from, k_to, type);
             }
@@ -939,8 +1081,8 @@ constexpr int MAX_MOVES = 256;
 
 enum Score : int
 {
-    WIN_TB = 10000,
-    LOSS_TB = -WIN_TB,
+    WIN_TB           = 10000,
+    LOSS_TB          = -WIN_TB,
     MATE             = 32000,
     MATED            = -MATE,
     MATE_IN_MAX_PLY  = MATE - MAX_PLY,
@@ -971,21 +1113,26 @@ constexpr int relative_eval(const int eval, const Color side) noexcept
     return side == WHITE ? eval : -eval;
 }
 
-
-struct Date {
+struct Date
+{
     int y, m, d;
 
-    [[nodiscard]] std::string to_string() const {
+    [[nodiscard]] std::string to_string() const
+    {
         char buf[11];
         std::sprintf(buf, "%04d.%02d.%02d", y, m, d);
         return buf;
     }
-    static bool from_string(const std::string& s, Date& out) {
-        if (s.size() != 10) return false;
+    static bool from_string(const std::string& s, Date& out)
+    {
+        if (s.size() != 10)
+            return false;
         int yy, mm, dd;
-        if (std::sscanf(s.c_str(), "%d.%d.%d", &yy, &mm, &dd) != 3) return false;
+        if (std::sscanf(s.c_str(), "%d.%d.%d", &yy, &mm, &dd) != 3)
+            return false;
 
-        if (mm < 1 || mm > 12 || dd < 1 || dd > 31) return false;
+        if (mm < 1 || mm > 12 || dd < 1 || dd > 31)
+            return false;
 
         out = Date{yy, mm, dd};
         return true;
@@ -994,105 +1141,75 @@ struct Date {
     static std::optional<Date> from_string(const std::string& s)
     {
         Date d{};
-        if (!from_string(s, d)) return std::nullopt;
+        if (!from_string(s, d))
+            return std::nullopt;
         return d;
     }
 };
 
-
 inline constexpr auto start_fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1";
 
-template <typename T, std::size_t N>
-struct ArrayStack {
-    using value_type      = T;
-    using size_type       = std::size_t;
-    using difference_type = std::ptrdiff_t;
-    using reference       = T&;
-    using const_reference = const T&;
-    using iterator        = T*;
-    using const_iterator  = const T*;
-
-    void push_back(const T& v) {
-        assert(m_size < N && "ArrayStack overflow");
-        m_data[m_size++] = v;
-    }
-
-    reference operator[](size_type i) {
-        assert(i < m_size);
-        return m_data[i];
-    }
-    const_reference operator[](size_type i) const {
-        assert(i < m_size);
-        return m_data[i];
-    }
-
-    void clear() { m_size = 0; }
-    void shrink(size_type n) {
-        assert(n <= m_size);
-        m_size -= n;
-    }
-
-    [[nodiscard]] size_type size() const noexcept { return m_size; }
-    [[nodiscard]] static constexpr size_type capacity() noexcept { return N; }
-    [[nodiscard]] bool empty() const noexcept { return m_size == 0; }
-
-    [[nodiscard]] iterator begin() noexcept { return m_data.data(); }
-    [[nodiscard]] iterator end()   noexcept { return m_data.data() + m_size; }
-    [[nodiscard]] const_iterator begin() const noexcept { return m_data.data(); }
-    [[nodiscard]] const_iterator end()   const noexcept { return m_data.data() + m_size; }
-    [[nodiscard]] const_iterator cbegin() const noexcept { return m_data.data(); }
-    [[nodiscard]] const_iterator cend()   const noexcept { return m_data.data() + m_size; }
-
-    [[nodiscard]] T* data() noexcept { return m_data.data(); }
-    [[nodiscard]] const T* data() const noexcept { return m_data.data(); }
-
-    [[nodiscard]] reference front() { assert(!empty()); return m_data[0]; }
-    [[nodiscard]] reference back()  { assert(!empty()); return m_data[m_size - 1]; }
-    [[nodiscard]] const_reference front() const { assert(!empty()); return m_data[0]; }
-    [[nodiscard]] const_reference back()  const { assert(!empty()); return m_data[m_size - 1]; }
-
-protected:
-    std::array<T, N> m_data{};
-    size_type        m_size{0};
+struct MoveList : ArrayStack<Move, MAX_MOVES>
+{
+    using Base = ArrayStack;
+    using Base::push_back;
+    using Base::operator[];
+    using Base::begin;
+    using Base::end;
+    using Base::size;
 };
 
-static_assert(std::ranges::contiguous_range<ArrayStack<int, 8>>);
-static_assert(std::ranges::random_access_range<ArrayStack<int, 8>>);
+using MoveScoreT = int;
 
+struct ScoredMove
+{
+    Move       move{};
+    MoveScoreT score{};
+};
 
+struct ScoredMoveList : ArrayStack<ScoredMove, MoveList::capacity()>
+{
+    using Base = ArrayStack;
+    using Base::push_back;
+    using Base::operator[];
+    using Base::begin;
+    using Base::end;
+    using Base::size;
 
-template<typename T>
-struct VectorHandle {
+    template <typename ScoringFn, std::ranges::range Range>
+        requires std::is_invocable_r_v<MoveScoreT, ScoringFn, Move>
+    ScoredMoveList(Range&& move_list, ScoringFn&& scoring_fn)
+    {
+        for (auto&& move : move_list)
+        {
+            push_back({move, scoring_fn(move)});
+        }
+    }
+};
+
+template <typename T>
+struct VectorHandle
+{
     std::vector<T>* ptr;
-    uint32_t index;
+    uint32_t        index;
 
     VectorHandle(std::vector<T>* p, const uint32_t i) : ptr(p), index(i) {}
     VectorHandle() : ptr(nullptr), index(0) {}
 
-    T& operator*() const {
+    T& operator*() const
+    {
+        MoveList list;
         return ptr->at(index);
     }
 
-    T* operator->() const {
-        return &ptr->at(index);
-    }
+    T* operator->() const { return &ptr->at(index); }
 
-    T& operator()() const {
-        return ptr->at(index);
-    }
+    T& operator()() const { return ptr->at(index); }
 
-    explicit operator bool() const {
-        return ptr != nullptr && index < ptr->size();
-    }
+    explicit operator bool() const { return ptr != nullptr && index < ptr->size(); }
 
-    bool operator==(const VectorHandle& other) const {
-        return ptr == other.ptr && index == other.index;
-    }
-    bool operator!=(const VectorHandle& other) const {
-        return !(*this == other);
-    }
+    bool operator==(const VectorHandle& other) const { return ptr == other.ptr && index == other.index; }
+    bool operator!=(const VectorHandle& other) const { return !(*this == other); }
 };
-
-
 
 #endif

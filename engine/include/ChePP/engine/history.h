@@ -1,133 +1,74 @@
 #ifndef HISTORY_H
 #define HISTORY_H
 
-#include "movegen.h"
 #include "position.h"
 
 #include <functional>
 #include <cassert>
 
-using MoveScoreT = int;
 
-template <typename F>
-concept BonusFn = requires(F f, MoveScoreT x) {
-    { f(x) } -> std::convertible_to<MoveScoreT>;
-};
-
-
-struct HistoryTable
+template<typename T, T Range>
+class Bonus
 {
-    [[nodiscard]] MoveScoreT get_bonus(const Position& position, const Move move) const
+    static_assert(std::is_arithmetic_v<T>, "Bonus requires a numeric type");
+public:
+    Bonus() : value_(0) {}
+    explicit Bonus(T v) : value_(v) {}
+
+    operator T() const { return value_; }
+
+    static constexpr T max() { return Range;}
+    static constexpr T min() { return -Range;}
+
+
+    Bonus operator<<(T newValue)
     {
-        if (move == Move::null()) return 0;
-        return m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq());
+        T clamped = std::clamp(newValue, -Range, Range);
+        value_ += clamped - value_ * std::abs(clamped) / Range;
+        return *this;
     }
 
-    template <BonusFn F>
-    void apply_bonus(const Position& position, const Move move, const F& bonus)
-    {
-        if (move == Move::null()) return;
-        m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()) =
-            bonus(m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()));
-    }
+    T value() const { return value_; }
+    void set(T v) { value_ = v; }
 
-    EnumArray<Piece, EnumArray<Square, MoveScoreT>> m_hist;
+private:
+    T value_;
 };
 
-
-struct ContinuationHistoryTable
-{
-    HistoryTable& get_relevant_history(const Position& position)
-    {
-        const Move move = position.move();
-        return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
-    }
-
-    [[nodiscard]] const HistoryTable& get_relevant_history(const Position& position) const
-    {
-        const Move move = position.move();
-        return m_hist.at(position.piece_at(move.to_sq())).at(move.to_sq());
-    }
-
-    [[nodiscard]] MoveScoreT get_bonus(const Position& previous, const Position& current, const Move move) const
-    {
-        return get_relevant_history(previous).get_bonus(current, move);
-    }
-
-    template <BonusFn F>
-    void apply_bonus(const Position& previous, const Position& current, const Move move, const F& bonus)
-    {
-        get_relevant_history(previous).apply_bonus(current, move, bonus);
-    }
-
-    EnumArray<Piece, EnumArray<Square, HistoryTable>> m_hist;
-};
-
+using HistoryBonus = Bonus<int, 16000>;
 
 struct History
 {
-    History() = default;
-    History(HistoryTable* hist, Positions::Handle pos) : m_hist(hist), position(pos) {}
 
-    History(const History&) = default;
-    History& operator=(const History&) = default;
-    History(History&&) noexcept = default;
-    History& operator=(History&&) noexcept = default;
-
-    ~History() = default;
-
-    [[nodiscard]] MoveScoreT get_bonus(const Move move) const
+    [[nodiscard]] HistoryBonus& at(const Position& position, const Move move)
     {
-        return m_hist->get_bonus(*position, move);
+        assert(move.is_ok());
+        return m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq());
     }
-
-    template <BonusFn F>
-    void apply_bonus(const Move move, const F& bonus) {
-        m_hist->apply_bonus(*position, move, bonus);
-    }
-
-
-    HistoryTable* m_hist = nullptr;
-    Positions::Handle position{};
+    EnumArray<HistoryBonus, Piece, Square> m_hist;
 };
-
 
 struct ContinuationHistory
 {
-    ContinuationHistory() = default;
-    ContinuationHistory(ContinuationHistoryTable* hist, const Positions::Handle& prev) : m_hist(hist), previous(prev) {}
-
-    ContinuationHistory(const ContinuationHistory&) = default;
-    ContinuationHistory& operator=(const ContinuationHistory&) = default;
-    ContinuationHistory(ContinuationHistory&&) noexcept = default;
-    ContinuationHistory& operator=(ContinuationHistory&&) noexcept = default;
-
-    ~ContinuationHistory() = default;
-
-    [[nodiscard]] MoveScoreT get_bonus(const Position& current, const Move move) const
+    History& get_relevant_history(const Position& position)
     {
-        if (!valid()) return 0;
-        return m_hist->get_bonus(*previous, current, move);
+        const Move move = position.move();
+        assert(move.is_ok());
+        return m_hist.at(position.moved()).at(move.to_sq());
     }
-
-    template <BonusFn F>
-    void apply_bonus(const Position& current, const Move move, const F& bonus)
-    {
-        if (!valid()) return;
-        m_hist->apply_bonus(*previous, current, move, bonus);
-    }
-
-    [[nodiscard]] bool valid() const
-    {
-        if (previous) assert(previous->move() != Move::none());
-        return m_hist != nullptr && previous && previous->move() != Move::null();
-    }
-
-    ContinuationHistoryTable* m_hist = nullptr;
-    Positions::Handle previous{};
+    EnumArray<History, Piece, Square> m_hist;
 };
 
-using RefutationMapT = std::unordered_map<Move, size_t>;
+struct CaptureHistory
+{
+    [[nodiscard]] HistoryBonus& at(const Position& position, const Move move)
+    {
+        return m_hist.at(position.piece_at(move.from_sq())).at(move.to_sq()).at(position.captured_by_move(move));
+    }
+    EnumArray<HistoryBonus, Piece, Square, Piece> m_hist;
+};
+
+using RefutationHistory = std::unordered_map<Move, size_t>;
 
 
 #endif // HISTORY_H

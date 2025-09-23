@@ -5,38 +5,45 @@
 #include "search_stack.h"
 #include "types.h"
 
-template <typename F>
-concept MoveScorer = requires(F f, Move m) {
-    { f(m) } -> std::convertible_to<MoveScoreT>;
-};
 
-struct ScoredMoveStream {
 
-    struct ScoredMove {
-        Move move;
-        MoveScoreT score;
+struct MoveSelector {
+
+    enum class Stage {
+        Root,
+        Search,
+        QSearch,
+        ProbCut
     };
 
-    struct ScoredMoveList : ArrayStack<ScoredMove, MoveList::capacity()> {
-        using Base = ArrayStack;
-        using Base::push_back;
-        using Base::operator[];
-
-        template <std::ranges::range R, MoveScorer ScoreFn>
-        ScoredMoveList(R&& moves, ScoreFn&& scorer)
-        {
-            for (auto&& m : moves) {
-                push_back({m, scorer(m)});
-            }
-        }
+    struct Params {
+        int tt_bonus       = 20'000'000;
+        int killer1_bonus  = 9'000'000;
+        int killer2_bonus  = 8'000'000;
+        int good_capture   = 10'000'000;
+        int probcut_capture= 10'000'000;
+        int root_bonus     = 10'000'000;
     };
 
-    explicit ScoredMoveStream(const ScoredMoveList& moves) : m_list(moves), m_remaining(moves.size()) {}
-    template <std::ranges::range R, MoveScorer ScoreFn>
-    ScoredMoveStream(R&& moves, ScoreFn&& scorer) : ScoredMoveStream(ScoredMoveList(moves, scorer)) {}
+    template <std::ranges::range Range>
+    MoveSelector(Range&& moves,
+                 const Stage stage,
+                 const SearchStack::Node& ss,
+                 const Params& params,
+                 const Move tt_move = Move::none())
+    : m_stage(stage),
+    m_ss(ss),
+    m_params(params),
+    m_tt_move(tt_move),
+    m_list(moves, [this](const Move m){ return score_move(m); })
+    {
+        m_remaining = m_list.size();
+    }
 
     [[nodiscard]] bool has_next() const { return m_remaining > 0; }
     [[nodiscard]] bool empty() const { return m_remaining == 0; }
+    [[nodiscard]] size_t remaining() const { return m_remaining; }
+    [[nodiscard]] size_t size() const { return m_list.size(); }
 
     std::pair<Move, MoveScoreT> next() {
         assert(has_next());
@@ -55,135 +62,89 @@ struct ScoredMoveStream {
         return {m_list[m_remaining].move, m_list[m_remaining].score};
     }
 
-    [[nodiscard]] size_t remaining() const { return m_remaining; }
-    [[nodiscard]] size_t size() const { return m_list.size(); }
-
     struct iterator {
-        using value_type = std::pair<Move, int64_t>;
-        using reference = value_type&;
-        using pointer = value_type*;
+        using value_type = std::pair<Move, MoveScoreT>;
+        using reference  = value_type;
+        using pointer    = void;
         using difference_type = std::ptrdiff_t;
         using iterator_category = std::input_iterator_tag;
 
-        explicit iterator(ScoredMoveStream* stream) : m_stream(stream) {}
+        explicit iterator(MoveSelector* stream) : m_stream(stream) {}
 
-        value_type operator*() const {
-            return m_stream->next();
-        }
+        value_type operator*() const { return m_stream->next(); }
 
-        iterator& operator++() {
-            return *this;
-        }
+        iterator& operator++() { return *this; }
+        void operator++(int) { ++(*this); }
 
-        bool operator!=(const iterator& _) const {
-            return m_stream->has_next();
-        }
+        bool operator!=(const iterator&) const { return m_stream && m_stream->has_next(); }
 
     private:
-        ScoredMoveStream* m_stream;
+        MoveSelector* m_stream;
     };
 
     iterator begin() { return iterator(this); }
-    static iterator end()   { return iterator(nullptr); }
+    iterator end()   { return iterator(nullptr); }
+
+    [[nodiscard]] const Params& params() const { return m_params; }
 
 private:
-    ScoredMoveList m_list;
-    size_t m_remaining{0};
-};
+    MoveScoreT score_move(Move m) const {
+        if (m == m_tt_move) return m_params.tt_bonus;
 
+        const Piece attacker = m_ss.position->piece_at(m.from_sq());
+        const Piece victim = m_ss.position->is_capture(m) ? m_ss.position->captured_by_move(m) : NO_PIECE;
 
+        MoveScoreT score = 0;
 
-inline int mvv_lva(const PieceType attacker, const PieceType victim)
-{
-    return ((victim.index()) * 100) + (KING.index() - attacker.index());
-}
-
-enum class ScorerType { Root, Search, QSearch };
-
-struct RootParams {
-    int m_tt_bonus = 20000000;
-    int max_root_bonus = 10000000;
-};
-
-struct SearchParams {
-    int m_tt_bonus = 20000000;
-    int m_killer_1_bonus = 9000000;
-    int m_killer_2_bonus = 8000000;
-    int good_capture_bonus = 10000000;
-};
-
-struct QSearchParams {
-    int m_tt_bonus = 20000000;
-    int good_capture_bonus = 10000000;
-    int m_killer_1_bonus = 9000000;
-    int m_killer_2_bonus = 8000000;
-};
-
-template <ScorerType T>
-struct ParamsFor;
-
-template <>
-struct ParamsFor<ScorerType::Root> { using type = RootParams; };
-
-template <>
-struct ParamsFor<ScorerType::Search> { using type = SearchParams; };
-
-template <>
-struct ParamsFor<ScorerType::QSearch> { using type = QSearchParams; };
-
-template <ScorerType T>
-struct Scorer {
-    using Params = ParamsFor<T>::type;
-
-    Scorer(const Params& params, const SearchStack::Node& ss, Move tt_move)
-        : m_params(params), m_ss(ss), m_tt_move(tt_move) {}
-
-    auto operator()() const {
-        return [this](Move m) -> MoveScoreT {
-            MoveScoreT score = 0;
-
-            if constexpr (T == ScorerType::Root) {
+        switch (m_stage) {
+            case Stage::Root: {
                 const auto max_nodes = std::ranges::max_element(
-                    *m_ss.refutation_nodes,
+                    *m_ss.refutation_history,
                     {},
                     &std::pair<const Move, size_t>::second
                 );
-                assert(max_nodes != m_ss.refutation_nodes->end());
-
-                if (m == m_tt_move)
-                    score = m_params.m_tt_bonus;
-                else
-                    score = m_params.max_root_bonus * m_ss.refutation_nodes->at(m) / max_nodes->second;
-            } else {
-                const auto attacker = m_ss.position->piece_at(m.from_sq()).type();
-                const auto victim = m.type_of() == EN_PASSANT ? PAWN : m_ss.position->piece_at(m.to_sq()).type();
-
-                if (m == m_tt_move) score += m_params.m_tt_bonus;
-                else if constexpr (T == ScorerType::Search) {
-                    if (m == m_ss.killer1) score += m_params.m_killer_1_bonus;
-                    else if (m == m_ss.killer2) score += m_params.m_killer_2_bonus;
-
-                    else if (victim)
-                        score += mvv_lva(attacker, victim) + m_params.good_capture_bonus * (m_ss.position->see(m) > -107);
-                    else {
-                        score += m_ss.history.get_bonus(m);
-                        if (m_ss.ply > 1) score += m_ss.continuation_history.get_bonus(m_ss.position(), m);
-                        if (m_ss.ply > 2) score += m_ss.prev->continuation_history.get_bonus(m_ss.position(), m);
-                    }
-                } else if constexpr (T == ScorerType::QSearch) {
-                    if (victim)
-                        score += mvv_lva(attacker, victim) + m_params.good_capture_bonus * (m_ss.position->see(m) > -107);
+                if (max_nodes != m_ss.refutation_history->end()) {
+                    score = m_params.root_bonus *
+                            m_ss.refutation_history->at(m) / max_nodes->second;
                 }
+                break;
             }
 
-            return score;
-        };
+            case Stage::Search: {
+                if (m == m_ss.killer1) { score += m_params.killer1_bonus; break; }
+                if (m == m_ss.killer2) { score += m_params.killer2_bonus; break; }
+                if (m_ss.position->is_quiet(m)) {
+                    score += m_ss.history->at(m_ss.position(), m);
+                    if (m_ss.continuation_history) score += m_ss.continuation_history->at(m_ss.position(), m);
+                    if (m_ss.prev && m_ss.prev->continuation_history) score += m_ss.prev->continuation_history->at(m_ss.position(), m);
+                    break;
+                }
+            }
+            [[fallthrough]];
+            case Stage::ProbCut: {
+            }
+            [[fallthrough]];
+            case Stage::QSearch: {
+                if (victim) {
+                    score += mvv_lva(attacker.type(), victim.type()) + HistoryBonus::max() +
+                        m_params.good_capture * (m_ss.position->see(m) > -107) +
+                        m_ss.capture_history->at(m_ss.position(), m);
+                }
+            }
+        }
+        return score;
     }
 
-    const Params& m_params;
-    const SearchStack::Node& m_ss;
-    Move m_tt_move;
-};
+    static int mvv_lva(const PieceType attacker, const PieceType victim) {
+        return victim.index() * 10 + (KING.index() - attacker.index());
+    }
 
+    Stage m_stage;
+    const SearchStack::Node& m_ss;
+    const Params& m_params;
+    Move m_tt_move;
+    ScoredMoveList m_list;
+    size_t m_remaining{0};
+};
 
 #endif // MOVE_ORDERING_H

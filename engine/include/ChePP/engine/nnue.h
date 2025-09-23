@@ -10,6 +10,7 @@
 #include <cstring>
 #include <vector>
 
+#include "../../../../cmake-build-debug-coverage/_deps/highway-src/hwy/cache_control.h"
 #include "network_net.h"
 #include "position.h"
 
@@ -45,7 +46,7 @@ struct FeatureTransformer
             auto rem = [&](const Square sq, const Piece pc)
             { rem_v.push_back(get_index(view, cur.ksq(view), sq, pc)); };
 
-            const EnumArray<Color, Bitboard> color_diff = {
+            const EnumArray<Bitboard, Color> color_diff = {
                 prev.occupancy(WHITE) ^ cur.occupancy(WHITE),
                 prev.occupancy(BLACK) ^ cur.occupancy(BLACK),
             };
@@ -63,7 +64,7 @@ struct FeatureTransformer
 
   private:
     static int king_square_index(Square ksq) {
-        static EnumArray<Square, int> WKSqH = {
+        static EnumArray<int, Square> WKSqH = {
             0,  1,  2,  3,  3,  2,  1,  0,
             4,  5,  6,  7,  7,  6,  5,  4,
             8,  9, 10, 11, 11, 10,  9,  8,
@@ -211,10 +212,11 @@ struct Accumulator
             for (int i = 0; i < L1Sz; ++i) {
                 Vec<D32> acc = Zero(D32{});
 
+
                 for (size_t u = 0; u < UNROLL; ++u) {
                     const size_t idx = j + u * Lanes(D16{});
-                    const Vec<D16> w_our   = LoadU(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx]);
-                    const Vec<D16> w_their = LoadU(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx + OutSz]);
+                    const Vec<D16> w_our   = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx]);
+                    const Vec<D16> w_their = Load(D16{}, &l1_weights_ptr[i * OutSz * 2 + idx + OutSz]);
 
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_our_block[u], w_our));
                     acc = Add(acc, WidenMulPairwiseAdd(D32{}, v_their_block[u], w_their));
