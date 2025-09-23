@@ -261,11 +261,13 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
 
     int eval = Negamax(depth, alpha, beta, false);
 
+    if (m_tm->should_stop())
+    {
+        return eval;
+    }
+
     while (eval <= alpha || eval >= beta)
     {
-        if (m_tm->should_stop())
-            return eval;
-
         if (eval <= alpha)
         {
             window = window * m_parameters.aspiration_window_multiplicative_factor;
@@ -508,7 +510,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         if (is_quiet && skip_quiets) continue;
 
-        if (false && !is_root && best_score > MATED)
+        if (!is_root && best_score > MATED)
         {
 
             int lmr_depth = m_cache.lmr.at(is_quiet).at(std::min(depth, MAX_PLY - 1)).at(std::min(move_count, MAX_MOVES - 1));
