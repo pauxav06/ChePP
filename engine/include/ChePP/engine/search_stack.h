@@ -50,7 +50,8 @@ public:
     m_nodes(std::make_unique<Node[]>(MAX_PLY)),
     m_history(std::make_unique<History>()),
     m_capture_history(std::make_unique<CaptureHistory>()),
-    m_continuation_history(std::make_unique<ContinuationHistory>())
+    m_continuation_history(std::make_unique<ContinuationHistory>()),
+    m_null_move_continuation_history(std::make_unique<History>())
     {
         update_last_node();
     }
@@ -107,7 +108,8 @@ private:
         node.history = m_history.get();
         node.capture_history = m_capture_history.get();
         node.continuation_history =
-            !node.prev || node.position->move() == Move::null() ? nullptr :
+            !node.prev ? nullptr :
+            node.position->move() == Move::null() ? nullptr :
             &m_continuation_history->get_relevant_history(node.position());
         node.refutation_history = &m_refutation_nodes;
     }
@@ -134,6 +136,7 @@ private:
     std::unique_ptr<History> m_history{};
     std::unique_ptr<CaptureHistory> m_capture_history{};
     std::unique_ptr<ContinuationHistory> m_continuation_history{};
+    std::unique_ptr<History> m_null_move_continuation_history;
     RefutationHistory m_refutation_nodes{MAX_MOVES};
 };
 
