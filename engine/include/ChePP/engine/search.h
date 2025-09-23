@@ -94,7 +94,7 @@ struct SearchThread
     Cache                 m_cache;
     Statistics            m_statistics;
     SearchStack           m_search_stack;
-    Move                  best_move;
+    Move                  root_best_move;
 
 
     void init_cache()
@@ -232,7 +232,7 @@ inline void SearchThread::IterativeDeepening()
                     auto time_since_start = std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                     time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                     int nps = m_statistics.nodes / time_since_start.count();
-                    auto pv = get_pv(ss().position(), best_move);
+                    auto pv = get_pv(ss().position(), root_best_move);
                     std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                         score, depth, m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(pv));
                     std::cout << uci_output << std::endl;
@@ -251,7 +251,7 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
     if (depth < m_parameters.aspiration_window_activation_depth)
     {
         int eval = Negamax(depth, -INF_SCORE, INF_SCORE, false);
-        best_move = ss().best_move;
+        root_best_move = ss().best_move;
         return eval;
     }
 
@@ -275,13 +275,17 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval)
         {
             window = window * m_parameters.aspiration_window_multiplicative_factor;
             beta  = std::clamp(eval + window, -INF_SCORE, INF_SCORE);
-            best_move = ss().best_move;
+            root_best_move = ss().best_move;
         }
 
         eval = Negamax(depth, alpha, beta, false);
+        if (m_tm->should_stop())
+        {
+            return eval;
+        }
     }
 
-    best_move = ss().best_move;
+    root_best_move = ss().best_move;
     return eval;
 }
 
@@ -461,14 +465,14 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
     int best_score= -INF;
     int move_count = 0;
     int score = -INF;
-    Move best_move = Move::none();
+    Move local_best_move = Move::none();
 
 
     MoveList moves = gen_moves(ss().position());
 
     bool skip_quiets = false;
 
-    MoveSelector::Stage stage = is_root && depth > 7 ? MoveSelector::Stage::Root : MoveSelector::Stage::Search;
+    MoveSelector::Stage stage = false && is_root && depth > 7 ? MoveSelector::Stage::Root : MoveSelector::Stage::Search;
     MoveSelector selector{
         moves
         | std::views::filter(make_legal_predicate(pos())),
@@ -492,6 +496,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
     for (const auto [m, s] : selector)
     {
+        //if (is_root) std::cout << m << " " << s << std::endl;
         if (m == ss().excluded) continue;
 
         bool is_quiet = ss().position->is_quiet(m);
@@ -522,7 +527,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
                     continue;
                 }
 
-                if (lmr_depth <= 6 && !in_check && eval + 217 + 71 * depth <= alpha)
+                if (false && lmr_depth <= 6 && !in_check && eval + 217 + 71 * depth <= alpha)
                 {
                     skip_quiets = true;
                 }
@@ -636,7 +641,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         {
             explored.back().score = score;
             best_score = score;
-            best_move = m;
+            local_best_move = m;
             if (score > alpha)
             {
                 explored.back().alpha_raise = true;
@@ -658,7 +663,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
             }
         }
 
-        if (m_tm->should_stop() && is_root && ss().best_move)
+        if (m_tm->should_stop() && is_root && local_best_move)
         {
             break;
         }
@@ -675,7 +680,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
         for (const auto [m, raise, cutoff, s] : explored_quiets)
         {
-            int bonus = cutoff ? depth * depth : raise ? depth : - depth;
+            int bonus = cutoff ? depth * depth : raise ? depth : -depth;
             ss().history->at(ss().position(), m) << bonus;
             if (ss().continuation_history) ss().continuation_history->at(ss().position(), m) << bonus;
             if (ss().prev && ss().prev->continuation_history) ss().prev->continuation_history->at(ss().position(), m) << bonus;
@@ -685,7 +690,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         | std::views::filter( [this] (auto e) { return ss().position->is_capture(e.move); });
         for (const auto [m, raise, cutoff, s] : explored_captures)
         {
-            int bonus = cutoff ? depth * depth : raise ? depth : - depth;
+            int bonus = cutoff ? depth * depth: raise ? depth : -depth;
             ss().capture_history->at(ss().position(), m) << bonus;
 
         }
@@ -693,11 +698,11 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
     TT::Bound bound = (best_score <= alpha_org) ? TT::UPPER : (best_score >= beta) ? TT::LOWER : TT::EXACT;
     if (!ss().excluded)
-        m_tt->store(ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, best_move, ss().static_eval);
+        m_tt->store(ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, local_best_move, ss().static_eval);
 
-    if (alpha != alpha_org)
+    if (alpha != alpha_org && !ss().excluded)
     {
-        ss().best_move = best_move;
+        ss().best_move = local_best_move;
     }
 
     return best_score;
@@ -856,7 +861,7 @@ struct SearchThreadHandler
     {
         std::unordered_map<Move, int> move_votes;
 
-        for (const auto& t : threads) move_votes[t->best_move]++;
+        for (const auto& t : threads) move_votes[t->root_best_move]++;
 
         const auto it =
             std::ranges::max_element(move_votes, [](const auto& a, const auto& b) { return a.second < b.second; });
