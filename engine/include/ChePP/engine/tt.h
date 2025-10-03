@@ -6,8 +6,8 @@
 #define TT_H
 
 #include "types.h"
+#include "zobrist.h"
 
-#include "ChePP/engine/zobrist.h"
 #include <bits/shared_ptr_base.h>
 #include <optional>
 #include <vector>

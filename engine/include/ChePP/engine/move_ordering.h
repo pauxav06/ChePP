@@ -35,7 +35,7 @@ struct MoveSelector {
     m_ss(ss),
     m_params(params),
     m_tt_move(tt_move),
-    m_list(moves, [this](const Move m){ return score_move(m); })
+    m_list(moves, std::bind_front(&MoveSelector::score_move, this))
     {
         m_remaining = m_list.size();
     }
@@ -88,7 +88,7 @@ struct MoveSelector {
     [[nodiscard]] const Params& params() const { return m_params; }
 
 private:
-    MoveScoreT score_move(Move m) const {
+    MoveScoreT score_move(const Move m) const {
         if (m == m_tt_move) return m_params.tt_bonus;
 
         const Piece attacker = m_ss.position->piece_at(m.from_sq());

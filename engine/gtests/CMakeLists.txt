@@ -5,6 +5,8 @@ set (TEST_SOURCES
         perft_tests.cpp
         repetitions_test.cpp
         zobrist_tests.cpp
+        layers_test.cpp
+        nnue_test.cpp
 )
 
 add_executable(ChePP_tests ${TEST_SOURCES})
@@ -15,6 +17,7 @@ target_include_directories(ChePP_tests PRIVATE
 
 target_link_libraries(ChePP_tests PRIVATE
         GTest::gtest_main
+        cpu_flags
         ChePP_engine
 )
 

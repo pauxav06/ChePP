@@ -130,7 +130,7 @@ struct SearchThread
         //assert(!ss().position->in_check(ss().position->side_to_move()));
         //assert(!is_draw());
 
-        auto eval = ss().accumulator->evaluate(ss().position->side_to_move());
+        auto eval = nnue::network.evaluate(ss().accumulator(), ss().position->side_to_move());
         eval      = std::clamp(eval, LOSS_TB + 1, WIN_TB - 1);
         eval -= eval * ss().position->halfmove_clock() / 101;
         return eval;
@@ -143,7 +143,7 @@ struct SearchThread
     }
 
 
-    MoveList get_pv(const Position& startpos, const Move first_move) const
+    [[nodiscard]] MoveList get_pv(const Position& startpos, const Move first_move) const
     {
         Positions positions{};
         positions.set_pos(startpos);
@@ -165,7 +165,7 @@ struct SearchThread
     }
 
 
-    [[nodiscard]] std::string format_pv_line(const MoveList& pv_line) const
+    static std::string format_pv_line(const MoveList& pv_line)
     {
         std::ostringstream oss;
         for (const auto m : pv_line)
@@ -375,6 +375,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         improving = false;
     }
 
+    MoveList moves;
+
     if (!is_pv && !in_check && !is_root && !ss().excluded)
     {
         if (tt_hit)
@@ -418,17 +420,18 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         if (depth >= 3 && abs(beta) < MATE_IN_MAX_PLY &&
             (!tt_hit || eval >= rbeta || tt_hit->depth < depth - 3))
         {
-
-            int score = 0;
+            if (moves.empty()) moves = gen_moves(pos());
             MoveSelector move_selector{
-                gen_moves(pos()) |
-                std::views::filter(make_legal_predicate(pos())) |
-                std::views::filter(make_tactical_predicate(pos())),
+                moves
+                | std::views::filter(std::bind_front(&Position::is_tactical, pos()))
+                | std::views::filter(std::bind_front(&Position::is_legal, pos())),
                 MoveSelector::Stage::ProbCut,
                 ss(),
                 m_parameters.scoring_parameters,
                 tt_move
             };
+
+            int score = 0;
 
             for (const auto [m, s] : move_selector)
             {
@@ -447,7 +450,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
 
                 if (score >= rbeta)
                 {
-                    m_tt->store(ss().position->hash(), depth - 3, score, TT::UPPER, m, ss().static_eval);
+                    m_tt->store(ss().position->hash(), depth - 3, score, TT::LOWER, m, ss().static_eval);
                     return score;
                 }
             }
@@ -470,14 +473,13 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
     Move local_best_move = Move::none();
 
 
-    MoveList moves = gen_moves(ss().position());
-
     bool skip_quiets = false;
 
+    if (moves.empty()) moves = gen_moves(pos());
     MoveSelector::Stage stage = false && is_root && depth > 7 ? MoveSelector::Stage::Root : MoveSelector::Stage::Search;
     MoveSelector selector{
         moves
-        | std::views::filter(make_legal_predicate(pos())),
+        | std::views::filter(std::bind_front(&Position::is_legal, pos())),
         stage,
         ss(),
         m_parameters.scoring_parameters,
@@ -545,7 +547,6 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         }
 
 
-
         if (!is_root && depth >= (6 + is_pv) && (m == tt_move)
             && tt_hit->bound == TT::LOWER && abs(tt_score) < MATE
             && tt_hit->depth >= depth - 3 && !ss().excluded)
@@ -578,6 +579,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         auto start = m_statistics.nodes;
 
         do_move(m);
+        m_tt->prefetch(ss().position->hash());
 
         m_statistics.nodes++;
         move_count++;
@@ -698,7 +700,7 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode)
         }
     }
 
-    TT::Bound bound = (best_score <= alpha_org) ? TT::UPPER : (best_score >= beta) ? TT::LOWER : TT::EXACT;
+    TT::Bound bound = (best_score >= beta) ? TT::LOWER : (best_score <= alpha_org || !is_pv) ? TT::UPPER : TT::EXACT;
     if (!ss().excluded)
         m_tt->store(ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, local_best_move, ss().static_eval);
 
@@ -718,14 +720,13 @@ inline int SearchThread::QSearch(int alpha, int beta)
 
     const bool is_pv = beta - alpha > 1;
     const bool in_check = ss().position->in_check(ss().position->side_to_move());
+    const Positions::Handle pos = ss().position;
 
     if (ply() >= MAX_PLY)
         return evaluate();
 
     if (is_draw())
         return 0;
-
-
 
     const int stand_pat = evaluate();
     ss().static_eval           = stand_pat;
@@ -734,8 +735,8 @@ inline int SearchThread::QSearch(int alpha, int beta)
     if (stand_pat > alpha) alpha = stand_pat;
 
     auto tt_hit = m_tt->probe(ss().position->hash());
-    //if (tt_hit) tt_hit = causes_draw(tt_hit->move) ? std::nullopt : tt_hit;
     const Move tt_move = tt_hit ? tt_hit->move : Move::none();
+    if (tt_move) tt_hit = causes_draw(tt_move) ? std::nullopt : tt_hit;
     const int tt_score = tt_hit ? TT::read_score(tt_hit->score, ply()) : 0;
     if (!is_pv && tt_hit)
     {
@@ -745,10 +746,15 @@ inline int SearchThread::QSearch(int alpha, int beta)
         }
     }
 
+    auto moves = gen_moves(ss().position());
+    auto filter = [&] (const Move move)
+    {
+        if (in_check && false) return pos->is_legal(move);
+        else return pos->is_tactical(move) && pos->is_legal(move);
+    };
+
     MoveSelector selector{
-        gen_moves(ss().position())
-        | std::views::filter(make_tactical_predicate(ss().position()))
-        | std::views::filter(make_legal_predicate(ss().position())),
+        moves | std::views::filter(filter),
         MoveSelector::Stage::QSearch,
         ss(),
         m_parameters.scoring_parameters,
@@ -768,6 +774,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
         }
 
         do_move(m);
+        m_tt->prefetch(ss().position->hash());
 
         m_statistics.nodes++;
         move_count++;
@@ -791,6 +798,7 @@ inline int SearchThread::QSearch(int alpha, int beta)
         if (alpha >= beta)
             break;
     }
+
     assert(best_eval > -INF && best_eval < INF);
     if (best_move != Move::none() && best_move != Move::null())
     {
@@ -824,7 +832,7 @@ struct SearchThreadHandler
         const TimeManager::InitInfo tm_init{
             .side = pos.last().side_to_move(),
             .moves_played =(pos.last().full_move_clock() / 2),
-            .static_eval = Accumulator(pos.last()).evaluate(pos.last().side_to_move())
+            .static_eval = nnue::network.evaluate(nnue::Accumulator(pos.last()), pos.last().side_to_move())
         };
         m_tm = TimeManager{tm_params, tm_init, tm_constraints};
         m_tt = tt;

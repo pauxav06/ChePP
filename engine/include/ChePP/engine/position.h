@@ -1,14 +1,15 @@
 #ifndef POSITION_H_INCLUDED
 #define POSITION_H_INCLUDED
-#include "bitboard.h"
+
 #include "types.h"
 #include "zobrist.h"
-
+#include "bitboard.h"
 #include <bit>
 #include <chrono>
 #include <cmath>
 #include <cstring>
 #include <expected>
+#include <functional>
 #include <memory>
 #include <ostream>
 #include <ranges>
@@ -60,13 +61,12 @@ struct Position
     [[nodiscard]] Bitboard attacking_sq(Square sq) const;
     [[nodiscard]] bool     is_attacking_sq(Square sq, Color c) const;
 
-    template <Color c>
-    [[nodiscard]] bool is_legal(Move move) const;
     [[nodiscard]] bool is_legal(Move move) const;
     [[nodiscard]] bool is_capture(Move move) const;
     [[nodiscard]] Piece              captured_by_move(Move move) const;
     void               do_move(Move move);
     [[nodiscard]] bool is_quiet(Move move) const;
+    bool                                                     is_tactical(Move move) const;
     [[nodiscard]] bool is_valid(Move move) const;
     [[nodiscard]] std::expected<std::monostate, std::string> is_ok_verbose() const;
     template <bool verbose = false>
@@ -97,6 +97,10 @@ struct Position
     bool              is_insufficient_material() const;
 
   private:
+
+    template <Color c>
+    [[nodiscard]] bool is_legal_for_side(Move move) const;
+
     // copied
     Zobrist::Hash                  m_hash{};
     EnumArray<Piece, Square>       m_pieces{};
@@ -181,6 +185,7 @@ inline Bitboard Position::attacking_sq(const Square sq, const Bitboard occ) cons
 {
     // if a piece attacks a square sq2 from a square sq1 it would attack sq1 from sq2
     // exception made for pawns where this is true only with reversed colors
+    using namespace Movegen;
     return ((attacks<ROOK>(sq, occ) & occupancy(ROOK, QUEEN)) | (attacks<BISHOP>(sq, occ) & occupancy(BISHOP, QUEEN)) |
             (attacks<KNIGHT>(sq, occ) & occupancy(KNIGHT)) | (attacks<PAWN>(sq, occ, BLACK) & occupancy(WHITE, PAWN)) |
             (attacks<PAWN>(sq, occ, WHITE) & occupancy(BLACK, PAWN)) | (attacks<KING>(sq, occ) & occupancy(KING))) &
@@ -196,6 +201,7 @@ inline bool Position::is_attacking_sq(const Square sq, const Color c) const
 {
     // if a piece attacks a square sq2 from a square sq1 it would attack sq1 from sq2
     // exception made for pawns where this is true only with reversed colors
+    using namespace Movegen;
     return attacks<KNIGHT>(sq, occupancy()) & occupancy(c, KNIGHT) ||
            attacks<PAWN>(sq, occupancy(), ~c) & occupancy(c, PAWN) ||
            attacks<KING>(sq, occupancy()) & occupancy(c, KING) ||
@@ -207,10 +213,10 @@ template <PieceType pt>
 void Position::update_checkers_and_blockers(const Color c)
 {
     static_assert(pt == BISHOP || pt == ROOK);
-    auto enemies = occupancy(~c, pt, QUEEN) & pseudo_attack<pt>(ksq(c), ~c);
+    auto enemies = occupancy(~c, pt, QUEEN) & Movegen::pseudo_attack<pt>(ksq(c), ~c);
     for (const Square sq : enemies)
     {
-        const auto line       = from_to_excl(sq, ksq(c));
+        const auto line       = bb::from_to_excl(sq, ksq(c));
         const auto on_line    = line & occupancy();
         const auto n_blockers = on_line.popcount();
         if (n_blockers == 0)
@@ -299,10 +305,7 @@ inline std::expected<std::monostate, std::string> Position::from_fen(const std::
     {
         if (c == '/')
         {
-            if (file)
-            {
-                return std::unexpected{std::format("Each rank must have exactly 8 squares")};
-            }
+            if (file) return std::unexpected{std::format("Each rank must have exactly 8 squares")};
             --rank;
             file = FILE_A;
         }
@@ -317,7 +320,7 @@ inline std::expected<std::monostate, std::string> Position::from_fen(const std::
             const auto pc = Piece::from_string(std::string{c});
             if (!pc)
                 return std::unexpected(std::format("Invalid piece character in FEN: {}", c));
-            if (file > FILE_H)
+            if (!file)
                 return std::unexpected(std::format("FEN error: file overflow when placing piece {}", c));
 
             set_piece(pc.value(), Square{file, rank});
@@ -438,12 +441,12 @@ inline std::string Position::to_string() const
     }
 
     res << "  a b c d e f g h\n";
-    res << to_fen();
+    res << to_fen() << "\n";
     return res.str();
 }
 
 template <Color c>
-bool Position::is_legal(const Move move) const
+bool Position::is_legal_for_side(const Move move) const
 {
     constexpr Direction down    = c == WHITE ? SOUTH : NORTH;
     const auto          from_bb = Bitboard(move.from_sq());
@@ -456,7 +459,7 @@ bool Position::is_legal(const Move move) const
         while (long_range)
         {
             if (const auto sq = Square{long_range.pop_lsb()};
-                are_aligned(sq, move.from_sq(), move.to_sq()) && move.to_sq() != sq)
+                bb::are_aligned(sq, move.from_sq(), move.to_sq()) && move.to_sq() != sq)
             {
                 return false;
             }
@@ -474,7 +477,7 @@ bool Position::is_legal(const Move move) const
         if (Bitboard(move.from_sq()) & blockers(c))
         {
             // and if it is not moving along the line it is pinned to
-            if (!(Bitboard(move.to_sq()) & line(move.from_sq(), ksq(c))))
+            if (!(Bitboard(move.to_sq()) & bb::line(move.from_sq(), ksq(c))))
             {
                 // we are breaking the pin, move is illegal
                 return false;
@@ -486,9 +489,9 @@ bool Position::is_legal(const Move move) const
         // en passant can create discovered checks so we check for any long range attack
         // we know they have not moved. therefore we only need to update global occupancy to cast rays
         // we check if rays intersect with any long range and if they do that means a there is a check
-        if (const Bitboard ep_occupancy = (occupancy() & ~from_bb | to_bb) & ~shift<down>(to_bb);
-            occupancy(~c, BISHOP, QUEEN) & attacks(BISHOP, ksq(c), ep_occupancy) ||
-            occupancy(~c, ROOK, QUEEN) & attacks(ROOK, ksq(c), ep_occupancy))
+        if (const Bitboard ep_occupancy = (occupancy() & ~from_bb | to_bb) & ~bb::shift<down>(to_bb);
+            occupancy(~c, BISHOP, QUEEN) & Movegen::attacks(BISHOP, ksq(c), ep_occupancy) ||
+            occupancy(~c, ROOK, QUEEN) & Movegen::attacks(ROOK, ksq(c), ep_occupancy))
             return false;
     }
     return true;
@@ -496,11 +499,7 @@ bool Position::is_legal(const Move move) const
 
 inline bool Position::is_legal(const Move move) const
 {
-    if (side_to_move() == WHITE)
-        return is_legal<WHITE>(move);
-    if (side_to_move() == BLACK)
-        return is_legal<BLACK>(move);
-    return false;
+    return side_to_move() == WHITE ? is_legal_for_side<WHITE>(move) : is_legal_for_side<BLACK>(move);
 }
 
 inline bool Position::is_capture(const Move move) const
@@ -519,6 +518,11 @@ inline Piece Position::captured_by_move(const Move move) const
 inline bool Position::is_quiet(const Move move) const
 {
     return move.type_of() != PROMOTION && !is_capture(move);
+}
+
+inline bool Position::is_tactical(const Move move) const
+{
+    return is_capture(move) || move.type_of() == PROMOTION;
 }
 
 inline void Position::do_move(const Move move)
@@ -598,7 +602,7 @@ inline void Position::do_move(const Move move)
         else if (pc.type() == PAWN && to.value() - from.value() == 2 * up)
         {
             // only set if ep is actually playable
-            if (((pseudo_attack<PAWN>(to - up, us)) & occupancy(~us)) != bb::empty())
+            if (((Movegen::pseudo_attack<PAWN>(to - up, us)) & occupancy(~us)) != bb::empty())
             {
                 m_ep_square = from + up;
                 Zobrist::flip_ep(m_hash, from.file());
@@ -676,8 +680,8 @@ inline int Position::see(const Move move) const
     auto capture = [&](const Square sq)
     {
         occ &= ~Bitboard(sq);
-        attackers |= (attacks<ROOK>(to, occ) & occupancy(ROOK, QUEEN));
-        attackers |= (attacks<BISHOP>(to, occ) & occupancy(BISHOP, QUEEN));
+        attackers |= (Movegen::attacks<ROOK>(to, occ) & occupancy(ROOK, QUEEN));
+        attackers |= (Movegen::attacks<BISHOP>(to, occ) & occupancy(BISHOP, QUEEN));
         attackers &= occ;
     };
 
@@ -702,7 +706,7 @@ inline int Position::see(const Move move) const
         Square    chosen_sq = NO_SQUARE;
         PieceType chosen_pt = NO_PIECE_TYPE;
 
-        for (const auto pt : PieceType::values())
+        for (const auto pt : PieceType::all())
         {
             const auto bb = occupancy(side, pt) & attacking;
             if (bb)
@@ -777,10 +781,8 @@ inline bool Position::is_insufficient_material() const
 
 inline void make_all_promotions(MoveList& list, const Square from, const Square to)
 {
-    list.push_back(Move::make<PROMOTION>(from, to, QUEEN));
-    list.push_back(Move::make<PROMOTION>(from, to, ROOK));
-    list.push_back(Move::make<PROMOTION>(from, to, BISHOP));
-    list.push_back(Move::make<PROMOTION>(from, to, KNIGHT));
+    for (const auto pt : {QUEEN, ROOK, KNIGHT, BISHOP})
+        list.push_back(Move::make<PROMOTION>(from, to, pt));
 }
 
 template <move_type_t T>
@@ -812,8 +814,8 @@ void gen_pawn_moves(const Position& pos, MoveList& list)
 
     // straight
     {
-        Bitboard single_push = shift<up>(pawns & ~bb_promotion_rank) & available;
-        Bitboard double_push = shift<up>(single_push & bb_third_rank) & available & check_mask;
+        Bitboard single_push = bb::shift<up>(pawns & ~bb_promotion_rank) & available;
+        Bitboard double_push = bb::shift<up>(single_push & bb_third_rank) & available & check_mask;
         single_push &= check_mask;
 
         add_moves_from_bb<NORMAL>(list, single_push, up);
@@ -822,9 +824,9 @@ void gen_pawn_moves(const Position& pos, MoveList& list)
     // promotion
     if (const Bitboard promotions = pawns & bb_promotion_rank)
     {
-        Bitboard push       = shift<up>(promotions) & available & check_mask;
-        Bitboard take_right = shift<up_right>(promotions) & enemy & check_mask;
-        Bitboard take_left  = shift<up_left>(promotions) & enemy & check_mask;
+        Bitboard push       = bb::shift<up>(promotions) & available & check_mask;
+        Bitboard take_right = bb::shift<up_right>(promotions) & enemy & check_mask;
+        Bitboard take_left  = bb::shift<up_left>(promotions) & enemy & check_mask;
 
         add_promotions(list, push, up);
         add_promotions(list, take_right, up_right);
@@ -832,10 +834,8 @@ void gen_pawn_moves(const Position& pos, MoveList& list)
     }
     // capture
     {
-        Bitboard       capturable = enemy | ep_bb;
-        const Bitboard ep_mask    = (check_mask & shift<down>(ep_bb)) ? ep_bb : bb::empty();
 
-        auto handle_capture = [&](const Bitboard bb, const int delta)
+        auto handle_capture = [&pos, &list](const Bitboard bb, const int delta)
         {
             for (const Square to : bb)
             {
@@ -843,12 +843,10 @@ void gen_pawn_moves(const Position& pos, MoveList& list)
                 else list.push_back(Move::make<NORMAL>(to - delta, to));
             }
         };
-
-        Bitboard take_right = shift<up_right>(pawns & ~bb_promotion_rank) & capturable & (check_mask | ep_mask);
-        Bitboard take_left  = shift<up_left>(pawns & ~bb_promotion_rank) & capturable & (check_mask | ep_mask);
-
-        handle_capture(take_right, up_right);
-        handle_capture(take_left, up_left);
+        const Bitboard ep_capture_mask = (check_mask & bb::shift<down>(ep_bb)) ? ep_bb : bb::empty();
+        const Bitboard possible_captures = (enemy | ep_bb) & (check_mask | ep_capture_mask);
+        handle_capture(bb::shift<up_right>(pawns & ~bb_promotion_rank) & possible_captures, up_right);
+        handle_capture(bb::shift<up_left>(pawns & ~bb_promotion_rank) & possible_captures, up_left);
     }
 }
 
@@ -860,7 +858,7 @@ void gen_pc_moves(const Position& pos, MoveList& list)
 
     for (const Square from : pos.occupancy(c, pc))
     {
-        for (const Square to : attacks<pc>(from, pos.occupancy()) & ~pos.occupancy(c) & check_mask)
+        for (const Square to : Movegen::attacks<pc>(from, pos.occupancy()) & ~pos.occupancy(c) & check_mask)
         {
             list.push_back(Move::make<NORMAL>(from, to));
         }
@@ -868,9 +866,15 @@ void gen_pc_moves(const Position& pos, MoveList& list)
 
 }
 
-inline void gen_castling(const Position& pos, MoveList& list)
+inline void gen_king_moves(const Position& pos, MoveList& list)
 {
-    const Color          c      = pos.side_to_move();
+    const Color    c     = pos.side_to_move();
+    const Square   from  = pos.ksq(c);
+    const Bitboard moves = Movegen::attacks<KING>(from, pos.occupancy());
+
+    for (const auto to : moves & (~pos.occupancy() | pos.occupancy(~c)))
+        list.push_back(Move::make<NORMAL>(from, to));;
+
     const CastlingRights rights = pos.castling_rights();
 
     if (pos.check_mask(c) || !rights.has_any_color(c))
@@ -883,35 +887,20 @@ inline void gen_castling(const Position& pos, MoveList& list)
             auto [k_from, k_to] = type.king_move();
             auto [r_from, r_to] = type.rook_move();
             assert(pos.piece_at(k_from) == Piece(c, KING));
-            bool            safe = (from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
+            bool            safe = (bb::from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
             const Direction dir  = direction_from(k_from, k_to);
             assert(dir != NO_DIRECTION);
             for (auto sq = k_from + dir; sq != k_to && safe; sq = sq + dir)
             {
                 safe &= !pos.is_attacking_sq(sq, ~c);
             }
-            if (safe)
-            {
-                list.push_back(Move::make<CASTLING>(k_from, k_to, type));
-            }
+            if (safe) list.push_back(Move::make<CASTLING>(k_from, k_to, type));
         }
     }
 }
 
-inline void gen_king_moves(const Position& pos, MoveList& list)
-{
-    const Color    c     = pos.side_to_move();
-    const Square   from  = pos.ksq(c);
-    const Bitboard moves = attacks<KING>(from, pos.occupancy());
-
-    for (const auto to : moves & (~pos.occupancy() | pos.occupancy(~c)))
-        list.push_back(Move::make<NORMAL>(from, to));;
-
-    gen_castling(pos, list);
-}
-
 template <Color c>
-MoveList gen_moves(const Position& pos)
+MoveList gen_moves_for_side(const Position& pos)
 {
     MoveList  list;
     const int n_checkers = pos.checkers(c).popcount();
@@ -931,29 +920,15 @@ MoveList gen_moves(const Position& pos)
 
 inline MoveList gen_moves(const Position& pos)
 {
-    if (pos.side_to_move() == WHITE)
-        return gen_moves<WHITE>(pos);
-    return gen_moves<BLACK>(pos);
-}
-
-inline auto make_legal_predicate(const Position& pos)
-{
-    return [&pos](const Move move) { return pos.is_legal(move); };
+    if (pos.side_to_move() == WHITE) return gen_moves_for_side<WHITE>(pos);
+    return gen_moves_for_side<BLACK>(pos);
 }
 
 inline MoveList gen_legal(const Position& pos)
 {
-    MoveList all = gen_moves(pos);
     MoveList legal;
-    std::ranges::copy_if(all, std::back_inserter(legal), [&](const Move move) { return pos.is_legal(move); });
+    std::ranges::copy_if(gen_moves(pos), std::back_inserter(legal), std::bind_front(&Position::is_legal, pos));
     return legal;
-}
-
-/* TODO IMPORTANT decide weather to evaluate giving checks in qsearch */
-inline auto make_tactical_predicate(const Position& pos)
-{
-    return [&pos](const Move move)
-    { return pos.is_occupied(move.to_sq()) || move.type_of() == EN_PASSANT || move.type_of() == PROMOTION; };
 }
 
 inline void perft(const Position& prev, const int ply, size_t& out)
@@ -1014,7 +989,7 @@ inline std::expected<std::monostate, std::string> Position::is_ok_verbose() cons
     EnumArray<Bitboard, PieceType> type_occ_local{};
     Bitboard                       global_local = bb::empty();
 
-    for (auto sq : Square::values())
+    for (auto sq : Square::all())
     {
         const Piece pc = m_pieces.at(sq);
         if (pc)
@@ -1034,19 +1009,19 @@ inline std::expected<std::monostate, std::string> Position::is_ok_verbose() cons
     if (global_local != m_global_occupancy)
         return err("occupancy is incoherent with pieces");
 
-    for (const auto c : Color::values())
+    for (const auto c : Color::all())
     {
         if (color_occ_local.at(c) != m_color_occupancy.at(c))
             return err(std::string("colore occupancy is incoherent for side") + std::string(c.to_string()));
     }
 
-    for (const auto pt : PieceType::values())
+    for (const auto pt : PieceType::all())
     {
         if (type_occ_local.at(pt) != m_pieces_type_occupancy.at(pt))
             return err(std::string("piece type occupancy is incoherent for type ") + std::string(pt.to_string()));
     }
 
-    for (const auto c : Color::values())
+    for (const auto c : Color::all())
     {
         const Bitboard king_bb = type_occ_local.at(KING) & color_occ_local.at(c);
         const int king_count = king_bb.popcount();
@@ -1063,7 +1038,7 @@ inline std::expected<std::monostate, std::string> Position::is_ok_verbose() cons
 
     for (const auto side : {KINGSIDE, QUEENSIDE})
     {
-        for (const auto c : Color::values())
+        for (const auto c : Color::all())
         {
             if (const CastlingType ct{c, side}; m_crs.has(ct))
             {

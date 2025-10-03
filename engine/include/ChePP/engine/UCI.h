@@ -5,10 +5,11 @@
 #ifndef CHEPP_UCI_H
 #define CHEPP_UCI_H
 
-#include "ChePP/engine/position.h"
-#include "ChePP/engine/search.h"
-#include "ChePP/engine/tm.h"
+#include "position.h"
+#include "search.h"
+#include "tm.h"
 #include "tb.h"
+#include "init.h"
 
 #include <algorithm>
 #include <functional>
@@ -319,9 +320,9 @@ public:
         m_pos.set_fen(start_fen);
     }
 
-    std::expected<MoveList, std::string> parse_moves(std::istringstream& iss, Position& movegen) {
+    static std::expected<std::vector<Move>, std::string> parse_moves(std::istringstream& iss, Position& movegen) {
         std::string token;
-        MoveList moves{};
+        std::vector<Move> moves{};
         while (iss >> token) {
             auto move = Move::from_uci(token, {
                 .pieces = movegen.pieces(),
@@ -349,7 +350,7 @@ public:
 
         std::string type;
         iss >> type;
-        MoveList moves;
+        std::vector<Move> moves;
         std::string fen;
 
         Position movegen;
@@ -419,9 +420,61 @@ public:
     void eval() const
     {
         std::cout << m_pos.last() << std::endl;
-        const Accumulator accum{m_pos.last()};
+        const nnue::Accumulator accum{m_pos.last()};
         std::cout << "Evaluation for " << m_pos.last().side_to_move() << " (cp): " << std::endl;
-        accum.evaluate_uci(m_pos.last().side_to_move());
+        nnue::network.evaluate_uci(accum, m_pos.last().side_to_move());
+    }
+
+
+    static void bench()
+    {
+        static constexpr int n_positions = 10; // just to not get messed up by cache
+        Positions pos;
+        auto err = pos.set_fen(start_fen);
+        nnue::Accumulators accum{pos.last()};
+        for (int i = 0; i < n_positions; i++)
+        {
+            auto moves = gen_legal(pos.last());
+            pos.do_move(moves[0]);
+            accum.do_move(pos[pos.ply() - 1] ,pos.last());
+        }
+        auto& rng = prng::thread_local_gen();
+        auto distrib = std::uniform_int_distribution<int8_t>(0, 9);
+
+        volatile int64_t tot{0};
+        constexpr size_t n_iterations = 1'000'000;
+
+        auto start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < n_iterations; i++)
+        {
+            tot += nnue::network.evaluate(accum[distrib(rng)], WHITE);
+        }
+        auto end = std::chrono::high_resolution_clock::now();
+        auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        auto ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+        std::cout << std::format("Time for {} evaluations: {} ({}ns/it) (tot {})",
+            n_iterations,
+            ms.count(),
+            ns.count()/n_iterations,
+            tot)
+        << std::endl;
+
+        start = std::chrono::high_resolution_clock::now();
+        for (size_t i = 0; i < n_iterations; i++)
+        {
+            nnue::Accumulator::bench_refresh(pos[distrib(rng)]);
+        }
+        end = std::chrono::high_resolution_clock::now();
+        ms = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+        ns = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
+
+        std::cout << std::format("Time for {} refreshes: {} ({}ns/it) (tot {})",
+            n_iterations,
+            ms.count(),
+            ns.count()/n_iterations,
+            tot)
+        << std::endl;
     }
 
 
@@ -446,6 +499,8 @@ public:
                 std::cerr << "info string Unknown option or invalid value\n" << std::endl;
         } else if (line == "evaluate" || line == "eval") {
             eval();
+        } else if (line == "bench") {
+            bench();
         } else if (line == "print") {
             std::cout << m_pos.last() << std::endl;
         } else if (line == "stop") {

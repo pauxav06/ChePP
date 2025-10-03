@@ -30,6 +30,8 @@ TmpFile process_chunk(std::vector<ElemT> chunk)
 
 // this function reads from the stream, performs conversion, chunks data.
 // data in one chunk is shuffled and written to a temporary file
+// this way we can create a global pool of temporary files coming from different sources
+// and shuffle them perfectly even when they do not fit in ram
 template <typename InputT, typename OutputT>
 auto convert_and_shuffle_chunks(StreamView<InputT>&&                  sv,
                                 const std::function<OutputT(const InputT&)>& converter,

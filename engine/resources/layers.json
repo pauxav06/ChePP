@@ -1,19 +1,74 @@
-[
-  { "type": "int16", "size": 23068672,  "name": "g_ft_weights" },
-  { "type": "int16", "size": 1024,      "name": "g_ft_biases" },
-
-  { "type": "int16", "size": 180224,    "name": "g_psqt_weights" },
-  { "type": "int16", "size": 8,         "name": "g_psqt_biases" },
-
-  { "type": "int16", "size": 16384,     "name": "g_l1_psqt_weights" },
-  { "type": "int32", "size": 8,         "name": "g_l1_psqt_biases" },
-
-  { "type": "int16", "size": 262144,    "name": "g_l1_weights" },
-  { "type": "int32", "size": 128,       "name": "g_l1_biases" },
-
-  { "type": "int16", "size": 4096,      "name": "g_l2_weights" },
-  { "type": "int32", "size": 256,       "name": "g_l2_biases" },
-
-  { "type": "int16", "size": 256,       "name": "g_out_weights" },
-  { "type": "int32", "size": 8,         "name": "g_out_bias" }
-]
+{
+  "layers": [
+    {
+      "name": "acc_weights",
+      "dtype": "int16",
+      "rows": 22528,
+      "cols": 1024,
+      "repetition": 1
+    },
+    {
+      "name": "acc_biases",
+      "dtype": "int16",
+      "rows": 1024,
+      "cols": 1,
+      "repetition": 1
+    },
+    {
+      "name": "psqt_weights",
+      "dtype": "int32",
+      "rows": 22528,
+      "cols": 8,
+      "repetition": 1
+    },
+    {
+      "name": "psqt_biases",
+      "dtype": "int32",
+      "rows": 1,
+      "cols": 8,
+      "repetition": 1
+    },
+    {
+      "name": "l1_weights",
+      "dtype": "int8",
+      "rows": 16,
+      "cols": 2048,
+      "repetition": 8
+    },
+    {
+      "name": "l1_biases",
+      "dtype": "int32",
+      "rows": 16,
+      "cols": 1,
+      "repetition": 8
+    },
+    {
+      "name": "l2_weights",
+      "dtype": "int8",
+      "rows": 32,
+      "cols": 16,
+      "repetition": 8
+    },
+    {
+      "name": "l2_biases",
+      "dtype": "int32",
+      "rows": 32,
+      "cols": 1,
+      "repetition": 8
+    },
+    {
+      "name": "out_weights",
+      "dtype": "int8",
+      "rows": 1,
+      "cols": 32,
+      "repetition": 8
+    },
+    {
+      "name": "out_biases",
+      "dtype": "int32",
+      "rows": 1,
+      "cols": 1,
+      "repetition": 8
+    }
+  ]
+}
