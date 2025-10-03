@@ -4,7 +4,10 @@
 
 #include <ChePP/engine/position.h>
 #include <gtest/gtest.h>
+#include <ChePP/engine/init.h>
 
+// These tests are now not necessary, as the position.is_ok() function
+// performs much more thorough testing of state including zobrist. it is called by the perft test.
 
 TEST(ZobristTranspositions, EnPassantRightsAffectHash) {
     Position pos1, pos2;

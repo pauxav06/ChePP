@@ -1,17 +1,67 @@
 cmake_minimum_required(VERSION 3.14)
+project(ChePP LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+include(FetchContent)
+
+set(CPU_PROBE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpu_probe)
+set(CPU_PROBE_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cpu_probe_build)
+set(CPU_PROBE_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/cpu_probe_install)
+set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
+file(MAKE_DIRECTORY ${CPU_PROBE_BUILD_DIR})
+file(MAKE_DIRECTORY ${CPU_PROBE_INSTALL_DIR})
+file(MAKE_DIRECTORY ${GENERATED_DIR})
+
+execute_process(
+        COMMAND ${CMAKE_COMMAND} -S ${CPU_PROBE_SRC_DIR} -B ${CPU_PROBE_BUILD_DIR}
+        -DCMAKE_INSTALL_PREFIX=${CPU_PROBE_INSTALL_DIR}
+        RESULT_VARIABLE cpures
+        OUTPUT_VARIABLE cpu_out
+        ERROR_VARIABLE cpu_err
+)
+message(STATUS "CPU probe configure output:\n${cpu_out}")
+if(NOT cpures EQUAL 0)
+    message(FATAL_ERROR "CPU probe configure failed:\n${cpu_err}")
+endif()
+
+execute_process(
+        COMMAND ${CMAKE_COMMAND} --build ${CPU_PROBE_BUILD_DIR} --target cpu_feature_flags
+        RESULT_VARIABLE cpures
+        OUTPUT_VARIABLE cpu_out
+        ERROR_VARIABLE cpu_err
+)
+message(STATUS "CPU probe build output:\n${cpu_out}")
+if(NOT cpures EQUAL 0)
+    message(FATAL_ERROR "CPU probe build failed:\n${cpu_err}")
+endif()
+
+execute_process(
+        COMMAND ${CPU_PROBE_BUILD_DIR}/cpu_feature_flags
+        WORKING_DIRECTORY ${GENERATED_DIR}
+        RESULT_VARIABLE cpures
+        OUTPUT_VARIABLE cpu_out
+        ERROR_VARIABLE cpu_err
+)
+message(STATUS "CPU probe execution output:\n${cpu_out}")
+if(NOT cpures EQUAL 0)
+    message(FATAL_ERROR "CPU probe execution failed:\n${cpu_err}")
+endif()
+
+include(${GENERATED_DIR}/cpu_flags.cmake)
+add_library(cpu_flags INTERFACE)
+target_compile_options(cpu_flags INTERFACE ${CPU_COMPILE_FLAGS})
+message(" cpu compile flags " ${CPU_COMPILE_FLAGS})
+
 
 if(MSVC)
     add_compile_options(
             /W4
             /permissive-
             /Zi
-            /arch:AVX2
     )
-
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(/O2)
     else()
@@ -20,17 +70,15 @@ if(MSVC)
 else()
     add_compile_options(
             -g
-            -march=native
             -Wall
             -Wextra
             -pedantic
     )
-
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(-O3)
     else()
         add_compile_options(-O)
-        if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
             message(STATUS "Enabling AddressSanitizer")
             add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
             add_link_options(-fsanitize=address)
@@ -39,9 +87,6 @@ else()
 endif()
 
 
-include(FetchContent)
-
-# Fathom is a used to probe tablebases
 FetchContent_Declare(
         fathom
         GIT_REPOSITORY https://github.com/basil00/Fathom.git
@@ -49,74 +94,61 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fathom)
 
-
-set(BUILD_GMOCK OFF CACHE BOOL "" FORCE)
-# Highway is used for cross platform SIMD code
-set(HIGHWAY_BUILD_TESTS OFF CACHE BOOL "Disable Highway tests" FORCE)
-
 FetchContent_Declare(
-        highway
-        GIT_REPOSITORY https://github.com/google/highway.git
-        GIT_TAG master
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG main
 )
-set(BUILD_GTEST OFF CACHE BOOL "" FORCE)
-FetchContent_MakeAvailable(highway)
+FetchContent_MakeAvailable(googletest)
+enable_testing()
 
-if(NOT TARGET gtest)
-    FetchContent_Declare(
-            googletest
-            GIT_REPOSITORY https://github.com/google/googletest.git
-            GIT_TAG main
-    )
-
-    FetchContent_MakeAvailable(googletest)
-    enable_testing()
-endif()
-
-
-# NNUE weights, embed directly into he binary, avoids any relative path issue at runtime
 set(NETWORK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/resources/latest.net)
-set(NETWORK_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/ChePP/engine/network_net.h)
-set(NETWORK_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/network_net.cpp)
+set(NETWORK_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/ChePP/engine/layers.h)
+set(NETWORK_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/src/layers.cpp)
 set(NETWORK_CFG ${CMAKE_CURRENT_SOURCE_DIR}/resources/layers.json)
 
-add_executable(bin2h ${CMAKE_CURRENT_SOURCE_DIR}/scripts/bin2h.cpp)
-target_link_libraries(bin2h PRIVATE nlohmann_json::nlohmann_json)
-target_include_directories(bin2h PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../external)
+add_executable(embed_layers src/embed_layers.cpp)
+target_link_libraries(embed_layers PRIVATE nlohmann_json::nlohmann_json)
+target_include_directories(embed_layers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../external)
+target_include_directories(embed_layers PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 add_custom_command(
         OUTPUT ${NETWORK_HEADER} ${NETWORK_SOURCE}
-        COMMAND $<TARGET_FILE:bin2h> --raw ${NETWORK_BIN} --config ${NETWORK_CFG} --header ${NETWORK_HEADER} --cpp ${NETWORK_SOURCE}
-        DEPENDS ${NETWORK_BIN} ${NETWORK_CFG} scripts/bin2h.cpp bin2h
-        COMMENT "Generating embedded network_net resource"
+        COMMAND $<TARGET_FILE:embed_layers>
+        --input ${NETWORK_BIN}
+        --header ${NETWORK_HEADER}
+        --cpp ${NETWORK_SOURCE}
+        --config ${NETWORK_CFG}
+        DEPENDS ${NETWORK_BIN} ${NETWORK_CFG} src/embed_layers.cpp embed_layers
+        COMMENT "Generating embedded NNUE network"
 )
 
 add_custom_target(embed_network ALL
         DEPENDS ${NETWORK_HEADER} ${NETWORK_SOURCE}
 )
 
-# Sources
 set(ENGINE_SOURCES
         ${fathom_SOURCE_DIR}/src/tbprobe.c
         ${NETWORK_SOURCE}
 )
 
 add_library(ChePP_engine STATIC ${ENGINE_SOURCES})
+add_dependencies(ChePP_engine embed_network)
 
+target_link_libraries(ChePP_engine cpu_flags)
 target_include_directories(ChePP_engine PUBLIC
-        ${CMAKE_SOURCE_DIR}/engine/include
-        ${CMAKE_SOURCE_DIR}/external
+        include/ChePP/engine
+        include/ChePP/nnue
+        ${CMAKE_CURRENT_SOURCE_DIR}/../external
         ${fathom_SOURCE_DIR}
         ${highway_SOURCE_DIR}
         ${CMAKE_CURRENT_BINARY_DIR}
+        ${GENERATED_DIR}
 )
 
 target_compile_definitions(ChePP_engine PRIVATE TB_NO_THREADS=1)
 
 
-# Store different versions of the exeutable
-# Override the name with -DENGINE_VERSION=name
-# Useful for benchmarking elo gains
 execute_process(
         COMMAND git rev-parse --short HEAD
         WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
@@ -124,16 +156,12 @@ execute_process(
         ERROR_QUIET
         OUTPUT_STRIP_TRAILING_WHITESPACE
 )
-
-if (NOT GIT_HASH)
+if(NOT GIT_HASH)
     set(GIT_HASH "nogit")
 endif()
-
 set(ENGINE_VERSION "${GIT_HASH}" CACHE STRING "Engine version string")
 
-# The UCI version of the engine
-# We could also store the static lib but we don-t really need it
-# (Do we even need the static lib to be compiled separately)
+
 add_executable(ChePP_${ENGINE_VERSION} src/main.cpp)
 target_link_libraries(ChePP_${ENGINE_VERSION} PRIVATE ChePP_engine)
 
@@ -141,14 +169,11 @@ set_target_properties(ChePP_${ENGINE_VERSION} PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin/versions
 )
 
-#add_executable(ChePP_benchmark src/benchmark.cpp)
-#target_link_libraries(ChePP_benchmark PRIVATE ChePP_engine)
-#add_dependencies(ChePP_benchmark ChePP_engine)
-
-#set_target_properties(ChePP_benchmark PROPERTIES
-#        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin
-#)
-
-
+# add_executable(ChePP_benchmark src/benchmark.cpp)
+# target_link_libraries(ChePP_benchmark PRIVATE ChePP_engine)
+# add_dependencies(ChePP_benchmark ChePP_engine)
+# set_target_properties(ChePP_benchmark PROPERTIES
+#     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin
+# )
 
 add_subdirectory(gtests)

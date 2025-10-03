@@ -1,6 +1,8 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
+#include "generated/cpu_features.h"
+
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -94,7 +96,10 @@ struct ArrayStack
 };
 
 // a custom enum of consecutive integers 0 ... N and a NONE value N + 1
-// values will overflow if they go passed the NONE value
+// values will wrap like integers if they go passed the NONE value
+// f eg, for a Color enum with [WHITE, BLACK, NONE], incrementing will result in the following sequence
+// [WHITE, BLACK, NONE, WHITE, BLACK ...], and decrementing [WHITE, NONE, BLACK, WHITE, NONE, BLACK ...]
+// Loop limits can hence always be the NONE value
 template <typename DerivedT, typename UnderlyingT, std::size_t COUNT,
           const std::array<std::string_view, COUNT + 1>& repr, bool EnableInc = false, bool EnableArithmetic = false>
     requires(std::is_integral_v<UnderlyingT> && std::is_unsigned_v<UnderlyingT>)
@@ -144,14 +149,6 @@ struct EnumBase
         os << e.to_string();
         return os;
     }
-
-    static constexpr std::array<DerivedT, COUNT_V> values()
-    {
-        std::array<DerivedT, COUNT_V> arr{};
-        for (std::size_t i = 0; i < COUNT_V; ++i)
-            arr[i] = DerivedT(static_cast<ValueT>(i));
-        return arr;
-    };
 
     friend constexpr DerivedT operator+(const DerivedT a, const int rhs) noexcept
         requires(EnableArithmetic)
@@ -214,6 +211,46 @@ struct EnumBase
     friend constexpr bool operator>(const DerivedT a, const DerivedT b) noexcept { return a.m_val > b.m_val; }
     friend constexpr bool operator>=(const DerivedT a, const DerivedT b) noexcept { return a.m_val >= b.m_val; }
 
+
+    struct iterator {
+        ValueT m_index;
+
+        constexpr explicit iterator(ValueT idx) : m_index(idx) {}
+
+        constexpr DerivedT operator*() const noexcept { return DerivedT(m_index); }
+
+        constexpr iterator& operator++() noexcept {
+            ++m_index;
+            return *this;
+        }
+
+        constexpr iterator operator++(int) noexcept {
+            iterator tmp = *this;
+            ++(*this);
+            return tmp;
+        }
+
+        friend constexpr bool operator==(const iterator& a, const iterator& b) noexcept {
+            return a.m_index == b.m_index;
+        }
+
+        friend constexpr bool operator!=(const iterator& a, const iterator& b) noexcept {
+            return !(a == b);
+        }
+    };
+
+    struct range {
+        iterator m_begin, m_end;
+
+        constexpr iterator begin() const noexcept { return m_begin; }
+        constexpr iterator end() const noexcept { return m_end; }
+    };
+
+    // excluding none
+    [[nodiscard]] static constexpr range all() noexcept {
+        return range{iterator(0), iterator(COUNT_V)};
+    }
+
     // public to simplify memcpy/templating semantics
     ValueT m_val = NONE_VALUE;
 };
@@ -241,11 +278,18 @@ struct EnumArray<T, Enum>
     constexpr ValueT&       operator[](Enum e) noexcept { return data[e.index()]; }
     constexpr const ValueT& operator[](Enum e) const noexcept { return data[e.index()]; }
 
-    constexpr ValueT&                     at(Enum e) { return data.at(e.index()); }
-    [[nodiscard]] constexpr const ValueT& at(Enum e) const { return data.at(e.index()); }
 
-    constexpr ValueT&                     at_index(indexT idx) { return data.at(idx); }
-    [[nodiscard]] constexpr const ValueT& at_index(indexT idx) const { return data.at(idx); }
+    constexpr ValueT&                     at(Enum e)
+    {
+        assert(e.index() < count);
+        return data[e.index()];
+    }
+    [[nodiscard]] constexpr const ValueT& at(Enum e) const
+    {
+        assert(e.index() < count);
+        return data[e.index()];
+    }
+
 
     [[nodiscard]] static constexpr indexT size() noexcept { return count; }
 
@@ -287,8 +331,16 @@ struct EnumArray<T, FirstEnum, RestEnums...>
     SubArrayT&       operator[](FirstEnum e) noexcept { return data[e.index()]; }
     const SubArrayT& operator[](FirstEnum e) const noexcept { return data[e.index()]; }
 
-    SubArrayT&       at(FirstEnum e) { return data.at(e.index()); }
-    const SubArrayT& at(FirstEnum e) const noexcept { return data.at(e.index()); }
+    SubArrayT&       at(FirstEnum e)
+    {
+        assert(e.index() < count);
+        return data[e.index()];
+    }
+    const SubArrayT& at(FirstEnum e) const noexcept
+    {
+        assert(e.index() < count);
+        return data[e.index()];
+    }
 
     [[nodiscard]] static constexpr std::size_t size() noexcept { return count; }
 
@@ -331,20 +383,9 @@ struct File : EnumBase<File, uint8_t, 8, file_repr, true, true>
 
     [[nodiscard]] static constexpr std::optional<File> from_string(const std::string_view& sv)
     {
-        if (sv.size() != 1)
-        {
-            return std::nullopt;
-        }
-        if (sv.at(0) == '-')
-        {
-            return File{NONE_VALUE};
-        }
-        if (sv.at(0) < 'a' || sv.at(0) > 'h')
-        {
-            return std::nullopt;
-        }
-
-        return File{sv.at(0) - 'a'};
+        if (sv.size() != 1 || sv[0] < 'a' || sv[0] > 'h') return std::nullopt;
+        if (sv[0] == '-') return File{NONE_VALUE};
+        return File{sv[0] - 'a'};
     }
 };
 
@@ -367,15 +408,9 @@ struct Rank : EnumBase<Rank, uint8_t, 8, rank_repr, true, true>
 
     [[nodiscard]] static constexpr std::optional<Rank> from_string(const std::string_view& sv)
     {
-        if (sv.size() != 1 || sv.at(0) < '1' || sv.at(0) > '8')
-        {
-            return std::nullopt;
-        }
-        if (sv.at(0) == '-')
-        {
-            return Rank{NONE_VALUE};
-        }
-        return Rank{sv.at(0) - '1'};
+        if (sv.size() != 1 || sv[0] < '1' || sv[0] > '8') return std::nullopt;
+        if (sv[0] == '-') return Rank{NONE_VALUE};
+        return Rank{sv[0] - '1'};
     }
 };
 
@@ -421,15 +456,9 @@ struct Square : EnumBase<Square, uint8_t, 64, square_repr, true, true>
 
     [[nodiscard]] static constexpr std::optional<Square> from_string(const std::string_view& sv)
     {
-        if (sv.size() == 1 && sv.at(0) == '-')
-        {
-            return Square{NONE_VALUE};
-        }
-        if (sv.size() != 2 || sv.at(0) < 'a' || sv.at(0) > 'h' || sv.at(1) < '1' || sv.at(1) > '8')
-        {
-            return std::nullopt;
-        }
-        return Square{File{sv.at(0) - 'a'}, Rank{sv.at(1) - '1'}};
+        if (sv.size() == 1 && sv[0] == '-') return Square{NONE_VALUE};
+        if (sv.size() != 2 || sv[0] < 'a' || sv[0] > 'h' || sv[1] < '1' || sv[1] > '8') return std::nullopt;
+        return Square{File{sv[0] - 'a'}, Rank{sv[1] - '1'}};
     }
 };
 
@@ -541,19 +570,17 @@ struct Color : EnumBase<Color, uint8_t, 2, color_repr>
     using base::EnumBase;
 
     constexpr Color operator~() const { return Color{m_val ^ 1}; }
-    constexpr Color opposite() const { return ~(*this); }
+    [[nodiscard]] constexpr Color opposite() const { return ~(*this); }
     // Prevent misuse of boolean context or !
     constexpr bool     operator!() const     = delete;
     explicit constexpr operator bool() const = delete;
 
     [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string_view& sv)
     {
-        if (sv.size() != 1)
-            return std::nullopt;
+        if (sv.size() != 1) return std::nullopt;
         const char c   = sv[0];
         const int  val = c == 'w' ? 0 : c == 'b' ? 1 : c == '-' ? 2 : 3;
-        if (val == 3)
-            return std::nullopt;
+        if (val == 3) return std::nullopt;
         return Color{val};
     }
 };
@@ -609,6 +636,7 @@ enum Direction
     SOUTH_WEST   = SOUTH + WEST,
     NO_DIRECTION = 0
 };
+
 
 constexpr Direction direction_from(const Square a, const Square b)
 {
@@ -767,16 +795,16 @@ struct CastlingRights
 constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = []
 {
     EnumArray<CastlingRights, Square> t{};
-    for (Square sq = A1; sq <= H8; ++sq)
+    t.fill_pred( [] (const Square sq)
     {
-        t.at(sq) = sq == E1   ? CastlingRights{WHITE_KINGSIDE, WHITE_QUEENSIDE}
-                   : sq == H1 ? CastlingRights{WHITE_KINGSIDE}
-                   : sq == A1 ? CastlingRights{WHITE_QUEENSIDE}
-                   : sq == E8 ? CastlingRights{BLACK_KINGSIDE, BLACK_QUEENSIDE}
-                   : sq == H8 ? CastlingRights{BLACK_KINGSIDE}
-                   : sq == A8 ? CastlingRights{BLACK_QUEENSIDE}
-                              : CastlingRights{};
-    }
+        return sq == E1   ? CastlingRights{WHITE_KINGSIDE, WHITE_QUEENSIDE}
+           : sq == H1 ? CastlingRights{WHITE_KINGSIDE}
+           : sq == A1 ? CastlingRights{WHITE_QUEENSIDE}
+           : sq == E8 ? CastlingRights{BLACK_KINGSIDE, BLACK_QUEENSIDE}
+           : sq == H8 ? CastlingRights{BLACK_KINGSIDE}
+           : sq == A8 ? CastlingRights{BLACK_QUEENSIDE}
+                      : CastlingRights{};
+    });
     return t;
 }();
 
@@ -1211,5 +1239,12 @@ struct VectorHandle
     bool operator==(const VectorHandle& other) const { return ptr == other.ptr && index == other.index; }
     bool operator!=(const VectorHandle& other) const { return !(*this == other); }
 };
+
+template <typename Pred1, typename Pred2>
+auto or_predicate(Pred1 a, Pred2 b) {
+    return [=](auto&& x) { return a(x) || b(x); };
+}
+
+
 
 #endif

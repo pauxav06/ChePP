@@ -1,4 +1,4 @@
-#include "ChePP/engine/UCI.h"
+#include "UCI.h"
 
 int main() {
     UCIEngine engine{false};
@@ -8,6 +8,8 @@ int main() {
         "go depth 20\n"
         "quit\n"
     );
+    //engine.loop(bench_input);
+    //engine = UCIEngine();
     engine.loop(std::cin);
     return 0;
 }

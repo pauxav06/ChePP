@@ -5,7 +5,7 @@
 #ifndef CHEPP_FORMATTING_H
 #define CHEPP_FORMATTING_H
 
-#include "ChePP/engine/position.h"
+#include "position.h"
 
 #include <regex>
 

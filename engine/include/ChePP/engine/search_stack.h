@@ -7,12 +7,12 @@
 
 #include "nnue.h"
 #include "history.h"
+#include "position.h"
 
 #include <cassert>
 #include <cstddef>
 #include <memory>
 
-#include "ChePP/engine/position.h"
 
 
 
@@ -25,7 +25,7 @@ public:
         int ply{};
 
         Positions::Handle position{};
-        Accumulators::Handle accumulator{};
+        nnue::Accumulators::Handle accumulator{};
 
         bool is_repetition{false};
         int static_eval{0};
@@ -120,7 +120,7 @@ private:
         node.prev = nullptr;
         node.ply = 0;
         node.position = Positions::Handle{nullptr, 0};
-        node.accumulator = Accumulators::Handle{nullptr, 0};
+        node.accumulator = nnue::Accumulators::Handle{nullptr, 0};
         node.history = nullptr;
         node.capture_history = nullptr;
         node.refutation_history = nullptr;
@@ -130,7 +130,7 @@ private:
     }
 
     Positions m_positions;
-    Accumulators m_accumulators;
+    nnue::Accumulators m_accumulators;
     std::unique_ptr<Node[]> m_nodes;
 
     std::unique_ptr<History> m_history{};

@@ -4,9 +4,7 @@
 #include "types.h"
 
 #include <cstdint>
-#include <array>
 #include <random>
-#include <mutex>
 
 namespace prng
 {
@@ -26,66 +24,38 @@ namespace Zobrist
 {
     using Hash = uint64_t;
 
-    inline const auto& psq_table()
+    inline EnumArray<Hash, Piece, Square> PSQ_TABLE;
+    inline EnumArray<Hash, File> EP_TABLE;
+    inline EnumArray<Hash, CastlingType> CASTLING_TABLE;
+    inline Hash SIDE_TABLE = 0;
+
+    struct Initialiser
     {
-        static const auto& table = [] {
-            EnumArray<Hash, Piece, Square> t{};
+        Initialiser()
+        {
             auto& gen = prng::thread_local_gen();
-            t.fill_pred([&gen]([[maybe_unused]] auto _, [[maybe_unused]] auto __) {
+
+            PSQ_TABLE.fill_pred([&gen]([[maybe_unused]] auto, [[maybe_unused]] auto) {
                 return prng::next_u64(gen);
             });
-            return t;
-        }();
-        return table;
-    }
 
-    inline const auto& ep_table()
-    {
-        static const auto& table = [] {
-            EnumArray<Hash, File> t{};
-            auto& gen = prng::thread_local_gen();
-            t.fill_pred([&gen]([[maybe_unused]] auto _) {
+            EP_TABLE.fill_pred([&gen]([[maybe_unused]] auto) {
                 return prng::next_u64(gen);
             });
-            return t;
-        }();
-        return table;
-    }
 
-    inline const auto& castling_table()
-    {
-        static const auto& table = [] {
-            EnumArray<Hash, CastlingType> t{};
-            auto& gen = prng::thread_local_gen();
-            t.fill_pred([&gen]([[maybe_unused]] auto _) {
+            CASTLING_TABLE.fill_pred([&gen]([[maybe_unused]] auto) {
                 return prng::next_u64(gen);
             });
-            return t;
-        }();
-        return table;
-    }
 
-    inline Hash side_table()
-    {
-        static const Hash value = [] {
-            auto& gen = prng::thread_local_gen();
-            return prng::next_u64(gen);
-        }();
-        return value;
-    }
+            SIDE_TABLE = prng::next_u64(gen);
+        }
+    };
 
-    inline Hash no_pawns_table()
-    {
-        static const Hash value = [] {
-            auto& gen = prng::thread_local_gen();
-            return prng::next_u64(gen);
-        }();
-        return value;
-    }
+    inline Initialiser _zobrist_initializer;
 
     inline void flip_piece(Hash& hash, const Piece pt, const Square sq)
     {
-        hash ^= psq_table().at(pt).at(sq);
+        hash ^= PSQ_TABLE.at(pt).at(sq);
     }
 
     inline void move_piece(Hash& hash, const Piece pt, const Square from, const Square to)
@@ -105,20 +75,25 @@ namespace Zobrist
         for (auto type : {WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE})
         {
             if (mask & type.mask())
-                hash ^= castling_table().at(type);
+                hash ^= CASTLING_TABLE.at(type);
         }
     }
 
     inline void flip_ep(Hash& hash, const File fl)
     {
-        hash ^= ep_table().at(fl);
+        hash ^= EP_TABLE.at(fl);
     }
 
     inline void flip_color(Hash& hash)
     {
-        hash ^= side_table();
+        hash ^= SIDE_TABLE;
     }
 
-} // namespace zobrist
+    inline Hash side_table()
+    {
+        return SIDE_TABLE;
+    }
+
+} // namespace Zobrist
 
 #endif // ZOBRIST_H

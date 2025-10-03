@@ -3,6 +3,7 @@
 //
 
 #include <ChePP/engine/position.h>
+#include <ChePP/engine/init.h>
 #include <gtest/gtest.h>
 
 TEST(ThreeFoldRepetitions, FourNullMoveIsDraw)
