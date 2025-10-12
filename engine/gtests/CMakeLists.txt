@@ -5,7 +5,6 @@ set (TEST_SOURCES
         perft_tests.cpp
         repetitions_test.cpp
         zobrist_tests.cpp
-        #layers_test.cpp
         nnue_test.cpp
         affine_test.cpp
         accum_test.cpp
