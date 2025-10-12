@@ -1,8 +1,6 @@
 #ifndef SIMPLE_NNUE_H
 #define SIMPLE_NNUE_H
 
-#include "layers.h"
-
 #include <algorithm>
 #include <array>
 #include <cassert>
@@ -12,11 +10,7 @@
 #include <cstring>
 #include <vector>
 
-#include "../nnue/layers.h"
 #include "position.h"
-
-#include "../nnue/simd/operations.h"
-#include "layers.h"
 
 namespace nnue
 {
@@ -109,22 +103,25 @@ namespace nnue
         Accumulator() = default;
         explicit Accumulator(const Position& pos)
         {
+            /**
             const auto [wadd, wrem] = FeatureTransformer::get_features(pos, pos, WHITE, true);
             refresh_acc(WHITE, wadd);
             const auto [badd, brem] = FeatureTransformer::get_features(pos, pos, BLACK, true);
             refresh_acc(BLACK, badd);
             m_bucket = (pos.occupancy().popcount() - 1) / 4;
+            **/
         }
 
         explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev)
         {
+            /**
             update(acc_prev, pos_cur, pos_prev, WHITE);
             update(acc_prev, pos_cur, pos_prev, BLACK);
             m_bucket = (pos_cur.occupancy().popcount() - 1) / 4;
-
+            **/
         }
 
-        static NOINLINE Accumulator bench_refresh(const Position& pos) { return Accumulator(pos); }
+        static Accumulator bench_refresh(const Position& pos) { return Accumulator(pos); }
 
         [[nodiscard]] size_t bucket() const { return m_bucket; }
 
@@ -144,6 +141,7 @@ namespace nnue
         // would force intermediate stores bc we don't have enough registers
         void refresh_acc(const Color view, const FeatureTransformer::RetT& features)
         {
+            /**
             using namespace simd;
             using AccumTag = pick_tag_t<int16_t>;
             using Vec16    = register_type_t<AccumTag>;
@@ -189,11 +187,13 @@ namespace nnue
                 psqt_accumulator = add<PsqtTag>(psqt_accumulator, w[0]);
             }
             psqt[0] = psqt_accumulator;
+            **/
         };
 
         void update_acc(const Accumulator& previous, const Color view, const FeatureTransformer::RetT& added_features,
                         const FeatureTransformer::RetT& removed_features)
         {
+            /**
             using namespace simd;
             using AccumTag = pick_tag_t<int16_t>;
             using Vec16    = register_type_t<AccumTag>;
@@ -250,6 +250,7 @@ namespace nnue
                 psqt_accumulator = sub<PsqtTag>(psqt_accumulator, w[0]);
             }
             psqt[0] = psqt_accumulator;
+            **/
         }
 
     public:
@@ -304,6 +305,7 @@ namespace nnue
               std::size_t L2Sz_ = 32>
     struct ArchTpl
     {
+        /**
         static constexpr std::size_t Buckets = Buckets_;
         static constexpr std::size_t AccSz   = AccSz_;
         static constexpr std::size_t PsqtSz  = PsqtSz_;
@@ -319,11 +321,13 @@ namespace nnue
         using layer3  = affine::AffineLayer<1, L2Sz>;
 
         using ft_relu = relu::QuantizedClippedRelu16_8<AccSz>;
+        **/
     };
 
     template <typename Arch>
     struct Network
     {
+        /**
         using arch_t    = Arch;
         using layer1_t  = typename arch_t::layer1;
         using l1_relu_t = typename arch_t::l1_relu;
@@ -340,6 +344,7 @@ namespace nnue
         std::array<layer1_t, Buckets> m_l1{};
         std::array<layer2_t, Buckets> m_l2{};
         std::array<layer3_t, Buckets> m_l3{};
+        **/
 
         Network() = default;
 
@@ -348,16 +353,19 @@ namespace nnue
         void load_weights(const L1WArr& l1_w, const L1BArr& l1_b, const L2WArr& l2_w, const L2BArr& l2_b,
                           const OUTWArr& out_w, const OUTBArr& out_b)
         {
+            /**
             for (std::size_t b = 0; b < Buckets; ++b)
             {
                 m_l1.at(b).load_weights(l1_w[b], l1_b[b]);
                 m_l2.at(b).load_weights(l2_w[b], l2_b[b]);
                 m_l3.at(b).load_weights(out_w[b], out_b[b]);
             }
+            **/
         }
 
         [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view, std::size_t bucket) const
         {
+            /**
             alignas(64) thread_local std::array<int8_t, 2 * AccSz> l1_in{};
             alignas(64) thread_local std::array<int32_t, L1Sz>     l1_out{};
             alignas(64) thread_local std::array<int8_t, L1Sz>      l2_in{};
@@ -379,6 +387,8 @@ namespace nnue
             const int32_t psqt = (acc.m_psqts[view][bucket] - acc.m_psqts[~view][bucket]) / 2;
 
             return out + psqt;
+            **/
+            return 0;
         }
 
         [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view) const
@@ -388,6 +398,7 @@ namespace nnue
 
         void evaluate_uci(const Accumulator& acc, const Color view) const
         {
+            /**
             for (std::size_t i = 0; i < Buckets; ++i)
             {
                 std::cout << std::format("Eval for bucket {} : {}", i, evaluate(acc, view, i));
@@ -397,9 +408,10 @@ namespace nnue
                 }
                 std::cout << std::endl;
             }
+            **/
         }
 
-        [[nodiscard]] NOINLINE int32_t bench_eval(const Accumulator& acc, Color view) const
+        [[nodiscard]] int32_t bench_eval(const Accumulator& acc, Color view) const
         {
             return evaluate(acc, view);
         }
@@ -411,7 +423,9 @@ namespace nnue
     {
         Initialiser()
         {
+            /**
             network.load_weights(l1_weights, l1_biases, l2_weights, l2_biases, out_weights, out_biases);
+            **/
         }
     };
 } // namespace nnue
