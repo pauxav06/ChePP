@@ -8,6 +8,10 @@
 #include <cmath>
 #include <iomanip>
 
+// Utility for transforming weight matrices of nnue
+// Relies on type erasure for ease of use
+// Therefore this should not be used in hot paths as it will not be optimised for speed
+
 template <typename T>
 struct AnyMatrixView {
     struct Concept {
