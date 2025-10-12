@@ -1,9 +1,11 @@
+#include "utils.h"
+
 #include <hwy/aligned_allocator.h>
-#include <mdspan/mdarray.hpp>
+#include <experimental/mdspan>
+#include <experimental/mdarray>
 #include <vector>
 #include <cassert>
 #include <cstring>
-#include "utils.h"
 
 #if defined(CHEPP_ACCUM_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_ACCUM_INL_H_
@@ -22,6 +24,7 @@ namespace chepp::nnue::layers::accum
     {
         namespace hn = hwy::HWY_NAMESPACE;
         namespace nn = chepp::nnue::HWY_NAMESPACE;
+        using namespace std::experimental;
 
         template <typename InT, size_t Rows_, typename OutT, size_t Columns_>
         struct ScalarKernel
@@ -34,15 +37,11 @@ namespace chepp::nnue::layers::accum
 
             using idx_span_t = std::span<input_type>;
 
-            using bias_extent_t = Kokkos::extents<size_t, Columns>;
-            using bias_array_t = Kokkos::Experimental::mdarray<const output_type, bias_extent_t,
-                                                                Kokkos::layout_right,
-                                                                hwy::AlignedVector<output_type>>;
+            using bias_extent_t = extents<size_t, Columns>;
+            using bias_array_t = mdarray<const output_type, bias_extent_t, layout_right, hwy::AlignedVector<output_type>>;
 
-            using weights_extent_t = Kokkos::extents<size_t, Rows, Columns>;
-            using weight_array_t = Kokkos::Experimental::mdarray<const output_type, weights_extent_t,
-                                                                 Kokkos::layout_right,
-                                                                 hwy::AlignedVector<output_type>>;
+            using weights_extent_t = extents<size_t, Rows, Columns>;
+            using weight_array_t = mdarray<const output_type, weights_extent_t, layout_right, hwy::AlignedVector<output_type>>;
 
             static constexpr weights_extent_t WeightsExtent{Rows, Columns};
 
@@ -92,23 +91,21 @@ namespace chepp::nnue::layers::accum
             static HWY_LANES_CONSTEXPR size_t Lanes = hn::Lanes(D());
             static HWY_LANES_CONSTEXPR size_t Chunks = Columns / (Lanes * Unroll);
 
-            using vec_extent_t = Kokkos::extents<size_t,
+            using vec_extent_t = extents<size_t,
                 nn::extent_if_constexpr_v<Chunks>,
                 Unroll,
                 nn::extent_if_constexpr_v<Lanes>
             >;
-            using vec_span_t = Kokkos::mdspan<T, vec_extent_t>;
+            using vec_span_t = mdspan<T, vec_extent_t>;
             using sparse_input_span_t = std::span<const IdxT>;
 
-            using weights_extent_t = Kokkos::extents<size_t, Rows,
+            using weights_extent_t = extents<size_t, Rows,
                 nn::extent_if_constexpr_v<Chunks>,
                 nn::extent_if_constexpr_v<Unroll>,
                 nn::extent_if_constexpr_v<Lanes>>;
 
 
-            using weight_array_t = Kokkos::Experimental::mdarray<const T, weights_extent_t,
-                                                                 Kokkos::layout_right,
-                                                                 std::vector<T, hwy::AlignedAllocator<T>>>;
+            using weight_array_t = mdarray<const T, weights_extent_t,layout_right, hwy::AlignedVector<T>>;
 
             static HWY_LANES_CONSTEXPR weights_extent_t WeightsExtent{Rows, Chunks, Unroll, Lanes};
             static HWY_LANES_CONSTEXPR vec_extent_t VecExtent{Chunks, Unroll, Lanes};

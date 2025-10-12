@@ -5,7 +5,8 @@
 
 #include <array>
 #include <cstddef>
-#include <mdspan/mdspan.hpp>
+#include <experimental/mdspan>
+#include <experimental/mdarray>
 
 namespace chepp::nnue::utils
 {

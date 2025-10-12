@@ -1,5 +1,7 @@
+#include <experimental/mdspan>
 #include <hwy/base.h>
-#include <mdspan/mdarray.hpp>
+#include <experimental/mdspan>
+#include <experimental/mdarray>
 
 #if defined(CHEPP_RELU_INL_H) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_RELU_INL_H
@@ -19,6 +21,7 @@ namespace chepp::nnue::layers::relu
     {
         namespace hn = hwy::HWY_NAMESPACE;
         namespace nn = chepp::nnue::HWY_NAMESPACE;
+        using namespace std::experimental;
 
 
         template <typename T>
@@ -63,16 +66,16 @@ namespace chepp::nnue::layers::relu
             static HWY_LANES_CONSTEXPR size_t ChunksIn  = Size / InLanes;
             static HWY_LANES_CONSTEXPR size_t ChunksOut = Size / OutLanes;
 
-            using in_extent_t  = Kokkos::extents<size_t,
+            using in_extent_t  = extents<size_t,
                 nn::extent_if_constexpr_v<ChunksIn / 2>,
                 2,
                 nn::extent_if_constexpr_v<InLanes>>;
-            using out_extent_t = Kokkos::extents<size_t,
+            using out_extent_t = extents<size_t,
                 nn::extent_if_constexpr_v<ChunksOut>,
                 nn::extent_if_constexpr_v<OutLanes>>;
 
-            using in_t         = Kokkos::mdspan<const InputT, in_extent_t>;
-            using out_t        = Kokkos::mdspan<OutT, out_extent_t>;
+            using in_t         = mdspan<const InputT, in_extent_t>;
+            using out_t        = mdspan<OutT, out_extent_t>;
 
             static HWY_LANES_CONSTEXPR in_extent_t  InExtent{ChunksIn / 2, 2, InLanes};
             static HWY_LANES_CONSTEXPR out_extent_t OutExtent{ChunksOut, OutLanes};
@@ -127,13 +130,13 @@ namespace chepp::nnue::layers::relu
             static HWY_LANES_CONSTEXPR size_t ChunksIn  = Size / InLanes;
             static HWY_LANES_CONSTEXPR size_t ChunksOut = Size / OutLanes;
 
-            using in_extent_t = Kokkos::extents<
+            using in_extent_t = extents<
                 size_t,
                 nn::extent_if_constexpr_v<ChunksIn / 4>,
                 4,
                 nn::extent_if_constexpr_v<InLanes>>;
 
-            using out_extent_t = Kokkos::extents<
+            using out_extent_t = extents<
                 size_t,
                 nn::extent_if_constexpr_v<ChunksOut>,
                 nn::extent_if_constexpr_v<OutLanes>>;
@@ -141,8 +144,8 @@ namespace chepp::nnue::layers::relu
             static constexpr in_extent_t  InExtent{ChunksIn / 4, 4, InLanes};
             static constexpr out_extent_t OutExtent{ChunksOut, OutLanes};
 
-            using in_t  = Kokkos::mdspan<const InputT, in_extent_t>;
-            using out_t = Kokkos::mdspan<OutT, out_extent_t>;
+            using in_t  = mdspan<const InputT, in_extent_t>;
+            using out_t = mdspan<OutT, out_extent_t>;
 
             HWY_NOINLINE static void forward(const InputT* HWY_RESTRICT input, OutT* HWY_RESTRICT output)
             {
