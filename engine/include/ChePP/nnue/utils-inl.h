@@ -1,3 +1,7 @@
+#include "utils.h"
+#include <experimental/mdspan>
+#include <experimental/mdarray>
+
 #if defined(CHEPP_UNROLLER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_UNROLLER_INL_H_
 #undef CHEPP_UNROLLER_INL_H_
@@ -49,7 +53,7 @@ namespace chepp
         namespace HWY_NAMESPACE
         {
             namespace hn = hwy::HWY_NAMESPACE;
-
+            using namespace std::experimental;
 
 
             // The highway documentation warns us about using STL containers for SIMD vectors because they are sizeless
@@ -101,7 +105,7 @@ VecT reg##I = [=] { if constexpr ((I) < N) return init(I); else return hn::Undef
 
             template <bool has_constexpr, size_t Value>
             struct conditional_extent {
-                static constexpr size_t value = has_constexpr ? Value : Kokkos::dynamic_extent;
+                static constexpr size_t value = has_constexpr ? Value : std::dynamic_extent;
             };
 
             template <size_t Value>

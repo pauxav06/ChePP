@@ -1,12 +1,11 @@
 #include "hwy/auto_tune.h"
 #include "layers.h"
-#include "simd/traits.h"
 #include "transformations.hpp"
 #include "utils.h"
 
 #include <hwy/aligned_allocator.h>
-#include <mdspan/mdarray.hpp>
-
+#include <experimental/mdspan>
+#include <experimental/mdarray>
 
 #if defined(CHEPP_AFFINE_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_AFFINE_INL_H_
@@ -26,6 +25,7 @@ namespace chepp::nnue::layers::affine
     {
         namespace hn = hwy::HWY_NAMESPACE;
         namespace nn = chepp::nnue::HWY_NAMESPACE;
+        using namespace std::experimental;
 
         template <Kernels K>
         struct Params;
@@ -43,12 +43,13 @@ namespace chepp::nnue::layers::affine
         template <Params<Kernels::Scalar> P>
         struct Kernel<Kernels::Scalar, P>
         {
+
             static constexpr size_t Rows = P.Rows;
             static constexpr size_t Cols = P.Cols;
-            using weights_extent_t = Kokkos::extents<size_t, Rows, Cols>;
-            using biases_extent_t  = Kokkos::extents<size_t, Cols>;
-            using weights_t        = Kokkos::mdspan<const int8_t, weights_extent_t>;
-            using bias_t           = Kokkos::mdspan<const int32_t, biases_extent_t>;
+            using weights_extent_t = extents<size_t, Rows, Cols>;
+            using biases_extent_t  = extents<size_t, Cols>;
+            using weights_t        = mdspan<const int8_t, weights_extent_t>;
+            using bias_t           = mdspan<const int32_t, biases_extent_t>;
             weights_extent_t m_weights_extent{};
             biases_extent_t  m_biases_extent{};
 
@@ -97,7 +98,11 @@ namespace chepp::nnue::layers::affine
             static constexpr size_t Columns = Columns_;
             static_assert(Columns % (4 * Unroll) == 0);
 
-            using Di8    = hn::ScalableTag<int8_t>;
+            using input_type = int8_t;
+            using output_type = int32_t;
+            using extent_type = size_t;
+
+            using Di8    = hn::ScalableTag<input_type>;
             using Du8    = hn::RebindToUnsigned<Di8>;
             using Di16   = hn::RepartitionToWide<Di8>;
             using Di32   = hn::RepartitionToWide<Di16>;
@@ -106,56 +111,39 @@ namespace chepp::nnue::layers::affine
             using Veci16 = hn::VFromD<Di16>;
             using Veci32 = hn::VFromD<Di32>;
 
-            static constexpr size_t Chunks = Columns / 4 / Unroll;
+            static constexpr extent_type Chunks = Columns / 4 / Unroll;
             // Lanes might or might not be constexpr :) We must not assume they are
-            static HWY_LANES_CONSTEXPR size_t D8Lanes  = hn::Lanes(Di8());
-            static HWY_LANES_CONSTEXPR size_t D32Lanes = hn::Lanes(Di32());
+            static HWY_LANES_CONSTEXPR extent_type D8Lanes  = hn::Lanes(Di8());
+            static HWY_LANES_CONSTEXPR extent_type D32Lanes = hn::Lanes(Di32());
 
-            static HWY_LANES_CONSTEXPR size_t Rows       = utils::pad_up(Rows_, D32Lanes);
-            static HWY_LANES_CONSTEXPR size_t RowPadding = Rows - Rows_;
-            static HWY_LANES_CONSTEXPR size_t Blocks     = Rows / D32Lanes;
+            static HWY_LANES_CONSTEXPR extent_type Rows       = utils::pad_up(Rows_, D32Lanes);
+            static HWY_LANES_CONSTEXPR extent_type RowPadding = Rows - Rows_;
+            static HWY_LANES_CONSTEXPR extent_type Blocks     = Rows / D32Lanes;
 
-
-            // we make extensive internal use of mdspan/mdarray in multiple layer implementations.
-            // this makes indexing a lot more flexible, safe and efficient as constexpr extents will always be
-            // correctly precomputed. Unfortunatly it is not yet widely implemented by all compilers so we just pull
-            // it from the GitHub repo.
-            using weights_extent_t = Kokkos::extents<size_t,
+            using weights_extent_t = extents<extent_type,
                 nn::extent_if_constexpr_v<Blocks>,
                 Chunks,
                 Unroll,
                 nn::extent_if_constexpr_v<D8Lanes>>;
-            using biases_extent_t  = Kokkos::extents<size_t,
+            using biases_extent_t  = extents<extent_type,
                 nn::extent_if_constexpr_v<Blocks>,
                 nn::extent_if_constexpr_v<D32Lanes>>;
 
             static HWY_LANES_CONSTEXPR weights_extent_t WeightsExtent{Blocks, Chunks, Unroll, D8Lanes};
             static HWY_LANES_CONSTEXPR biases_extent_t  BiasesExtent{Blocks, D32Lanes};
 
-            using input_extent_t = Kokkos::extents<size_t, Chunks, Unroll, 4>;
+            using input_extent_t = extents<extent_type, Chunks, Unroll, 4>;
             static HWY_LANES_CONSTEXPR input_extent_t InputExtent{};
             using padded_output_extent_t                                         = biases_extent_t;
             static HWY_LANES_CONSTEXPR padded_output_extent_t PaddedOutputExtent = BiasesExtent;
 
-            using input_t         = Kokkos::mdspan<const int8_t, input_extent_t>;
-            using weights_array_t = Kokkos::Experimental::mdarray<const int8_t, weights_extent_t, Kokkos::layout_right,
-                                                                  hwy::AlignedVector<int8_t>>;
-            using biases_array_t  = Kokkos::Experimental::mdarray<const int32_t, biases_extent_t, Kokkos::layout_right,
-                                                                  hwy::AlignedVector<int32_t>>;
-            using output_array_t  = Kokkos::Experimental::mdarray<int32_t, padded_output_extent_t, Kokkos::layout_right,
-                                                                  hwy::AlignedVector<int32_t>>;
+            using input_view_t    = mdspan<const input_type, input_extent_t>;
+            using weights_array_t = mdarray<const input_type, weights_extent_t, layout_right, hwy::AlignedVector<input_type>>;
+            using biases_array_t  = mdarray<const output_type, biases_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+            using output_array_t  = mdarray<output_type, padded_output_extent_t, layout_right, hwy::AlignedVector<output_type>>;
 
             weights_array_t m_weights;
             biases_array_t  m_biases;
-
-            static HWY_LANES_CONSTEXPR bool valid_split = []()
-            {
-                size_t t = 1;
-                for (int r = 0; r < weights_extent_t::rank(); ++r) t *= WeightsExtent.extent(r);
-                return t == Rows * Columns;
-            }();
-
-            HWY_STATIC_ASSERT(valid_split, "Weights split does not match total size");
 
             // for every target, both versions will be compiled, the best one will be chosen at runtime
             static constexpr auto SumOfMulQuadAcc = [](const Vecu8 a, const Veci8 b, const Veci32 acc)
@@ -201,10 +189,10 @@ namespace chepp::nnue::layers::affine
                 }
             }
 
-            void forward(const int8_t* HWY_RESTRICT input_ptr, int32_t* HWY_RESTRICT output_ptr) const
+            void forward(const input_type* HWY_RESTRICT input_ptr, output_type* HWY_RESTRICT output_ptr) const
             {
                 thread_local output_array_t tmp_out{PaddedOutputExtent};
-                const input_t               input{input_ptr, InputExtent};
+                const input_view_t               input{input_ptr, InputExtent};
 
                 for (auto b = 0; b < m_weights.extent(0); ++b)
                 {
@@ -216,8 +204,9 @@ namespace chepp::nnue::layers::affine
                             {
                                 for (auto u = 0; u < m_weights.extent(2); ++u)
                                 {
+                                    using packed_type = output_type;
                                     Veci32        reg    = get_reg(u);
-                                    const int32_t in_val = *reinterpret_cast<const int32_t*>(&input[c, u, 0]);
+                                    const packed_type in_val = *reinterpret_cast<const packed_type*>(&input[c, u, 0]);
                                     reg                  = SumOfMulQuadAcc(hn::BitCast(Du8(), hn::Set(Di32(), in_val)),
                                                                            hn::Load(Di8(), &m_weights[b, c, u, 0]), reg);
                                     set_reg(u, reg);
@@ -230,7 +219,7 @@ namespace chepp::nnue::layers::affine
 
 
                     // final write into the non-padded buffer
-                    std::memcpy(output_ptr, tmp_out.data(), Rows_ * sizeof(int32_t));
+                    std::memcpy(output_ptr, tmp_out.data(), Rows_ * sizeof(output_type));
                 }
             }
         };
