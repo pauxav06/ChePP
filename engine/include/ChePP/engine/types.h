@@ -1,8 +1,6 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
-#include "generated/cpu_features.h"
-
 #include <algorithm>
 #include <array>
 #include <bit>
@@ -48,8 +46,8 @@ struct ArrayStack
         return m_data[i];
     }
 
-    void clear() { m_size = 0; }
-    void shrink(size_type n)
+    void clear() noexcept { m_size = 0; }
+    void shrink(const size_type n)
     {
         assert(n <= m_size);
         m_size -= n;
@@ -136,12 +134,12 @@ struct EnumBase
     [[nodiscard]] static constexpr std::size_t count() noexcept { return COUNT_V; }
     [[nodiscard]] static constexpr std::size_t total() noexcept { return TOTAL_V; }
 
-    [[nodiscard]] constexpr std::string to_string() const { return std::string(repr.at(index())); }
+    [[nodiscard]] constexpr std::string to_string() const { return std::string{repr.at(index())}; }
 
     [[nodiscard]] static constexpr std::optional<DerivedT> from_string(const std::string_view& sv)
     {
         const auto it = std::ranges::find(repr, sv);
-        return it == repr.end() ? std::nullopt : std::optional{DerivedT(std::distance(repr.begin(), it))};
+        return it == repr.end() ? std::nullopt : std::optional{DerivedT{std::distance(repr.begin(), it)}};
     }
 
     friend std::ostream& operator<<(std::ostream& os, const EnumBase& e)
@@ -275,16 +273,16 @@ struct EnumArray<T, Enum>
     ContainerT data;
 
     // Access
-    constexpr ValueT&       operator[](Enum e) noexcept { return data[e.index()]; }
-    constexpr const ValueT& operator[](Enum e) const noexcept { return data[e.index()]; }
+    constexpr ValueT&       operator[](const Enum e) noexcept { return data[e.index()]; }
+    constexpr const ValueT& operator[](const Enum e) const noexcept { return data[e.index()]; }
 
 
-    constexpr ValueT&                     at(Enum e)
+    constexpr ValueT&                     at(const Enum e)
     {
         assert(e.index() < count);
         return data[e.index()];
     }
-    [[nodiscard]] constexpr const ValueT& at(Enum e) const
+    [[nodiscard]] constexpr const ValueT& at(const Enum e) const
     {
         assert(e.index() < count);
         return data[e.index()];
@@ -328,15 +326,15 @@ struct EnumArray<T, FirstEnum, RestEnums...>
 
     ContainerT data;
 
-    SubArrayT&       operator[](FirstEnum e) noexcept { return data[e.index()]; }
-    const SubArrayT& operator[](FirstEnum e) const noexcept { return data[e.index()]; }
+    SubArrayT&       operator[](const FirstEnum e) noexcept { return data[e.index()]; }
+    const SubArrayT& operator[](const FirstEnum e) const noexcept { return data[e.index()]; }
 
-    SubArrayT&       at(FirstEnum e)
+    SubArrayT&       at(const FirstEnum e)
     {
         assert(e.index() < count);
         return data[e.index()];
     }
-    const SubArrayT& at(FirstEnum e) const noexcept
+    const SubArrayT& at(const FirstEnum e) const noexcept
     {
         assert(e.index() < count);
         return data[e.index()];
@@ -438,11 +436,11 @@ struct Square : EnumBase<Square, uint8_t, 64, square_repr, true, true>
     using base::EnumBase;
 
     constexpr explicit Square(const Coordinates& coordinates)
-        : EnumBase(coordinates.first.index() + (coordinates.second.index() << 3))
+        : EnumBase{coordinates.first.index() + (coordinates.second.index() << 3)}
     {
     }
 
-    constexpr explicit Square(const File file, const Rank rank) : Square(Coordinates{file, rank}) {}
+    constexpr explicit Square(const File file, const Rank rank) : Square{Coordinates{file, rank}} {}
 
     [[nodiscard]] constexpr File file() const noexcept { return File{m_val & 7}; }
 
@@ -458,7 +456,7 @@ struct Square : EnumBase<Square, uint8_t, 64, square_repr, true, true>
     {
         if (sv.size() == 1 && sv[0] == '-') return Square{NONE_VALUE};
         if (sv.size() != 2 || sv[0] < 'a' || sv[0] > 'h' || sv[1] < '1' || sv[1] > '8') return std::nullopt;
-        return Square{File{sv[0] - 'a'}, Rank{sv[1] - '1'}};
+        return std::optional{Square{File{sv[0] - 'a'}, Rank{sv[1] - '1'}}};
     }
 };
 
@@ -569,19 +567,19 @@ struct Color : EnumBase<Color, uint8_t, 2, color_repr>
     using base = EnumBase;
     using base::EnumBase;
 
-    constexpr Color operator~() const { return Color{m_val ^ 1}; }
-    [[nodiscard]] constexpr Color opposite() const { return ~(*this); }
+    constexpr Color operator~() const noexcept { return Color{m_val ^ 1}; }
+    [[nodiscard]] constexpr Color opposite() const noexcept { return ~(*this); }
     // Prevent misuse of boolean context or !
     constexpr bool     operator!() const     = delete;
     explicit constexpr operator bool() const = delete;
 
-    [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string_view& sv)
+    [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string_view& sv) noexcept
     {
         if (sv.size() != 1) return std::nullopt;
         const char c   = sv[0];
         const int  val = c == 'w' ? 0 : c == 'b' ? 1 : c == '-' ? 2 : 3;
         if (val == 3) return std::nullopt;
-        return Color{val};
+        return std::optional{Color{val}};
     }
 };
 
@@ -597,11 +595,11 @@ struct Piece : EnumBase<Piece, uint8_t, 12, piece_repr, true, true>
     using base = EnumBase;
     using base::EnumBase;
 
-    explicit constexpr Piece(const Color c, const PieceType pt) : EnumBase(c.value() + (pt.value() << 1)) {}
+    explicit constexpr Piece(const Color c, const PieceType pt) : EnumBase{c.value() + (pt.value() << 1)} {}
 
-    [[nodiscard]] constexpr PieceType type() const { return PieceType{m_val >> 1}; }
+    [[nodiscard]] constexpr PieceType type() const noexcept { return PieceType{m_val >> 1}; }
 
-    [[nodiscard]] constexpr Color color() const { return Color{m_val & 1}; }
+    [[nodiscard]] constexpr Color color() const noexcept { return Color{m_val & 1}; }
 
     using PieceValueT = int;
     [[nodiscard]] constexpr PieceValueT piece_value() const { return piece_type_value.at(this->type()); }
@@ -652,11 +650,11 @@ constexpr Direction direction_from(const Square a, const Square b)
     return dir_table.at((nr + 1) * 3 + (nf + 1));
 }
 
-constexpr Square operator+(const Square s, const Direction d)
+constexpr Square operator+(const Square s, const Direction d) noexcept
 {
     return Square{s.value() + d};
 }
-constexpr Square operator-(const Square s, const Direction d)
+constexpr Square operator-(const Square s, const Direction d) noexcept
 {
     return Square{s.value() - d};
 }
@@ -691,8 +689,8 @@ struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
 
     constexpr explicit CastlingType(const Color c, const CastlingSide side) : CastlingType((c.value() << 1) + side) {}
 
-    [[nodiscard]] constexpr Color        color() const { return Color{m_val >> 1}; }
-    [[nodiscard]] constexpr CastlingSide side() const { return static_cast<CastlingSide>(m_val & 1); }
+    [[nodiscard]] constexpr Color        color() const noexcept { return Color{m_val >> 1}; }
+    [[nodiscard]] constexpr CastlingSide side() const noexcept { return static_cast<CastlingSide>(m_val & 1); }
 
     [[nodiscard]] constexpr ValueT mask() const { return m_val == 4 ? 0 : 1 << m_val; }
 
@@ -726,17 +724,17 @@ struct CastlingRights
     constexpr CastlingRights() : m_mask(0) {}
 
     template <typename int_type, std::enable_if_t<std::is_integral_v<int_type>, int> = 0>
-    constexpr explicit CastlingRights(const int_type mask) : m_mask(std::min(mask, static_cast<int_type>(0b1111)))
+    constexpr explicit CastlingRights(const int_type mask) noexcept : m_mask(std::min(mask, static_cast<int_type>(0b1111)))
     {
     }
 
-    constexpr CastlingRights(const std::initializer_list<CastlingType> types) : m_mask(0)
+    constexpr CastlingRights(const std::initializer_list<CastlingType> types) noexcept : m_mask(0)
     {
         for (auto t : types)
             m_mask |= t.mask();
     }
 
-    constexpr explicit CastlingRights(const Color c)
+    constexpr explicit CastlingRights(const Color c) noexcept
         : CastlingRights{CastlingType{c, KINGSIDE}, CastlingType{c, QUEENSIDE}}
     {
     }
@@ -744,7 +742,7 @@ struct CastlingRights
     static constexpr std::array<std::string_view, NComb> repr = {"-", "K",  "Q",  "KQ",  "k",  "Kk",  "Qk",  "KQk",
                                                                  "q", "Kq", "Qq", "KQq", "kq", "Kkq", "Qkq", "KQkq"};
 
-    [[nodiscard]] std::string_view to_string() const { return repr.at(m_mask); }
+    [[nodiscard]] std::string_view to_string() const noexcept { return repr.at(m_mask); }
 
     friend std::ostream& operator<<(std::ostream& os, const CastlingRights& cr)
     {
@@ -755,19 +753,19 @@ struct CastlingRights
     static constexpr CastlingRights all() { return CastlingRights{0b1111}; }
     static constexpr CastlingRights none() { return CastlingRights{0}; }
 
-    friend constexpr bool operator==(const CastlingRights& cr1, const CastlingRights& cr2)
+    friend constexpr bool operator==(const CastlingRights& cr1, const CastlingRights& cr2) noexcept
     {
         return cr1.m_mask == cr2.m_mask;
     }
-    friend constexpr bool operator!=(const CastlingRights& cr1, const CastlingRights& cr2)
+    friend constexpr bool operator!=(const CastlingRights& cr1, const CastlingRights& cr2) noexcept
     {
         return cr1.m_mask != cr2.m_mask;
     }
 
-    [[nodiscard]] constexpr bool has(const CastlingType t) const { return m_mask & t.mask(); }
+    [[nodiscard]] constexpr bool has(const CastlingType t) const noexcept { return m_mask & t.mask(); }
 
-    [[nodiscard]] constexpr bool has_any() const { return m_mask; }
-    [[nodiscard]] constexpr bool has_any_color(const Color c) const { return m_mask & CastlingRights(c).m_mask; }
+    [[nodiscard]] constexpr bool has_any() const noexcept { return m_mask; }
+    [[nodiscard]] constexpr bool has_any_color(const Color c) const noexcept { return m_mask & CastlingRights(c).m_mask; }
 
     constexpr void add(const CastlingType t) { m_mask |= t.mask(); }
     constexpr void remove(const CastlingType t) { m_mask &= ~t.mask(); }
