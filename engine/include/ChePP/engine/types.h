@@ -1,8 +1,6 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
-#include "generated/cpu_features.h"
-
 #include <algorithm>
 #include <array>
 #include <bit>
