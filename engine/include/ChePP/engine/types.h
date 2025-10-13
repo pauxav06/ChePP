@@ -567,7 +567,11 @@ struct Color : EnumBase<Color, uint8_t, 2, color_repr>
     using base = EnumBase;
     using base::EnumBase;
 
-    constexpr Color operator~() const noexcept { return Color{m_val ^ 1}; }
+    constexpr Color operator~() const noexcept
+    {
+        assert(!is_none());
+        return Color{m_val ^ 1};
+    }
     [[nodiscard]] constexpr Color opposite() const noexcept { return ~(*this); }
     // Prevent misuse of boolean context or !
     constexpr bool     operator!() const     = delete;
@@ -638,10 +642,10 @@ enum Direction
 
 constexpr Direction direction_from(const Square a, const Square b)
 {
+    assert(a && b);
     constexpr std::array dir_table{SOUTH_WEST, SOUTH,      SOUTH_EAST, WEST,      NO_DIRECTION,
                                    EAST,       NORTH_WEST, NORTH,      NORTH_EAST};
 
-    // who has time to write 8 if statements
     const int dr = b.rank().value() - a.rank().value();
     const int df = b.file().value() - a.file().value();
     const int nr = (dr > 0) - (dr < 0);
@@ -689,19 +693,33 @@ struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
 
     constexpr explicit CastlingType(const Color c, const CastlingSide side) : CastlingType((c.value() << 1) + side) {}
 
-    [[nodiscard]] constexpr Color        color() const noexcept { return Color{m_val >> 1}; }
-    [[nodiscard]] constexpr CastlingSide side() const noexcept { return static_cast<CastlingSide>(m_val & 1); }
+    [[nodiscard]] constexpr Color        color() const noexcept
+    {
+        assert(!is_none());
+        return Color{m_val >> 1};
+    }
+    [[nodiscard]] constexpr CastlingSide side() const noexcept
+    {
+        assert(!is_none());
+        return static_cast<CastlingSide>(m_val & 1);
+    }
 
-    [[nodiscard]] constexpr ValueT mask() const { return m_val == 4 ? 0 : 1 << m_val; }
+    [[nodiscard]] constexpr ValueT mask() const noexcept
+    {
+        assert(!is_none());
+        return 1 << m_val;
+    }
 
     [[nodiscard]] constexpr std::pair<Square, Square> king_move() const
     {
+        assert(!is_none());
         constexpr EnumArray<std::pair<Square, Square>, CastlingType> king_moves{
             std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
         return king_moves.at(*this);
     }
     [[nodiscard]] constexpr std::pair<Square, Square> rook_move() const
     {
+        assert(!is_none());
         constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
             std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
         return rook_moves.at(*this);
@@ -724,7 +742,7 @@ struct CastlingRights
     constexpr CastlingRights() : m_mask(0) {}
 
     template <typename int_type, std::enable_if_t<std::is_integral_v<int_type>, int> = 0>
-    constexpr explicit CastlingRights(const int_type mask) noexcept : m_mask(std::min(mask, static_cast<int_type>(0b1111)))
+    constexpr explicit CastlingRights(const int_type mask) noexcept : m_mask(mask & 0b1111)
     {
     }
 
@@ -806,7 +824,7 @@ constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = []
     return t;
 }();
 
-constexpr CastlingRights CASTLING_NONE{NO_CASTLING_TYPE};
+constexpr CastlingRights CASTLING_NONE{0};
 
 constexpr CastlingRights CASTLING_K{WHITE_KINGSIDE};
 constexpr CastlingRights CASTLING_Q{WHITE_QUEENSIDE};
@@ -1080,12 +1098,12 @@ constexpr std::optional<Move> Move::from_uci(const std::string_view& sv, const U
         while (!copy.empty())
         {
             auto type = CastlingType{bit::get_lsb(copy.mask())};
-            if (const auto [k_from, k_to] = type.king_move();
-                info.pieces.at(*from).color() == type.color() && *from == k_from && *to == k_to)
-            {
-                return make<CASTLING>(k_from, k_to, type);
-            }
             copy.remove(type);
+            const auto [k_from, k_to] = type.king_move();
+            const auto [r_from, _] = type.rook_move();
+            if (info.pieces.at(r_from) != Piece{type.color(), ROOK}) continue;
+            if (info.pieces.at(*from).color() != type.color() || *from != k_from || *to != k_to) continue;
+            return make<CASTLING>(k_from, k_to, type);
         }
     }
 
