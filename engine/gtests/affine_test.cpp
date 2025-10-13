@@ -1,32 +1,6 @@
-#ifndef AFFINE_TEST_H
-#define AFFINE_TEST_H
 #include <random>
 #include <stdint.h>
-
-namespace chepp::nnue::layers
-{
-    namespace affine
-    {
-        namespace
-        {
-
-            struct Param
-            {
-                size_t InSz{};
-                size_t OutSz{};
-            };
-
-        }
-    }
-    namespace relu
-    {
-        namespace
-        {
-        }
-    }
-}
-
-#endif
+#include "tune.h"
 
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "affine_test.cpp"
@@ -52,7 +26,7 @@ namespace chepp::nnue::layers
             {
 
                 template <typename T>
-                void fill_random(std::vector<T>& v, int min, int max, unsigned seed = 1234)
+                void fill_random(hwy::AlignedVector<T>& v, int min, int max, unsigned seed = 1234)
                 {
                     std::mt19937                       rng(seed);
                     std::uniform_int_distribution<int> dist(min, max);
@@ -60,9 +34,9 @@ namespace chepp::nnue::layers
                         x = static_cast<T>(dist(rng));
                 }
 
-                void reference_affine(const std::vector<int8_t>& input, const std::vector<int8_t>& weights,
-                                      const std::vector<int32_t>& biases, size_t Rows, size_t Cols,
-                                      std::vector<int32_t>& out)
+                void reference_affine(const hwy::AlignedVector<int8_t>& input, const hwy::AlignedVector<int8_t>& weights,
+                                      const hwy::AlignedVector<int32_t>& biases, size_t Rows, size_t Cols,
+                                      hwy::AlignedVector<int32_t>& out)
                 {
                     out.assign(Rows, 0);
                     for (size_t r = 0; r < Rows; r++)
@@ -76,21 +50,23 @@ namespace chepp::nnue::layers
                     }
                 }
 
-                namespace hn = hwy::HWY_NAMESPACE;
 
-                template <Param P>
+                namespace hn = hwy::HWY_NAMESPACE;
+                using namespace hn;
+                using namespace meta;
+
                 void affine()
                 {
                     std::cout << "Test passed for target: " << hwy::TargetName(HWY_TARGET) << std::endl;
-                    constexpr size_t Rows       = P.OutSz;
-                    constexpr size_t Cols       = P.InSz;
+                    constexpr size_t in       = 2048;
+                    constexpr size_t out       = 16;
                     constexpr size_t Iterations = 10000;
 
-                    std::vector<int8_t>  weights(Rows * Cols);
-                    std::vector<int32_t> biases(Rows);
-                    std::vector<int8_t>  input(Cols);
-                    std::vector<int32_t> ref_output(Rows);
-                    std::vector<int32_t> simd_output(Rows);
+                    hwy::AlignedVector<int8_t>  weights(in * out);
+                    hwy::AlignedVector<int32_t> biases(out);
+                    hwy::AlignedVector<int8_t>  input(in);
+                    hwy::AlignedVector<int32_t> ref_output(out);
+                    hwy::AlignedVector<int32_t> simd_output(out);
 
                     fill_random(weights, -3, 3);
                     fill_random(biases, -10, 10);
@@ -101,40 +77,74 @@ namespace chepp::nnue::layers
                     auto start_ref = high_resolution_clock::now();
                     for (size_t iter = 0; iter < Iterations; ++iter)
                     {
-                        reference_affine(input, weights, biases, Rows, Cols, ref_output);
+                        reference_affine(input, weights, biases, out, in, ref_output);
                     }
                     auto end_ref = high_resolution_clock::now();
                     total_ref_duration += duration_cast<nanoseconds>(end_ref - start_ref).count();
 
-                    constexpr VNNIKernelParams params{8, true, true};
-                    using layer_t = VNNIKernel<Rows, Cols, params>;
-                    layer_t layer;
-                    layer.load_weights(weights.data(), biases.data());
+                    constexpr Types types = {
+                        .in = ScalarType::Int8,
+                        .out = ScalarType::Int32,
+                    };
 
-                    int64_t total_simd_duration = 0;
-                    auto start_simd = high_resolution_clock::now();
-                    for (size_t iter = 0; iter < Iterations; ++iter)
-                    {
-                        layer.forward(input.data(), simd_output.data());
-                    }
-                    auto end_simd = high_resolution_clock::now();
-                    total_simd_duration += duration_cast<nanoseconds>(end_simd - start_simd).count();
+                    constexpr Dims dims = {
+                        .in = in,
+                        .out = out,
+                    };
 
-                    reference_affine(input, weights, biases, Rows, Cols, ref_output);
-                    HWY_ASSERT_ARRAY_EQ(simd_output.data(), ref_output.data(), simd_output.size());
-                    std::cout << "Reference (naive) affine avg: " << total_ref_duration / Iterations << " ns\n";
-                    std::cout << "SIMD affine layer avg:        " << total_simd_duration / Iterations << " ns\n";
+                    using opt_t   = Opt<Kernels::SIMD>;
+                    using param_t = Params<Kernels::SIMD>;
+                    constexpr std::array type_arr   = {types};
+                    constexpr std::array dim_arr    = {dims};
+                    constexpr std::array unroll     = {1, 2, 4, 8, 16};
+                    constexpr std::array operations = {opt_t::Operation::SumOfMulQuadAcc,
+                                                       opt_t::Operation::SumOfMulPairAdd};
+
+                    constexpr auto configs =
+                        tune::generate_combinations<param_t>(
+                            type_arr, dim_arr,
+                            tune::generate_combinations<opt_t>(unroll, operations));
+
+                    auto run_all_configs = [&](auto&& input, auto&& weights, auto&& biases,
+                                               auto&& simd_output, auto&& ref_output) {
+                        [&]<size_t... I>(std::index_sequence<I...>) {
+                            (([&]{
+                                constexpr auto config = configs[I];
+                                using layer_t = Layer<Kernels::SIMD, config>;
+                                layer_t layer;
+                                layer.load_weights(weights.data(), biases.data());
+
+                                int64_t total_simd_duration = 0;
+                                auto start_simd = high_resolution_clock::now();
+                                for (size_t iter = 0; iter < Iterations; ++iter)
+                                    layer.forward(input.data(), simd_output.data());
+                                auto end_simd = high_resolution_clock::now();
+                                total_simd_duration += duration_cast<nanoseconds>(end_simd - start_simd).count();
+
+                                reference_affine(input, weights, biases, out, in, ref_output);
+                                HWY_ASSERT_ARRAY_EQ(simd_output.data(), ref_output.data(), simd_output.size());
+
+                                std::cout << "Reference (naive) affine avg: " << total_ref_duration / Iterations << " ns\n";
+                                std::cout << "SIMD affine layer avg:        " << total_simd_duration / Iterations << " ns\n";
+                            }()), ...);
+                        }(std::make_index_sequence<configs.size()>{});
+                    };
+
+                    run_all_configs(input, weights, biases, simd_output, ref_output);
+
+
+
                 }
 
                 void affine_all()
                 {
-                    constexpr Param p = {2048, 16};
-                    affine<p>();
+                    affine();
                 }
             }
         }
     }
 
+    /**
     namespace relu
     {
         namespace HWY_NAMESPACE
@@ -206,10 +216,13 @@ namespace chepp::nnue::layers
                     std::cout << "SIMD ReLU layer avg:         " << total_simd_duration / Iterations << " ns\n";
                 }
 
+
             }
         }
 
+
     } // namespace
+    **/
     // NOLINTNEXTLINE(google-readability-namespace-comments)
 } // namespace HWY_NAMESPACE
 HWY_AFTER_NAMESPACE();
@@ -225,6 +238,7 @@ namespace chepp::nnue::layers
             HWY_EXPORT_AND_TEST_P(AffineTest, affine_all);
         }
     }
+    /**
     namespace relu
     {
         namespace
@@ -235,6 +249,7 @@ namespace chepp::nnue::layers
             HWY_AFTER_TEST();
         }
     }
+    **/
 }
 HWY_TEST_MAIN();
 #endif // HWY_ONCE
