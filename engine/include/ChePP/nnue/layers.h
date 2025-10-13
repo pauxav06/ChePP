@@ -130,15 +130,5 @@ constexpr const char* to_string(ScalarType t) noexcept {
 } // namespace meta
 
 
-namespace chepp::nnue::layers
-{
-    template <typename InT, typename OutT>
-    struct Layer
-    {
-        using input_type = InT;
-        using output_type = OutT;
-    };
-}
-
 
 #endif
