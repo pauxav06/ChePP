@@ -5,54 +5,46 @@
 #ifndef CHEPP_SEARCH_STACK_H
 #define CHEPP_SEARCH_STACK_H
 
-#include "nnue.h"
 #include "history.h"
+#include "nnue.h"
 #include "position.h"
 
 #include <cassert>
 #include <cstddef>
 #include <memory>
 
-
-
-
 class SearchStack {
-public:
+  public:
     // null pointers indicate the desired information does not exist and should be checked
-    struct Node
-    {
+    struct Node {
         Node* prev{};
-        int ply{};
+        int   ply{};
 
-        Positions::Handle position{};
+        Positions::Handle          position{};
         nnue::Accumulators::Handle accumulator{};
 
         bool is_repetition{false};
-        int static_eval{0};
+        int  static_eval{0};
 
         Move excluded{Move::none()};
-        int single_extensions{0};
-        int double_extensions{0};
+        int  single_extensions{0};
+        int  double_extensions{0};
 
         Move best_move{Move::none()};
 
-        Move killer1{Move::none()};
-        Move killer2{Move::none()};
-        History* continuation_history{};
-        History* history{};
-        CaptureHistory* capture_history{};
+        Move               killer1{Move::none()};
+        Move               killer2{Move::none()};
+        History*           continuation_history{};
+        History*           history{};
+        CaptureHistory*    capture_history{};
         RefutationHistory* refutation_history{};
     };
 
     explicit SearchStack(const Positions& positions)
-    : m_positions(positions),
-    m_accumulators(positions.last()),
-    m_nodes(std::make_unique<Node[]>(MAX_PLY)),
-    m_history(std::make_unique<History>()),
-    m_capture_history(std::make_unique<CaptureHistory>()),
-    m_continuation_history(std::make_unique<ContinuationHistory>()),
-    m_null_move_continuation_history(std::make_unique<History>())
-    {
+        : m_positions(positions), m_accumulators(positions.last()), m_nodes(std::make_unique<Node[]>(MAX_PLY)),
+          m_history(std::make_unique<History>()), m_capture_history(std::make_unique<CaptureHistory>()),
+          m_continuation_history(std::make_unique<ContinuationHistory>()),
+          m_null_move_continuation_history(std::make_unique<History>()) {
         update_last_node();
     }
 
@@ -63,83 +55,75 @@ public:
         return m_nodes[i];
     }
 
-    const Node& operator[] (const int i) const {
+    const Node& operator[](const int i) const {
         assert(i >= 0 && i <= ply());
         return m_nodes[i];
     }
 
-    void do_move(const Move move, const bool update_nnue)
-    {
+    void do_move(const Move move, const bool update_nnue) {
         const int init_ply = ply();
         m_positions.do_move(move);
-        if (update_nnue && move != Move::none() && move != Move::null())
-        {
+        if (update_nnue && move != Move::none() && move != Move::null()) {
             m_accumulators.do_move(m_positions[init_ply], m_positions[ply()]);
         }
         update_last_node();
     }
 
-    void undo_move(const bool update_nnue)
-    {
+    void undo_move(const bool update_nnue) {
         assert(ply() > 0);
         const Move move = m_positions.last().move();
         reset_last_node();
-        if (update_nnue && move != Move::none() && move != Move::null())
-        {
+        if (update_nnue && move != Move::none() && move != Move::null()) {
             m_accumulators.undo_move();
         }
         m_positions.undo_move();
     }
 
-private:
-    void update_last_node()
-    {
+  private:
+    void update_last_node() {
         Node& node = m_nodes[ply()];
-        node.prev = ply() == 0 ? nullptr : &m_nodes[ply() - 1];
-        node.ply = ply();
+        node.prev  = ply() == 0 ? nullptr : &m_nodes[ply() - 1];
+        node.ply   = ply();
 
-        node.accumulator = m_accumulators.handle_to_last();
-        node.position = m_positions.handle_to_last();
+        node.accumulator   = m_accumulators.handle_to_last();
+        node.position      = m_positions.handle_to_last();
         node.is_repetition = m_positions.is_repetition();
 
         node.single_extensions = node.prev ? m_nodes[ply() - 1].single_extensions : 0;
         node.double_extensions = node.prev ? m_nodes[ply() - 1].double_extensions : 0;
 
-        node.history = m_history.get();
-        node.capture_history = m_capture_history.get();
-        node.continuation_history =
-            !node.prev ? nullptr :
-            node.position->move() == Move::null() ? nullptr :
-            &m_continuation_history->get_relevant_history(node.position());
-        node.refutation_history = &m_refutation_nodes;
+        node.history              = m_history.get();
+        node.capture_history      = m_capture_history.get();
+        node.continuation_history = !node.prev ? nullptr
+                                    : node.position->move() == Move::null()
+                                        ? nullptr
+                                        : &m_continuation_history->get_relevant_history(node.position());
+        node.refutation_history   = &m_refutation_nodes;
     }
 
-    void reset_last_node()
-    {
-        Node& node = m_nodes[ply()];
-        node.prev = nullptr;
-        node.ply = 0;
-        node.position = Positions::Handle{nullptr, 0};
-        node.accumulator = nnue::Accumulators::Handle{nullptr, 0};
-        node.history = nullptr;
-        node.capture_history = nullptr;
+    void reset_last_node() {
+        Node& node              = m_nodes[ply()];
+        node.prev               = nullptr;
+        node.ply                = 0;
+        node.position           = Positions::Handle{nullptr, 0};
+        node.accumulator        = nnue::Accumulators::Handle{nullptr, 0};
+        node.history            = nullptr;
+        node.capture_history    = nullptr;
         node.refutation_history = nullptr;
-        node.is_repetition = false;
-        node.double_extensions = 0;
-        node.single_extensions = 0;
+        node.is_repetition      = false;
+        node.double_extensions  = 0;
+        node.single_extensions  = 0;
     }
 
-    Positions m_positions;
-    nnue::Accumulators m_accumulators;
+    Positions               m_positions;
+    nnue::Accumulators      m_accumulators;
     std::unique_ptr<Node[]> m_nodes;
 
-    std::unique_ptr<History> m_history{};
-    std::unique_ptr<CaptureHistory> m_capture_history{};
+    std::unique_ptr<History>             m_history{};
+    std::unique_ptr<CaptureHistory>      m_capture_history{};
     std::unique_ptr<ContinuationHistory> m_continuation_history{};
-    std::unique_ptr<History> m_null_move_continuation_history;
-    RefutationHistory m_refutation_nodes{MAX_MOVES};
+    std::unique_ptr<History>             m_null_move_continuation_history;
+    RefutationHistory                    m_refutation_nodes{MAX_MOVES};
 };
-
-
 
 #endif // CHEPP_SEARCH_STACK_H

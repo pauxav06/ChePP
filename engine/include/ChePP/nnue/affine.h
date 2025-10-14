@@ -4,20 +4,17 @@
 #include "layers.h"
 #include "utils.h"
 
-namespace chepp::nnue::layers::affine
-{
+namespace chepp::nnue::layers::affine {
     using namespace meta;
 
-    enum class Kernels {Scalar, SIMD};
+    enum class Kernels { Scalar, SIMD };
 
-    struct Types
-    {
+    struct Types {
         ScalarType in;
         ScalarType out;
     };
 
-    struct Dims
-    {
+    struct Dims {
         size_t in;
         size_t out;
     };
@@ -26,23 +23,21 @@ namespace chepp::nnue::layers::affine
     struct Opt;
 
     template <>
-    struct Opt<Kernels::Scalar> {
-    };
+    struct Opt<Kernels::Scalar> {};
 
     template <>
     struct Opt<Kernels::SIMD> {
-        enum Operation : uint8_t {SumOfMulQuadAcc, SumOfMulPairAdd};
-        size_t unroll;
+        enum Operation : uint8_t { SumOfMulQuadAcc, SumOfMulPairAdd };
+        size_t    unroll;
         Operation operation;
     };
 
     template <Kernels K>
-    struct Params
-    {
+    struct Params {
         static constexpr Kernels kernel = K;
-        Types types;
-        Dims dims;
-        Opt<kernel> opt;
+        Types                    types;
+        Dims                     dims;
+        Opt<kernel>              opt;
     };
 
     template <Kernels... Ks>
@@ -54,6 +49,6 @@ namespace chepp::nnue::layers::affine
     using OptVariantFromEnumList_t = OptVariantFromEnumList<Ks...>::type;
 
     using test = OptVariantFromEnumList_t<Kernels::SIMD, Kernels::Scalar>;
-}
+} // namespace chepp::nnue::layers::affine
 
 #endif // CHEPP_AFFINE_H

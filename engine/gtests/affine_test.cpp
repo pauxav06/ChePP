@@ -16,12 +16,9 @@
 
 HWY_BEFORE_NAMESPACE();
 
-namespace chepp::tests::nnue::layers::affine
-{
-    namespace HWY_NAMESPACE
-    {
-        namespace
-        {
+namespace chepp::tests::nnue::layers::affine {
+    namespace HWY_NAMESPACE {
+        namespace {
 
             namespace hn = hwy::HWY_NAMESPACE;
             namespace an = chepp::nnue::layers::affine::HWY_NAMESPACE;
@@ -30,8 +27,7 @@ namespace chepp::tests::nnue::layers::affine
             using namespace meta;
             using namespace chepp::nnue::layers::affine;
 
-            void affine()
-            {
+            void affine() {
                 constexpr size_t in         = 2048;
                 constexpr size_t out        = 16;
                 constexpr size_t Iterations = 10000;
@@ -74,40 +70,32 @@ namespace chepp::tests::nnue::layers::affine
 
                 reference_layer.load_weights(weights.data(), biases.data());
 
-                auto simd_layers = [&]<size_t... I>(std::index_sequence<I...>)
-                {
-                    return std::make_tuple((
-                        [&]
-                        {
-                            using layer_t = an::Layer<Kernels::SIMD, simd_params[I]>;
-                            return layer_t{};
-                        }())...);
+                auto simd_layers = [&]<size_t... I>(std::index_sequence<I...>) {
+                    return std::make_tuple(([&] {
+                        using layer_t = an::Layer<Kernels::SIMD, simd_params[I]>;
+                        return layer_t{};
+                    }())...);
                 }(std::make_index_sequence<simd_params.size()>{});
 
                 std::apply(
-                    [&](auto&&... layer)
-                    {
-                        ((
-                             [&]()
-                             {
-                                 layer.forward(input.data(), simd_output.data());
-                                 HWY_ASSERT_ARRAY_EQ(simd_output.data(), ref_output.data(), simd_output.size());
-                             }()),
+                    [&](auto&&... layer) {
+                        (([&]() {
+                             layer.forward(input.data(), simd_output.data());
+                             HWY_ASSERT_ARRAY_EQ(simd_output.data(), ref_output.data(), simd_output.size());
+                         }()),
                          ...);
                     },
                     simd_layers);
             }
         } // namespace
-    } // namespace HWY_NAMESPACE
+    }     // namespace HWY_NAMESPACE
 } // namespace chepp::tests::nnue::layers::affine
 
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-namespace chepp::tests::nnue::layers::affine
-{
-    namespace
-    {
+namespace chepp::tests::nnue::layers::affine {
+    namespace {
         HWY_BEFORE_TEST(AffineTest);
         HWY_EXPORT_AND_TEST_P(AffineTest, affine);
     } // namespace

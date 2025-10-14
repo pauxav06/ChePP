@@ -12,18 +12,15 @@
 
 #include "position.h"
 
-namespace nnue
-{
-    struct FeatureTransformer
-    {
+namespace nnue {
+    struct FeatureTransformer {
         static constexpr auto MaxChanges = 32;
         using FeatureT                   = uint16_t;
         using RetT                       = ArrayStack<FeatureT, MaxChanges>;
 
         static constexpr size_t n_features_v = 32 * 11 * 64;
 
-        static bool needs_refresh(const Position& cur, const Position& prev, const Color view)
-        {
+        static bool needs_refresh(const Position& cur, const Position& prev, const Color view) {
             return prev.ksq(view) != cur.ksq(view);
         }
 
@@ -34,31 +31,29 @@ namespace nnue
             RetT add_v;
             RetT rem_v;
 
-            if (refresh)
-            {
-                for (const Square sq : cur.occupancy())
-                {
+            if (refresh) {
+                for (const Square sq : cur.occupancy()) {
                     add_v.push_back(get_index(view, cur.ksq(view), sq, cur.piece_at(sq)));
                 }
-            }
-            else
-            {
-                auto add = [&](const Square sq, const Piece pc)
-                { add_v.push_back(get_index(view, cur.ksq(view), sq, pc)); };
-                auto rem = [&](const Square sq, const Piece pc)
-                { rem_v.push_back(get_index(view, cur.ksq(view), sq, pc)); };
+            } else {
+                auto add = [&](const Square sq, const Piece pc) {
+                    add_v.push_back(get_index(view, cur.ksq(view), sq, pc));
+                };
+                auto rem = [&](const Square sq, const Piece pc) {
+                    rem_v.push_back(get_index(view, cur.ksq(view), sq, pc));
+                };
 
                 const EnumArray<Bitboard, Color> color_diff = {
                     prev.occupancy(WHITE) ^ cur.occupancy(WHITE),
                     prev.occupancy(BLACK) ^ cur.occupancy(BLACK),
                 };
 
-                for (const auto c : {WHITE, BLACK})
-                {
-                    for (const Square sq : color_diff.at(c))
-                    {
-                        if (prev.occupancy(c).is_set(sq)) rem(sq, prev.piece_at(sq));
-                        else add(sq, cur.piece_at(sq));
+                for (const auto c : {WHITE, BLACK}) {
+                    for (const Square sq : color_diff.at(c)) {
+                        if (prev.occupancy(c).is_set(sq))
+                            rem(sq, prev.piece_at(sq));
+                        else
+                            add(sq, cur.piece_at(sq));
                     }
                 }
             }
@@ -66,8 +61,7 @@ namespace nnue
         }
 
       private:
-        static int king_square_index(Square ksq)
-        {
+        static int king_square_index(Square ksq) {
             static EnumArray<int, Square> WKSqH = {0,  1,  2,  3,  3,  2,  1,  0,  4,  5,  6,  7,  7,  6,  5,  4,
                                                    8,  9,  10, 11, 11, 10, 9,  8,  12, 13, 14, 15, 15, 14, 13, 12,
                                                    16, 17, 18, 19, 19, 18, 17, 16, 20, 21, 22, 23, 23, 22, 21, 20,
@@ -76,12 +70,10 @@ namespace nnue
             return WKSqH[ksq];
         }
 
-        static int get_index(Color view, Square king_square, Square piece_square, Piece piece)
-        {
+        static int get_index(Color view, Square king_square, Square piece_square, Piece piece) {
             auto relative_piece_square = (view == WHITE ? piece_square : piece_square.flipped_horizontally());
             auto relative_king_square  = (view == WHITE ? king_square : king_square.flipped_horizontally());
-            if (king_square.file() > FILE_D)
-            {
+            if (king_square.file() > FILE_D) {
                 relative_piece_square = relative_piece_square.flipped_vertically();
             }
             int piece_idx = piece.type() == KING ? 0 : 1 + piece.type().value() * 2 + (piece.color() == view ? 0 : 1);
@@ -92,8 +84,7 @@ namespace nnue
     template <typename Arch>
     struct Network;
 
-    struct Accumulator
-    {
+    struct Accumulator {
         static constexpr auto AccSz  = 1024;
         static constexpr auto PsqtSz = 8;
 
@@ -101,8 +92,7 @@ namespace nnue
         using PsqtT        = std::array<int32_t, PsqtSz>;
 
         Accumulator() = default;
-        explicit Accumulator(const Position& pos)
-        {
+        explicit Accumulator(const Position& pos) {
             /**
             const auto [wadd, wrem] = FeatureTransformer::get_features(pos, pos, WHITE, true);
             refresh_acc(WHITE, wadd);
@@ -112,8 +102,7 @@ namespace nnue
             **/
         }
 
-        explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev)
-        {
+        explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev) {
             /**
             update(acc_prev, pos_cur, pos_prev, WHITE);
             update(acc_prev, pos_cur, pos_prev, BLACK);
@@ -126,8 +115,7 @@ namespace nnue
         [[nodiscard]] size_t bucket() const { return m_bucket; }
 
       private:
-        void update(const Accumulator& prev, const Position& pos_cur, const Position& pos_prev, const Color view)
-        {
+        void update(const Accumulator& prev, const Position& pos_cur, const Position& pos_prev, const Color view) {
             const bool needs_refresh = FeatureTransformer::needs_refresh(pos_cur, pos_prev, view);
             const auto [add, rem]    = FeatureTransformer::get_features(pos_cur, pos_prev, view, needs_refresh);
             if (needs_refresh)
@@ -139,8 +127,7 @@ namespace nnue
         // horribly slow and memory bound function, how to make it faster?
         // we cannot tile weights because they are accessed sparsely, and doing one feature at a time
         // would force intermediate stores bc we don't have enough registers
-        void refresh_acc(const Color view, const FeatureTransformer::RetT& features)
-        {
+        void refresh_acc(const Color view, const FeatureTransformer::RetT& features){
             /**
             using namespace simd;
             using AccumTag = pick_tag_t<int16_t>;
@@ -191,8 +178,7 @@ namespace nnue
         };
 
         void update_acc(const Accumulator& previous, const Color view, const FeatureTransformer::RetT& added_features,
-                        const FeatureTransformer::RetT& removed_features)
-        {
+                        const FeatureTransformer::RetT& removed_features) {
             /**
             using namespace simd;
             using AccumTag = pick_tag_t<int16_t>;
@@ -253,21 +239,19 @@ namespace nnue
             **/
         }
 
-    public:
+      public:
         alignas(64) EnumArray<AccumulatorT, Color> m_accumulators{};
         alignas(64) EnumArray<PsqtT, Color> m_psqts{};
         size_t m_bucket{};
     };
 
-    struct Accumulators
-    {
+    struct Accumulators {
         using Acc         = Accumulator;
         using ConstAcc    = const Acc;
         using AccRef      = Acc&;
         using ConstAccRef = ConstAcc&;
 
-        explicit Accumulators(const Position& pos)
-        {
+        explicit Accumulators(const Position& pos) {
             m_accumulators.reserve(MAX_PLY);
             m_accumulators.emplace_back(pos);
         }
@@ -283,8 +267,7 @@ namespace nnue
 
         [[nodiscard]] uint32_t ply() const { return static_cast<int>(m_accumulators.size() - 1); }
 
-        void do_move(const Position& prev, const Position& next)
-        {
+        void do_move(const Position& prev, const Position& next) {
             m_accumulators.emplace_back(m_accumulators.back(), next, prev);
         }
 
@@ -292,8 +275,7 @@ namespace nnue
 
         using Handle = VectorHandle<Accumulator>;
 
-        Handle handle_to_last()
-        {
+        Handle handle_to_last() {
             return VectorHandle{&m_accumulators, static_cast<unsigned>(m_accumulators.size() - 1)};
         }
 
@@ -303,8 +285,7 @@ namespace nnue
 
     template <std::size_t Buckets_ = 8, std::size_t AccSz_ = 1024, std::size_t PsqtSz_ = 8, std::size_t L1Sz_ = 16,
               std::size_t L2Sz_ = 32>
-    struct ArchTpl
-    {
+    struct ArchTpl {
         /**
         static constexpr std::size_t Buckets = Buckets_;
         static constexpr std::size_t AccSz   = AccSz_;
@@ -325,8 +306,7 @@ namespace nnue
     };
 
     template <typename Arch>
-    struct Network
-    {
+    struct Network {
         /**
         using arch_t    = Arch;
         using layer1_t  = typename arch_t::layer1;
@@ -351,8 +331,7 @@ namespace nnue
         template <typename L1WArr, typename L1BArr, typename L2WArr, typename L2BArr, typename OUTWArr,
                   typename OUTBArr>
         void load_weights(const L1WArr& l1_w, const L1BArr& l1_b, const L2WArr& l2_w, const L2BArr& l2_b,
-                          const OUTWArr& out_w, const OUTBArr& out_b)
-        {
+                          const OUTWArr& out_w, const OUTBArr& out_b) {
             /**
             for (std::size_t b = 0; b < Buckets; ++b)
             {
@@ -363,8 +342,7 @@ namespace nnue
             **/
         }
 
-        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view, std::size_t bucket) const
-        {
+        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view, std::size_t bucket) const {
             /**
             alignas(64) thread_local std::array<int8_t, 2 * AccSz> l1_in{};
             alignas(64) thread_local std::array<int32_t, L1Sz>     l1_out{};
@@ -391,13 +369,11 @@ namespace nnue
             return 0;
         }
 
-        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view) const
-        {
+        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view) const {
             return evaluate(acc, view, acc.m_bucket);
         }
 
-        void evaluate_uci(const Accumulator& acc, const Color view) const
-        {
+        void evaluate_uci(const Accumulator& acc, const Color view) const {
             /**
             for (std::size_t i = 0; i < Buckets; ++i)
             {
@@ -411,18 +387,13 @@ namespace nnue
             **/
         }
 
-        [[nodiscard]] int32_t bench_eval(const Accumulator& acc, Color view) const
-        {
-            return evaluate(acc, view);
-        }
+        [[nodiscard]] int32_t bench_eval(const Accumulator& acc, Color view) const { return evaluate(acc, view); }
     };
 
     inline Network<ArchTpl<>> network;
 
-    struct Initialiser
-    {
-        Initialiser()
-        {
+    struct Initialiser {
+        Initialiser() {
             /**
             network.load_weights(l1_weights, l1_biases, l2_weights, l2_biases, out_weights, out_biases);
             **/
