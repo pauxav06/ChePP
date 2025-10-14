@@ -2,9 +2,9 @@
 // Created by paul on 7/30/25.
 //
 
+#include <ChePP/engine/init.h>
 #include <ChePP/engine/position.h>
 #include <gtest/gtest.h>
-#include <ChePP/engine/init.h>
 
 // These tests are now not necessary, as the position.is_ok() function
 // performs much more thorough testing of state including zobrist. it is called by the perft test.
@@ -24,9 +24,7 @@ TEST(ZobristTranspositions, EnPassantRightsAffectHash) {
     pos1.do_move(Move::make<NORMAL>(D7, D5));
     std::cout << pos1 << pos2 << std::endl;
 
-
     EXPECT_NE(pos1.hash(), pos2.hash());
-
 
     pos1.do_move(Move::make<EN_PASSANT>(E5, D6));
     pos2.do_move(Move::make<EN_PASSANT>(E5, D6));
@@ -46,8 +44,5 @@ TEST(ZobristTranspositions, CastlingRightsAffectHash) {
     pos1.do_move(Move::make<NORMAL>(E7, E8));
     pos1.do_move(Move::null());
 
-
     EXPECT_EQ(pos1.hash(), pos2.hash());
 }
-
-

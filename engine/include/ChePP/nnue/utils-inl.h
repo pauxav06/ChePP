@@ -1,6 +1,6 @@
 #include "utils.h"
-#include <experimental/mdspan>
 #include <experimental/mdarray>
+#include <experimental/mdspan>
 
 #if defined(CHEPP_UNROLLER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_UNROLLER_INL_H_
@@ -9,16 +9,16 @@
 #define CHEPP_UNROLLER_INL_H_
 #endif
 
-#define REPEAT_1(M)  M(0)
-#define REPEAT_2(M)  REPEAT_1(M)  M(1)
-#define REPEAT_3(M)  REPEAT_2(M)  M(2)
-#define REPEAT_4(M)  REPEAT_3(M)  M(3)
-#define REPEAT_5(M)  REPEAT_4(M)  M(4)
-#define REPEAT_6(M)  REPEAT_5(M)  M(5)
-#define REPEAT_7(M)  REPEAT_6(M)  M(6)
-#define REPEAT_8(M)  REPEAT_7(M)  M(7)
-#define REPEAT_9(M)  REPEAT_8(M)  M(8)
-#define REPEAT_10(M) REPEAT_9(M)  M(9)
+#define REPEAT_1(M) M(0)
+#define REPEAT_2(M) REPEAT_1(M) M(1)
+#define REPEAT_3(M) REPEAT_2(M) M(2)
+#define REPEAT_4(M) REPEAT_3(M) M(3)
+#define REPEAT_5(M) REPEAT_4(M) M(4)
+#define REPEAT_6(M) REPEAT_5(M) M(5)
+#define REPEAT_7(M) REPEAT_6(M) M(6)
+#define REPEAT_8(M) REPEAT_7(M) M(7)
+#define REPEAT_9(M) REPEAT_8(M) M(8)
+#define REPEAT_10(M) REPEAT_9(M) M(9)
 #define REPEAT_11(M) REPEAT_10(M) M(10)
 #define REPEAT_12(M) REPEAT_11(M) M(11)
 #define REPEAT_13(M) REPEAT_12(M) M(12)
@@ -46,15 +46,11 @@
 #include <hwy/highway.h>
 HWY_BEFORE_NAMESPACE();
 
-namespace chepp
-{
-    namespace nnue
-    {
-        namespace HWY_NAMESPACE
-        {
+namespace chepp {
+    namespace nnue {
+        namespace HWY_NAMESPACE {
             namespace hn = hwy::HWY_NAMESPACE;
             using namespace std::experimental;
-
 
             // The highway documentation warns us about using STL containers for SIMD vectors because they are sizeless
             // and they might blow the stack. We instead should declare them as local variables.
@@ -71,20 +67,28 @@ namespace chepp
                     static_assert(N <= 16, "Unroll factor exceeds 16");
                     using D = hn::DFromV<VecT>;
 
-#define DECL_REG_LOCAL(I) \
-VecT reg##I = [=] { if constexpr ((I) < N) return init(I); else return hn::Undefined(D()); }();
+#define DECL_REG_LOCAL(I)                                                                                              \
+    VecT reg##I = [=] {                                                                                                \
+        if constexpr ((I) < N)                                                                                         \
+            return init(I);                                                                                            \
+        else                                                                                                           \
+            return hn::Undefined(D());                                                                                 \
+    }();
 
                     REPEAT(32, DECL_REG_LOCAL)
-    #undef DECL_REG_LOCAL
+#undef DECL_REG_LOCAL
 
                     auto get_reg = [&](const size_t idx) -> VecT {
                         if constexpr (N == 0) return hn::Undefined(D());
                         if (idx >= N) return hn::Undefined(D());
                         switch (idx) {
-#define SWITCH_GET(I) case I: return reg##I;
+#define SWITCH_GET(I)                                                                                                  \
+    case I:                                                                                                            \
+        return reg##I;
                             REPEAT(32, SWITCH_GET)
-    #undef SWITCH_GET
-                            default: return hn::Undefined(D());
+#undef SWITCH_GET
+                            default:
+                                return hn::Undefined(D());
                         }
                     };
 
@@ -92,10 +96,14 @@ VecT reg##I = [=] { if constexpr ((I) < N) return init(I); else return hn::Undef
                         if constexpr (N == 0) return;
                         if (idx >= N) return;
                         switch (idx) {
-#define SWITCH_SET(I) case I: reg##I = val; break;
+#define SWITCH_SET(I)                                                                                                  \
+    case I:                                                                                                            \
+        reg##I = val;                                                                                                  \
+        break;
                             REPEAT(32, SWITCH_SET)
-    #undef SWITCH_SET
-                            default: break;
+#undef SWITCH_SET
+                            default:
+                                break;
                         }
                     };
 
@@ -111,9 +119,9 @@ VecT reg##I = [=] { if constexpr ((I) < N) return init(I); else return hn::Undef
             template <size_t Value>
             constexpr size_t extent_if_constexpr_v = conditional_extent<HWY_HAVE_CONSTEXPR_LANES, Value>::value;
 
-        }
-    }
-}
+        } // namespace HWY_NAMESPACE
+    }     // namespace nnue
+} // namespace chepp
 
 HWY_AFTER_NAMESPACE();
 

@@ -10,13 +10,11 @@
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
-namespace chepp::nnue::network
-{
-    namespace HWY_NAMESPACE
-    {
+namespace chepp::nnue::network {
+    namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
         namespace nn = chepp::nnue::HWY_NAMESPACE;
-    }
-}
+    } // namespace HWY_NAMESPACE
+} // namespace chepp::nnue::network
 HWY_AFTER_NAMESPACE();
 #endif

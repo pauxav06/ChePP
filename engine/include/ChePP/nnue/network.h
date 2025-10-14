@@ -6,13 +6,10 @@
 
 #include <cstddef>
 
-namespace chepp::nnue::network
-{
+namespace chepp::nnue::network {
     using namespace meta;
 
-    namespace accum {
-
-    }
+    namespace accum {}
 
     namespace l1 {
         using namespace chepp::nnue::layers::affine;
@@ -39,10 +36,8 @@ namespace chepp::nnue::network
         constexpr auto simd_params = chepp::nnue::tune::generate_combinations<param_t>(
             simd_type_arr, simd_dim_arr,
             chepp::nnue::tune::generate_combinations<simd_opt_t>(simd_unroll_arr, simd_op_arr));
-    }
+    } // namespace l1
 
-
-
-}
+} // namespace chepp::nnue::network
 
 #endif // CHEPP_NETWORK_INL_H

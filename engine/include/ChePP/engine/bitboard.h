@@ -12,14 +12,12 @@
 
 #if CHEPP_PEXT == 1
 #include <immintrin.h>
-inline uint64_t pext(const uint64_t val, const uint64_t mask)
-{
+inline uint64_t pext(const uint64_t val, const uint64_t mask) {
     return _pext_u64(val, mask);
 }
 #endif
 
-class Bitboard
-{
+class Bitboard {
   public:
     using U64 = std::uint64_t;
 
@@ -36,13 +34,12 @@ class Bitboard
     explicit constexpr Bitboard(const File f) noexcept : m_{FILE_A_MASK << f.index()} {}
 
     static constexpr Bitboard corners() noexcept { return Bitboard{A1} | Bitboard{A8} | Bitboard{H1} | Bitboard{H8}; }
-    static constexpr Bitboard sides() noexcept
-    {
+    static constexpr Bitboard sides() noexcept {
         return Bitboard{FILE_A} | Bitboard{FILE_H} | Bitboard{RANK_1} | Bitboard{RANK_8};
     }
 
     [[nodiscard]] explicit constexpr operator U64() const noexcept { return m_; }
-    [[nodiscard]] constexpr U64      value() const noexcept { return m_; }
+    [[nodiscard]] constexpr U64 value() const noexcept { return m_; }
 
     // bitwise ops
     [[nodiscard]] constexpr Bitboard operator~() const noexcept { return Bitboard{~m_}; }
@@ -50,18 +47,15 @@ class Bitboard
     [[nodiscard]] constexpr Bitboard operator&(const Bitboard o) const noexcept { return Bitboard{m_ & o.m_}; }
     [[nodiscard]] constexpr Bitboard operator^(const Bitboard o) const noexcept { return Bitboard{m_ ^ o.m_}; }
 
-    constexpr Bitboard& operator|=(const Bitboard o) noexcept
-    {
+    constexpr Bitboard& operator|=(const Bitboard o) noexcept {
         m_ |= o.m_;
         return *this;
     }
-    constexpr Bitboard& operator&=(const Bitboard o) noexcept
-    {
+    constexpr Bitboard& operator&=(const Bitboard o) noexcept {
         m_ &= o.m_;
         return *this;
     }
-    constexpr Bitboard& operator^=(const Bitboard o) noexcept
-    {
+    constexpr Bitboard& operator^=(const Bitboard o) noexcept {
         m_ ^= o.m_;
         return *this;
     }
@@ -70,24 +64,21 @@ class Bitboard
     [[nodiscard]] constexpr Bitboard operator>>(const int s) const noexcept { return Bitboard{m_ >> s}; }
 
     // tests
-    [[nodiscard]] constexpr bool     operator==(const Bitboard o) const noexcept { return m_ == o.m_; }
-    [[nodiscard]] constexpr bool     operator!=(const Bitboard o) const noexcept { return m_ != o.m_; }
+    [[nodiscard]] constexpr bool operator==(const Bitboard o) const noexcept { return m_ == o.m_; }
+    [[nodiscard]] constexpr bool operator!=(const Bitboard o) const noexcept { return m_ != o.m_; }
     [[nodiscard]] constexpr explicit operator bool() const noexcept { return m_ != 0; }
 
     // single bit ops
     [[nodiscard]] constexpr bool is_set(const int bit) const noexcept { return (m_ >> bit) & 1ULL; }
-    constexpr Bitboard&          set(const int bit) noexcept
-    {
+    constexpr Bitboard&          set(const int bit) noexcept {
         m_ |= (1ULL << bit);
         return *this;
     }
-    constexpr Bitboard& unset(const int bit) noexcept
-    {
+    constexpr Bitboard& unset(const int bit) noexcept {
         m_ &= ~(1ULL << bit);
         return *this;
     }
-    constexpr Bitboard& flip(const int bit) noexcept
-    {
+    constexpr Bitboard& flip(const int bit) noexcept {
         m_ ^= (1ULL << bit);
         return *this;
     }
@@ -103,17 +94,14 @@ class Bitboard
     [[nodiscard]] constexpr int get_msb() const noexcept { return bit::get_msb(m_); }
 
     template <typename F>
-    void for_each_square(F&& f) const
-    {
+    void for_each_square(F&& f) const {
         Bitboard bb{m_};
-        while (bb)
-        {
+        while (bb) {
             f(Square{bb.pop_lsb()});
         }
     }
 
-    class iterator
-    {
+    class iterator {
       public:
         using value_type        = Square;
         using difference_type   = std::ptrdiff_t;
@@ -125,20 +113,17 @@ class Bitboard
         explicit constexpr iterator(const U64 bits) noexcept : bits_(bits) { advance(); }
 
         constexpr Square    operator*() const noexcept { return Square{current_}; }
-        constexpr iterator& operator++() noexcept
-        {
+        constexpr iterator& operator++() noexcept {
             advance();
             return *this;
         }
-        constexpr iterator operator++(int) noexcept
-        {
+        constexpr iterator operator++(int) noexcept {
             const iterator tmp = *this;
             ++(*this);
             return tmp;
         }
 
-        constexpr bool operator==(const iterator& o) const noexcept
-        {
+        constexpr bool operator==(const iterator& o) const noexcept {
             return bits_ == o.bits_ && current_ == o.current_;
         }
         constexpr bool operator!=(const iterator& o) const noexcept { return !(*this == o); }
@@ -147,10 +132,8 @@ class Bitboard
         U64 bits_;
         int current_{};
 
-        void advance() noexcept
-        {
-            if (bits_ == 0)
-            {
+        void advance() noexcept {
+            if (bits_ == 0) {
                 current_ = -1;
                 return;
             }
@@ -161,8 +144,7 @@ class Bitboard
     [[nodiscard]] constexpr iterator begin() const noexcept { return iterator{m_}; }
     static constexpr iterator        end() noexcept { return iterator{}; }
 
-    [[nodiscard]] std::string to_string() const
-    {
+    [[nodiscard]] std::string to_string() const {
         static constexpr char empty_board[] = "  A B C D E F G H   \n"
                                               "8 . . . . . . . . 8 \n"
                                               "7 . . . . . . . . 7 \n"
@@ -179,36 +161,31 @@ class Bitboard
 
         std::string out(empty_board);
 
-        for (const Square sq : *this)
-        {
+        for (const Square sq : *this) {
             out[row_len + (RANK_8 - sq.rank()).value() * row_len + col_len * (sq.file().value() + 1)] = 'X';
         }
 
         return out;
     }
 
-    friend std::ostream& operator<<(std::ostream& os, const Bitboard& o)
-    {
+    friend std::ostream& operator<<(std::ostream& os, const Bitboard& o) {
         os << o.to_string();
         return os;
     }
 
     static EnumArray<Bitboard, Square, Square> LINES;
     static Bitboard                            line(const Square sq1, const Square sq2) { return LINES[sq1][sq2]; }
-    static bool                                are_aligned(const Square sq1, const Square sq2, const Square sq3)
-    {
+    static bool                                are_aligned(const Square sq1, const Square sq2, const Square sq3) {
         return line(sq1, sq2) == line(sq2, sq3);
     }
     static EnumArray<Bitboard, Square, Square> FROM_TO;
     static Bitboard from_to_incl(const Square sq1, const Square sq2) { return FROM_TO[sq1][sq2]; }
-    static Bitboard from_to_excl(const Square sq1, const Square sq2)
-    {
+    static Bitboard from_to_excl(const Square sq1, const Square sq2) {
         return from_to_incl(sq1, sq2).unset(sq1).unset(sq2);
     }
 
     template <Direction dir>
-    static constexpr Bitboard direction_mask()
-    {
+    static constexpr Bitboard direction_mask() {
         static_assert(dir != NO_DIRECTION, "Invalid direction");
         if constexpr (dir == EAST || dir == NORTH_EAST || dir == SOUTH_EAST)
             return ~Bitboard(FILE_H);
@@ -219,12 +196,10 @@ class Bitboard
     }
 
     template <Direction... Dirs>
-    static constexpr Bitboard shift(Bitboard b)
-    {
+    static constexpr Bitboard shift(Bitboard b) {
         if constexpr (sizeof...(Dirs) == 0)
             return b;
-        else if constexpr (sizeof...(Dirs) == 1)
-        {
+        else if constexpr (sizeof...(Dirs) == 1) {
             constexpr Direction dir  = std::get<0>(std::tuple{Dirs...});
             constexpr Bitboard  mask = direction_mask<dir>();
             return dir > 0 ? (b & mask) << dir : (b & mask) >> -dir;
@@ -234,18 +209,14 @@ class Bitboard
     }
 
     template <Direction... Dirs>
-    static constexpr Bitboard ray(const Square sq, const Bitboard blockers = empty())
-    {
-        if constexpr (sizeof...(Dirs) == 1)
-        {
+    static constexpr Bitboard ray(const Square sq, const Bitboard blockers = empty()) {
+        if constexpr (sizeof...(Dirs) == 1) {
             constexpr Direction Dir     = std::get<0>(std::tuple{Dirs...});
             Bitboard            attacks = empty();
             Bitboard            bb      = shift<Dir>(Bitboard(sq));
-            while (bb)
-            {
+            while (bb) {
                 attacks |= bb;
-                if ((bb & blockers) != empty())
-                    break;
+                if ((bb & blockers) != empty()) break;
                 bb = shift<Dir>(bb);
             }
             return attacks;
@@ -253,46 +224,35 @@ class Bitboard
         return (ray<Dirs>(sq, blockers) | ...);
     }
 
-    static constexpr Bitboard orthogonal_rays(const Square sq, const Bitboard blockers = empty())
-    {
+    static constexpr Bitboard orthogonal_rays(const Square sq, const Bitboard blockers = empty()) {
         return ray<NORTH, EAST, SOUTH, WEST>(sq, blockers);
     }
 
-    static constexpr Bitboard diagonal_rays(const Square sq, const Bitboard blockers = empty())
-    {
+    static constexpr Bitboard diagonal_rays(const Square sq, const Bitboard blockers = empty()) {
         return ray<NORTH_EAST, SOUTH_EAST, NORTH_WEST, SOUTH_WEST>(sq, blockers);
     }
 
-    struct Initialiser
-    {
-        Initialiser()
-        {
-            LINES.fill_pred(
-                [](const Square sq1, const Square sq2) -> Bitboard
-                {
-                    if (sq1.file() == sq2.file())
-                        return Bitboard{sq1.file()};
-                    if (sq1.rank() == sq2.rank())
-                        return Bitboard{sq1.rank()};
-                    if (sq1.file().value() - sq1.rank().value() == sq2.file().value() - sq2.rank().value() ||
-                        sq1.file().value() + sq1.rank().value() == sq2.file().value() + sq2.rank().value())
-                    {
-                        return (diagonal_rays(sq1) & diagonal_rays(sq2))
-                            .set(sq1)
-                            .set(sq2);
-                    }
-                    return empty();
-                });
+    struct Initialiser {
+        Initialiser() {
+            LINES.fill_pred([](const Square sq1, const Square sq2) -> Bitboard {
+                if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
+                if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
+                if (sq1.file().value() - sq1.rank().value() == sq2.file().value() - sq2.rank().value() ||
+                    sq1.file().value() + sq1.rank().value() == sq2.file().value() + sq2.rank().value()) {
+                    return (diagonal_rays(sq1) & diagonal_rays(sq2)).set(sq1).set(sq2);
+                }
+                return empty();
+            });
 
-            FROM_TO.fill_pred(
-                [](const Square to, const Square from)
-                {
-                    return orthogonal_rays(from).is_set(to)
-                               ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)
-                           : diagonal_rays(from).is_set(to)
-                               ? (diagonal_rays(from, Bitboard(to)) & diagonal_rays(to, Bitboard(from))).set(from).set(to)
-                               : empty();
-                });
+            FROM_TO.fill_pred([](const Square to, const Square from) {
+                return orthogonal_rays(from).is_set(to)
+                           ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from)))
+                                 .set(from)
+                                 .set(to)
+                       : diagonal_rays(from).is_set(to)
+                           ? (diagonal_rays(from, Bitboard(to)) & diagonal_rays(to, Bitboard(from))).set(from).set(to)
+                           : empty();
+            });
         }
     };
 
@@ -305,17 +265,14 @@ inline EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO = {};
 
 using bb = Bitboard;
 
-namespace Movegen
-{
-    namespace detail
-    {
+namespace Movegen {
+    namespace detail {
 
         inline EnumArray<Bitboard, Color, Square>     PAWN_PSEUDO_ATTACKS;
         inline EnumArray<Bitboard, PieceType, Square> PIECE_PSEUDO_ATTACKS;
 
         template <PieceType pc>
-        constexpr Bitboard ray(const Square sq, const Bitboard blockers = bb::empty())
-        {
+        constexpr Bitboard ray(const Square sq, const Bitboard blockers = bb::empty()) {
             static_assert(pc == BISHOP || pc == ROOK || pc == QUEEN);
             if constexpr (pc == BISHOP)
                 return bb::diagonal_rays(sq, blockers);
@@ -330,8 +287,7 @@ namespace Movegen
     } // namespace detail
 
     template <PieceType pc>
-    constexpr Bitboard pseudo_attack(const Square sq, const Color c)
-    {
+    constexpr Bitboard pseudo_attack(const Square sq, const Color c) {
         static_assert(pc != NO_PIECE_TYPE, "Invalid piece type");
         if constexpr (pc == PAWN)
             return detail::PAWN_PSEUDO_ATTACKS[c][sq];
@@ -340,14 +296,11 @@ namespace Movegen
         return bb::empty();
     }
 
-    namespace detail
-    {
+    namespace detail {
 
         template <PieceType pc>
-        struct Magics
-        {
-            struct MagicValue
-            {
+        struct Magics {
+            struct MagicValue {
                 using index_type = uint32_t;
                 using mask_type  = Bitboard;
                 mask_type mask;
@@ -357,8 +310,7 @@ namespace Movegen
                 magic_type magic{};
                 shift_type shift{};
 #endif
-                [[nodiscard]] __always_inline index_type operator()(const Bitboard blockers) const
-                {
+                [[nodiscard]] __always_inline index_type operator()(const Bitboard blockers) const {
 #if CHEPP_PEXT != 1
                     return ((blockers & mask).value() * magic) >> shift;
 #else
@@ -367,20 +319,16 @@ namespace Movegen
                 }
             };
 
-            static constexpr Bitboard relevancy_mask(const Square sq)
-            {
+            static constexpr Bitboard relevancy_mask(const Square sq) {
                 // relevancy mask are squares where blockers are relevant for a piece sliding attack computation. // aka
                 // blockers that could stop a ray from a sliding attack // for bishop: it's rays minus the sides because
                 // we stop the ray anyway on the side // for rook it's the same except we keep the side if it sits on it
                 Bitboard mask = ~bb::sides();
-                if constexpr (pc == ROOK)
-                {
-                    if (sq.rank() == RANK_1 || sq.rank() == RANK_8)
-                    {
+                if constexpr (pc == ROOK) {
+                    if (sq.rank() == RANK_1 || sq.rank() == RANK_8) {
                         mask |= Bitboard(sq.rank());
                     }
-                    if (sq.file() == FILE_A || sq.file() == FILE_H)
-                    {
+                    if (sq.file() == FILE_A || sq.file() == FILE_H) {
                         mask |= Bitboard(sq.file());
                     }
                     mask &= ~bb::corners();
@@ -388,23 +336,19 @@ namespace Movegen
                 return ray<pc>(sq) & mask;
             }
 
-            static constexpr std::size_t sz = []()
-            {
+            static constexpr std::size_t sz = []() {
                 size_t ret = 0;
-                for (auto sq = A1; sq <= H8; ++sq)
-                {
+                for (auto sq = A1; sq <= H8; ++sq) {
                     ret += 1ULL << relevancy_mask(sq).popcount();
                 }
                 return ret;
             }();
 
-            void init()
-            {
+            void init() {
                 constexpr uint64_t              MAX_TRIES{UINT64_MAX};
                 typename MagicValue::index_type offset{0};
 
-                for (auto sq : Square::all())
-                {
+                for (auto sq : Square::all()) {
                     const typename MagicValue::mask_type mask{relevancy_mask(sq)};
                     const int                            nb_ones{mask.popcount()};
                     const int                            combinations{1 << nb_ones};
@@ -412,9 +356,7 @@ namespace Movegen
                     const typename MagicValue::shift_type shift{64 - nb_ones};
                     typename MagicValue::magic_type       magic{0};
 
-
-                    static auto random_magic = []() -> uint64_t
-                    {
+                    static auto random_magic = []() -> uint64_t {
                         static std::random_device                      rd;
                         static std::mt19937                            gen(rd());
                         static std::uniform_int_distribution<uint64_t> dist(0, UINT64_MAX);
@@ -427,16 +369,14 @@ namespace Movegen
                         Bitboard       bb{0};
                         int            idx = 0;
                         for (const Square sq : mask)
-                            if (target_bits.is_set(idx++))
-                                bb.set(sq);
+                            if (target_bits.is_set(idx++)) bb.set(sq);
                         return bb;
                     };
 
                     std::vector<Bitboard> cached_blockers(combinations);
                     std::vector<Bitboard> cached_attacks(combinations);
 
-                    for (int comb = 0; comb < combinations; comb++)
-                    {
+                    for (int comb = 0; comb < combinations; comb++) {
                         cached_blockers[comb] = mask_nb(comb);
                         cached_attacks[comb]  = ray<pc>(sq, cached_blockers[comb]);
                     }
@@ -444,8 +384,7 @@ namespace Movegen
                     offsets.at(sq)         = offset;
                     magic_vals.at(sq).mask = mask;
 
-                    for (uint64_t tries = 1;; tries++)
-                    {
+                    for (uint64_t tries = 1;; tries++) {
                         std::vector<bool> tries_map(combinations, false);
                         bool              fail{false};
 #if CHEPP_PEXT != 1
@@ -454,12 +393,10 @@ namespace Movegen
                         magic_vals.at(sq).shift = shift;
 #endif
 
-                        for (int c = 0; c < combinations; c++)
-                        {
+                        for (int c = 0; c < combinations; c++) {
                             const typename MagicValue::index_type index = magic_vals.at(sq)(cached_blockers[c]);
 
-                            if (tries_map[index] && (attacks.at(offset + index) != cached_attacks[c]))
-                            {
+                            if (tries_map[index] && (attacks.at(offset + index) != cached_attacks[c])) {
                                 fail = true;
                                 break;
                             }
@@ -467,12 +404,10 @@ namespace Movegen
                             tries_map[index]           = true;
                         }
 
-                        if (!fail)
-                        {
+                        if (!fail) {
                             break;
                         }
-                        if (tries == MAX_TRIES - 1)
-                        {
+                        if (tries == MAX_TRIES - 1) {
                             throw std::runtime_error("failed to find magic number for slider movegen");
                         }
                     }
@@ -480,8 +415,7 @@ namespace Movegen
                 }
             }
 
-            [[nodiscard]] Bitboard attack(const Square sq, const Bitboard occupancy) const
-            {
+            [[nodiscard]] Bitboard attack(const Square sq, const Bitboard occupancy) const {
                 return attacks[offsets[sq] + magic_vals[sq](occupancy)];
             }
 
@@ -497,42 +431,32 @@ namespace Movegen
         inline Magics<ROOK>   MAGIC_ROOKS;
 
         template <>
-        inline Magics<BISHOP>& magics<BISHOP>()
-        {
+        inline Magics<BISHOP>& magics<BISHOP>() {
             return MAGIC_BISHOPS;
         }
 
         template <>
-        inline Magics<ROOK>& magics<ROOK>()
-        {
+        inline Magics<ROOK>& magics<ROOK>() {
             return MAGIC_ROOKS;
         }
     } // namespace detail
 
     template <PieceType pc>
-    Bitboard attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE)
-    {
+    Bitboard attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE) {
         static_assert(pc, "Invalid piece type");
-        if constexpr (pc == ROOK || pc == BISHOP)
-        {
+        if constexpr (pc == ROOK || pc == BISHOP) {
             return detail::magics<pc>().attack(sq, occupancy);
-        }
-        else if constexpr (pc == QUEEN)
-        {
+        } else if constexpr (pc == QUEEN) {
             return attacks<BISHOP>(sq, occupancy) | attacks<ROOK>(sq, occupancy);
-        }
-        else if constexpr (pc == PAWN || pc == KNIGHT || pc == KING)
-        {
+        } else if constexpr (pc == PAWN || pc == KNIGHT || pc == KING) {
             return pseudo_attack<pc>(sq, c);
         }
         return {};
     }
 
     inline Bitboard attacks(const PieceType pt, const Square sq, const Bitboard occupancy = bb::empty(),
-                            const Color c = WHITE)
-    {
-        switch (pt.value())
-        {
+                            const Color c = WHITE) {
+        switch (pt.value()) {
             case (PAWN).value():
                 return attacks<PAWN>(sq, occupancy, c);
             case (KNIGHT).value():
@@ -551,57 +475,48 @@ namespace Movegen
         }
     }
 
-    struct Initialiser
-    {
-        Initialiser()
-        {
-            detail::PAWN_PSEUDO_ATTACKS.fill_pred(
-                [](const Color c, const Square sq)
-                {
-                    const Bitboard bb{sq};
-                    return c == WHITE ? bb::shift<NORTH_WEST>(bb) | bb::shift<NORTH_EAST>(bb)
-                                      : bb::shift<SOUTH_WEST>(bb) | bb::shift<SOUTH_EAST>(bb);
-                });
+    struct Initialiser {
+        Initialiser() {
+            detail::PAWN_PSEUDO_ATTACKS.fill_pred([](const Color c, const Square sq) {
+                const Bitboard bb{sq};
+                return c == WHITE ? bb::shift<NORTH_WEST>(bb) | bb::shift<NORTH_EAST>(bb)
+                                  : bb::shift<SOUTH_WEST>(bb) | bb::shift<SOUTH_EAST>(bb);
+            });
 
-            detail::PIECE_PSEUDO_ATTACKS.fill_pred(
-                [](const PieceType pt, const Square sq)
-                {
-                    using namespace Movegen::detail;
+            detail::PIECE_PSEUDO_ATTACKS.fill_pred([](const PieceType pt, const Square sq) {
+                using namespace Movegen::detail;
 
-                    const Bitboard bb{sq};
-                    switch (pt.value())
-                    {
-                        case KNIGHT.value():
-                            return bb::shift<NORTH, NORTH, EAST>(bb) | bb::shift<NORTH, NORTH, WEST>(bb) |
-                                   bb::shift<SOUTH, SOUTH, EAST>(bb) | bb::shift<SOUTH, SOUTH, WEST>(bb) |
-                                   bb::shift<EAST, EAST, NORTH>(bb) | bb::shift<EAST, EAST, SOUTH>(bb) |
-                                   bb::shift<WEST, WEST, NORTH>(bb) | bb::shift<WEST, WEST, SOUTH>(bb);
+                const Bitboard bb{sq};
+                switch (pt.value()) {
+                    case KNIGHT.value():
+                        return bb::shift<NORTH, NORTH, EAST>(bb) | bb::shift<NORTH, NORTH, WEST>(bb) |
+                               bb::shift<SOUTH, SOUTH, EAST>(bb) | bb::shift<SOUTH, SOUTH, WEST>(bb) |
+                               bb::shift<EAST, EAST, NORTH>(bb) | bb::shift<EAST, EAST, SOUTH>(bb) |
+                               bb::shift<WEST, WEST, NORTH>(bb) | bb::shift<WEST, WEST, SOUTH>(bb);
 
-                        case BISHOP.value():
-                            return ray<BISHOP>(sq);
+                    case BISHOP.value():
+                        return ray<BISHOP>(sq);
 
-                        case ROOK.value():
-                            return ray<ROOK>(sq);
+                    case ROOK.value():
+                        return ray<ROOK>(sq);
 
-                        case QUEEN.value():
-                            return ray<BISHOP>(sq) | ray<ROOK>(sq);
+                    case QUEEN.value():
+                        return ray<BISHOP>(sq) | ray<ROOK>(sq);
 
-                        case KING.value():
-                            return bb::shift<NORTH>(bb) | bb::shift<SOUTH>(bb) | bb::shift<EAST>(bb) |
-                                   bb::shift<WEST>(bb) | bb::shift<NORTH, EAST>(bb) | bb::shift<NORTH, WEST>(bb) |
-                                   bb::shift<SOUTH, EAST>(bb) | bb::shift<SOUTH, WEST>(bb);
+                    case KING.value():
+                        return bb::shift<NORTH>(bb) | bb::shift<SOUTH>(bb) | bb::shift<EAST>(bb) | bb::shift<WEST>(bb) |
+                               bb::shift<NORTH, EAST>(bb) | bb::shift<NORTH, WEST>(bb) | bb::shift<SOUTH, EAST>(bb) |
+                               bb::shift<SOUTH, WEST>(bb);
 
-                        default:
-                            return Bitboard::empty();
-                    }
-                });
+                    default:
+                        return Bitboard::empty();
+                }
+            });
 
             detail::MAGIC_BISHOPS.init();
             detail::MAGIC_ROOKS.init();
         }
     };
 } // namespace Movegen
-
-
 
 #endif

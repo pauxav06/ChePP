@@ -30,10 +30,8 @@ TEST(ArrayStackTest, BasicOperations) {
     EXPECT_TRUE(s.empty());
 }
 
-
 template <typename Enum>
-class EnumStringTest : public ::testing::Test {
-};
+class EnumStringTest : public ::testing::Test {};
 
 using MyTypes = ::testing::Types<File, Rank, Square, PieceType, Color, Piece, CastlingType, Result>;
 
@@ -41,21 +39,20 @@ TYPED_TEST_SUITE(EnumStringTest, MyTypes);
 
 TYPED_TEST(EnumStringTest, RoundtripConversion) {
     for (auto e : TypeParam::all()) {
-        std::string s = e.to_string();
-        auto back = TypeParam::from_string(s);
+        std::string s    = e.to_string();
+        auto        back = TypeParam::from_string(s);
         EXPECT_TRUE(back.has_value()) << "Empty optional for valid enum member: " << s;
         EXPECT_EQ(*back, e) << "Forward and back do not match: " << s << " -> " << *back;
     }
 }
 
 std::string random_string(const size_t length) {
-    const std::string chars =
-        "abcdefghijklmnopqrstuvwxyz"
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-        "0123456789";
+    const std::string chars = "abcdefghijklmnopqrstuvwxyz"
+                              "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+                              "0123456789";
 
     thread_local std::random_device rd;
-    thread_local std::mt19937 gen(rd());
+    thread_local std::mt19937       gen(rd());
     std::uniform_int_distribution<> dis(0, chars.size() - 1);
 
     std::string result;
@@ -68,50 +65,40 @@ std::string random_string(const size_t length) {
 
 TYPED_TEST(EnumStringTest, InjectiveAndOptionalIfInvalid) {
     std::unordered_map<std::string, TypeParam> map;
-    const size_t max_length = [] ()
-    {
+    const size_t                               max_length = []() {
         size_t ret = 0;
         for (const TypeParam e : TypeParam::all()) {
             ret = std::max(ret, e.to_string().size());
         }
         return ret;
-    } ();
+    }();
 
     thread_local std::random_device rd;
-    thread_local std::mt19937 gen(rd());
+    thread_local std::mt19937       gen(rd());
     std::uniform_int_distribution<> dis(0, max_length + 1);
 
     constexpr size_t iter = 10000;
 
-    for (size_t i = 0; i < iter; i++)
-    {
-        const std::string str = random_string(dis(gen));
-        const std::optional<TypeParam> e = TypeParam::from_string(str);
-        const bool in_map = map.contains(str);
-        if (e.has_value())
-        {
-            if (in_map)
-            {
+    for (size_t i = 0; i < iter; i++) {
+        const std::string              str    = random_string(dis(gen));
+        const std::optional<TypeParam> e      = TypeParam::from_string(str);
+        const bool                     in_map = map.contains(str);
+        if (e.has_value()) {
+            if (in_map) {
                 EXPECT_TRUE(e.has_value());
                 EXPECT_EQ(map.at(str), e);
             }
             map.insert_or_assign(str, *e);
-        }
-        else
-        {
+        } else {
             EXPECT_FALSE(in_map);
         }
     }
     EXPECT_LE(map.size(), TypeParam::total()) << "More enums parsed than valid options";
 }
 
-
-
 TEST(EnumBaseTest, FileRankSquareConversions) {
-    for (const File f : File::all())
-    {
-        for (const Rank r : Rank::all())
-        {
+    for (const File f : File::all()) {
+        for (const Rank r : Rank::all()) {
             Square sq{f, r};
             EXPECT_EQ(sq.file(), f);
             EXPECT_EQ(sq.rank(), r);
@@ -124,7 +111,6 @@ TEST(EnumBaseTest, FileRankSquareConversions) {
     }
 }
 
-
 TEST(EnumArrayTest, SingleEnumFillPred) {
     EnumArray<int, File> arr{};
     arr.fill_pred([](File f) { return static_cast<int>(f.index()); });
@@ -134,15 +120,12 @@ TEST(EnumArrayTest, SingleEnumFillPred) {
 
 TEST(EnumArrayTest, MultiEnumFillPred) {
     EnumArray<int, File, Rank> arr{};
-    arr.fill_pred([](const File f, const Rank r) {
-        return static_cast<int>(f.index() * 10 + r.index());
-    });
+    arr.fill_pred([](const File f, const Rank r) { return static_cast<int>(f.index() * 10 + r.index()); });
     EXPECT_EQ(arr[FILE_B][RANK_3], 1 * 10 + 2);
 }
 
 TEST(PieceTest, PieceTypeAndValues) {
-    for (const Piece pc : Piece::all())
-    {
+    for (const Piece pc : Piece::all()) {
         const auto back = Piece{pc.color(), pc.type()};
         EXPECT_EQ(pc, back);
     }
@@ -151,7 +134,7 @@ TEST(PieceTest, PieceTypeAndValues) {
 TEST(ColorTest, Opposite) {
     EXPECT_EQ(~WHITE, BLACK);
     EXPECT_EQ(~(~BLACK), BLACK);
-    //EXPECT_EQ(~NO_COLOR, NO_COLOR);
+    // EXPECT_EQ(~NO_COLOR, NO_COLOR);
 }
 
 TEST(CastlingTest, KingAndRookMoves) {
@@ -165,7 +148,7 @@ TEST(CastlingTest, KingAndRookMoves) {
 
 TEST(CastlingRightsTest, LostFromMove) {
     CastlingRights cr = CastlingRights::all();
-    Move rookMove{H1, F1};
+    Move           rookMove{H1, F1};
     CastlingRights lost = cr.lost_from_move(rookMove);
     EXPECT_TRUE(lost.has(WHITE_KINGSIDE));
     EXPECT_FALSE(lost.has(WHITE_QUEENSIDE));
@@ -173,17 +156,17 @@ TEST(CastlingRightsTest, LostFromMove) {
 
 TEST(BitHelpersTest, PopcountAndLSBMSB) {
     using u64 = uint64_t;
-    u64 x = (u64(1) << 0) | (u64(1) << 3) | (u64(1) << 63);
+    u64 x     = (u64(1) << 0) | (u64(1) << 3) | (u64(1) << 63);
     EXPECT_EQ(bit::popcount(x), 3);
     EXPECT_EQ(bit::get_lsb(x), 0);
     EXPECT_EQ(bit::get_msb(x), 63);
 
-    u64 y = x;
+    u64 y   = x;
     int lsb = bit::pop_lsb(y);
     EXPECT_EQ(lsb, 0);
     EXPECT_EQ(bit::get_lsb(y), 3);
 
-    u64 z = x;
+    u64 z   = x;
     int msb = bit::pop_msb(z);
     EXPECT_EQ(msb, 63);
 }
@@ -218,7 +201,7 @@ TEST(MoveFromUciTest, NormalPawnMove) {
     pieces.fill(NO_PIECE);
     pieces[E2] = W_PAWN;
     Move::UciInfo info{pieces, NO_SQUARE, CastlingRights::none()};
-    auto mv = Move::from_uci("e2e4", info);
+    auto          mv = Move::from_uci("e2e4", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->from_sq().to_string(), "e2");
     EXPECT_EQ(mv->to_sq().to_string(), "e4");
@@ -229,12 +212,12 @@ TEST(MoveFromUciTest, EnPassant) {
     pieces.fill(NO_PIECE);
     pieces[E5] = W_PAWN;
     Move::UciInfo info{pieces, D6, CastlingRights::none()};
-    auto mv = Move::from_uci("e5d6", info);
+    auto          mv = Move::from_uci("e5d6", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->type_of(), EN_PASSANT);
 
     Move::UciInfo info1{pieces, NO_SQUARE, CastlingRights::none()};
-    auto mv1 = Move::from_uci("e5d6", info1);
+    auto          mv1 = Move::from_uci("e5d6", info1);
     ASSERT_TRUE(mv1.has_value());
     EXPECT_EQ(mv1->type_of(), NORMAL);
 }
@@ -245,8 +228,8 @@ TEST(MoveFromUciTest, Castling) {
     pieces[E1] = W_KING;
     pieces[H1] = W_ROOK;
     CastlingRights cr{WHITE_KINGSIDE};
-    Move::UciInfo info{pieces, NO_SQUARE, cr};
-    auto mv = Move::from_uci("e1g1", info);
+    Move::UciInfo  info{pieces, NO_SQUARE, cr};
+    auto           mv = Move::from_uci("e1g1", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->type_of(), CASTLING);
     EXPECT_EQ(mv->castling_type(), WHITE_KINGSIDE);
@@ -254,11 +237,10 @@ TEST(MoveFromUciTest, Castling) {
     cr.remove(CastlingRights::all());
 
     Move::UciInfo info1{pieces, NO_SQUARE, cr};
-    auto mv1 = Move::from_uci("e1g1", info1);
+    auto          mv1 = Move::from_uci("e1g1", info1);
     ASSERT_TRUE(mv1.has_value());
     EXPECT_EQ(mv1->type_of(), NORMAL);
 }
-
 
 TEST(CastlingRights, RoundtripAndInvalid) {
     EXPECT_EQ(std::string(CASTLING_NONE.to_string()), std::string("-"));
@@ -338,7 +320,7 @@ TEST(CastlingRights, KingAndRookMovesRemoveCorrectRights) {
     CastlingRights full = CastlingRights::all();
     EXPECT_EQ(full.mask(), CASTLING_KQkq.mask());
 
-    Move mk = Move::make<NORMAL>(E1, G1);
+    Move           mk   = Move::make<NORMAL>(E1, G1);
     CastlingRights lost = full.lost_from_move(mk);
     EXPECT_EQ(lost.mask(), CASTLING_KQ.mask());
 
@@ -346,12 +328,11 @@ TEST(CastlingRights, KingAndRookMovesRemoveCorrectRights) {
     CastlingRights lost2 = onlyK.lost_from_move(mk);
     EXPECT_EQ(lost2.mask(), CASTLING_K.mask());
 
-    Move rook_h1 = Move::make<NORMAL>(H1, F1);
-    CastlingRights lost3 = CASTLING_KQkq.lost_from_move(rook_h1);
+    Move           rook_h1 = Move::make<NORMAL>(H1, F1);
+    CastlingRights lost3   = CASTLING_KQkq.lost_from_move(rook_h1);
     EXPECT_EQ(lost3.mask(), CASTLING_K.mask());
 
-    Move rook_a8 = Move::make<NORMAL>(A8, B8);
-    CastlingRights lost4 = CASTLING_KQkq.lost_from_move(rook_a8);
+    Move           rook_a8 = Move::make<NORMAL>(A8, B8);
+    CastlingRights lost4   = CASTLING_KQkq.lost_from_move(rook_a8);
     EXPECT_EQ(lost4.mask(), CASTLING_q.mask());
 }
-

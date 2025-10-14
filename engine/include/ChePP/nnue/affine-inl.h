@@ -42,8 +42,10 @@ namespace chepp::nnue::layers::affine {
 
             using weights_extent_t = extents<extent_type, Rows, Cols>;
             using biases_extent_t  = extents<extent_type, Cols>;
-            using weight_array_t   = mdarray<const input_type, weights_extent_t, layout_right, hwy::AlignedVector<input_type>>;
-            using bias_array_t     = mdarray<const output_type, biases_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+            using weight_array_t =
+                mdarray<const input_type, weights_extent_t, layout_right, hwy::AlignedVector<input_type>>;
+            using bias_array_t =
+                mdarray<const output_type, biases_extent_t, layout_right, hwy::AlignedVector<output_type>>;
 
             weights_extent_t m_weights_extent;
             biases_extent_t  m_biases_extent;
