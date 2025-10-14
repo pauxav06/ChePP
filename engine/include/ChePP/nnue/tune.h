@@ -73,6 +73,24 @@ namespace chepp::nnue::tune {
         return generate_combinations_impl<Dest, Arrays...>(arrays...);
     }
 
+    template <typename T, size_t N>
+    consteval auto append_element(const std::array<T, N>& arr, const T& elem) {
+        std::array<T, N + 1> result{};
+        for (size_t i = 0; i < N; ++i) {
+            result[i] = arr[i];
+        }
+        result[N] = elem;
+        return result;
+    }
+
+    template <typename T, size_t N1, size_t N2>
+    consteval auto combine_arrays(const std::array<T, N1>& a1, const std::array<T, N2>& a2) {
+        std::array<T, N1 + N2> result{};
+        for (size_t i = 0; i < N1; ++i) result[i] = a1[i];
+        for (size_t i = 0; i < N2; ++i) result[N1 + i] = a2[i];
+        return result;
+    }
+
 } // namespace chepp::nnue::tune
 
 #endif // CHEPP_TUNE_H
