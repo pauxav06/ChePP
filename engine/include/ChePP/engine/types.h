@@ -93,13 +93,21 @@ struct ArrayStack
     size_type        m_size{0};
 };
 
+template <typename EnumT>
+struct EnumTraits;
+
+template <typename T>
+concept StringRepresentableEnum = requires(T t, std::string s) {
+    { EnumTraits<T>::to_string(t) } -> std::convertible_to<std::string>;
+    { EnumTraits<T>::from_string(s) } -> std::same_as<std::optional<T>>;
+};
+
 // a custom enum of consecutive integers 0 ... N and a NONE value N + 1
 // values will wrap like integers if they go passed the NONE value
 // f eg, for a Color enum with [WHITE, BLACK, NONE], incrementing will result in the following sequence
 // [WHITE, BLACK, NONE, WHITE, BLACK ...], and decrementing [WHITE, NONE, BLACK, WHITE, NONE, BLACK ...]
 // Loop limits can hence always be the NONE value
-template <typename DerivedT, typename UnderlyingT, std::size_t COUNT,
-          const std::array<std::string_view, COUNT + 1>& repr, bool EnableInc = false, bool EnableArithmetic = false>
+template <typename DerivedT, typename UnderlyingT, std::size_t COUNT, bool EnableInc = false, bool EnableArithmetic = false>
     requires(std::is_integral_v<UnderlyingT> && std::is_unsigned_v<UnderlyingT>)
 struct EnumBase
 {
@@ -108,9 +116,9 @@ struct EnumBase
 
     static constexpr std::size_t COUNT_V = COUNT;
     static constexpr std::size_t TOTAL_V = COUNT + 1;
-    static constexpr const auto& repr_v  = repr;
 
     using ValueT = UnderlyingT;
+    using TraitsT = EnumTraits<DerivedT>;
     using ReprT  = const std::array<std::string_view, TOTAL_V>; // array of string representation of values
     using IndexT = std::size_t;
 
@@ -133,19 +141,20 @@ struct EnumBase
     [[nodiscard]] constexpr bool               is_none() const noexcept { return m_val == NONE_VALUE; }
     [[nodiscard]] static constexpr std::size_t count() noexcept { return COUNT_V; }
     [[nodiscard]] static constexpr std::size_t total() noexcept { return TOTAL_V; }
+    [[nodiscard]] static constexpr DerivedT    none() noexcept { return DerivedT(NONE_VALUE); }
 
-    [[nodiscard]] constexpr std::string to_string() const { return std::string{repr.at(index())}; }
-
-    [[nodiscard]] static constexpr std::optional<DerivedT> from_string(const std::string_view& sv)
-    {
-        const auto it = std::ranges::find(repr, sv);
-        return it == repr.end() ? std::nullopt : std::optional{DerivedT{std::distance(repr.begin(), it)}};
+    [[nodiscard]] constexpr std::string to_string() const noexcept
+    requires (StringRepresentableEnum<DerivedT>) {
+        return std::string{TraitsT::to_string(static_cast<DerivedT>(value()))};
+    }
+    [[nodiscard]] static constexpr std::optional<DerivedT> from_string(const std::string& s)
+    requires (StringRepresentableEnum<DerivedT>) {
+        return TraitsT::from_string(s);
     }
 
     friend std::ostream& operator<<(std::ostream& os, const EnumBase& e)
-    {
-        os << e.to_string();
-        return os;
+    requires (StringRepresentableEnum<DerivedT>) {
+        return os << e.to_string();
     }
 
     friend constexpr DerivedT operator+(const DerivedT a, const int rhs) noexcept
@@ -258,7 +267,7 @@ template <typename T, typename... Enums>
 struct EnumArray;
 
 template <typename T, typename Enum>
-    requires(std::is_base_of_v<EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::repr_v, Enum::EnableInc_v,
+    requires(std::is_base_of_v<EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::EnableInc_v,
                                         Enum::EnableArithmetic_v>,
                                Enum> &&
              Enum::count() > 0)
@@ -314,7 +323,7 @@ struct EnumArray<T, Enum>
 };
 
 template <typename T, typename FirstEnum, typename... RestEnums>
-    requires(std::is_base_of_v<EnumBase<FirstEnum, typename FirstEnum::ValueT, FirstEnum::COUNT_V, FirstEnum::repr_v,
+    requires(std::is_base_of_v<EnumBase<FirstEnum, typename FirstEnum::ValueT, FirstEnum::COUNT_V,
                                         FirstEnum::EnableInc_v, FirstEnum::EnableArithmetic_v>,
                                FirstEnum> &&
              FirstEnum::count() > 0)
@@ -372,18 +381,25 @@ struct EnumArray<T, FirstEnum, RestEnums...>
     }
 };
 
-inline constexpr std::array<std::string_view, 9> file_repr{"a", "b", "c", "d", "e", "f", "g", "h", "-"};
-
-struct File : EnumBase<File, uint8_t, 8, file_repr, true, true>
+struct File : EnumBase<File, uint8_t, 8, true, true>
 {
     using base = EnumBase;
     using base::EnumBase;
+};
 
-    [[nodiscard]] static constexpr std::optional<File> from_string(const std::string_view& sv)
-    {
-        if (sv.size() != 1 || sv[0] < 'a' || sv[0] > 'h') return std::nullopt;
-        if (sv[0] == '-') return File{NONE_VALUE};
-        return File{sv[0] - 'a'};
+template <>
+struct EnumTraits<File>
+{
+    static constexpr std::string_view repr{"abcdefgh-"};
+
+    [[nodiscard]] static constexpr std::string to_string(const File f) noexcept {
+        return std::string{repr.at(f.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<File> from_string(const std::string& s) noexcept {
+        if(s == "-") return File::none();
+        if(s.size() == 1 && s[0] >= 'a' && s[0] <= 'h') return File{s[0]-'a'};
+        return {};
     }
 };
 
@@ -397,18 +413,27 @@ constexpr File FILE_G{6};
 constexpr File FILE_H{7};
 constexpr File NO_FILE{8};
 
-inline constexpr std::array<std::string_view, 9> rank_repr = {"1", "2", "3", "4", "5", "6", "7", "8", "-"};
 
-struct Rank : EnumBase<Rank, uint8_t, 8, rank_repr, true, true>
+struct Rank : EnumBase<Rank, uint8_t, 8, true, true>
 {
     using base = EnumBase;
     using base::EnumBase;
+};
+
+template <>
+struct EnumTraits<Rank>
+{
+    static constexpr std::string_view repr{"12345678-"};
+
+    [[nodiscard]] static constexpr std::string to_string(const Rank r) noexcept {
+        return std::string{repr.at(r.index())};
+    }
 
     [[nodiscard]] static constexpr std::optional<Rank> from_string(const std::string_view& sv)
     {
-        if (sv.size() != 1 || sv[0] < '1' || sv[0] > '8') return std::nullopt;
-        if (sv[0] == '-') return Rank{NONE_VALUE};
-        return Rank{sv[0] - '1'};
+        if (sv == "-") return Rank{};
+        if (sv.size() == 1 && sv[0] >= '1' && sv[0] <= '8') return Rank{sv[0] - '1'};
+        return {};
     }
 };
 
@@ -424,13 +449,7 @@ constexpr Rank NO_RANK{8};
 
 using Coordinates = std::pair<File, Rank>;
 
-inline constexpr std::array<std::string_view, 65> square_repr{
-    "a1", "b1", "c1", "d1", "e1", "f1", "g1", "h1", "a2", "b2", "c2", "d2", "e2", "f2", "g2", "h2", "a3",
-    "b3", "c3", "d3", "e3", "f3", "g3", "h3", "a4", "b4", "c4", "d4", "e4", "f4", "g4", "h4", "a5", "b5",
-    "c5", "d5", "e5", "f5", "g5", "h5", "a6", "b6", "c6", "d6", "e6", "f6", "g6", "h6", "a7", "b7", "c7",
-    "d7", "e7", "f7", "g7", "h7", "a8", "b8", "c8", "d8", "e8", "f8", "g8", "h8", "-"};
-
-struct Square : EnumBase<Square, uint8_t, 64, square_repr, true, true>
+struct Square : EnumBase<Square, uint8_t, 64, true, true>
 {
     using base = EnumBase;
     using base::EnumBase;
@@ -451,12 +470,24 @@ struct Square : EnumBase<Square, uint8_t, 64, square_repr, true, true>
     [[nodiscard]] constexpr Square flipped_horizontally() const noexcept { return Square{file(), RANK_8 - rank()}; }
 
     [[nodiscard]] constexpr Square flipped_vertically() const noexcept { return Square{FILE_H - file(), rank()}; }
+};
 
-    [[nodiscard]] static constexpr std::optional<Square> from_string(const std::string_view& sv)
+template <>
+struct EnumTraits<Square>
+{
+    [[nodiscard]] static constexpr std::string to_string(const Square sq) noexcept {
+        if (!sq) return "-";
+        return std::string{sq.file().to_string() + sq.rank().to_string()};
+    }
+
+    [[nodiscard]] static constexpr std::optional<Square> from_string(const std::string& s)
     {
-        if (sv.size() == 1 && sv[0] == '-') return Square{NONE_VALUE};
-        if (sv.size() != 2 || sv[0] < 'a' || sv[0] > 'h' || sv[1] < '1' || sv[1] > '8') return std::nullopt;
-        return std::optional{Square{File{sv[0] - 'a'}, Rank{sv[1] - '1'}}};
+        if (s.size() == 1 && s[0] == '-') return Square::none();
+        if (s.size() != 2) return {};
+        const auto file = File::from_string(s.substr(0, 1));
+        const auto rank = Rank::from_string(s.substr(1, 1));
+        if (!file || !rank) return std::nullopt;
+        return Square{*file, *rank};
     }
 };
 
@@ -534,9 +565,8 @@ constexpr Square H8{FILE_H, RANK_8};
 
 constexpr Square NO_SQUARE{64};
 
-inline constexpr std::array<std::string_view, 7> piece_type_repr = {"p", "n", "b", "r", "q", "k", "-"};
 
-struct PieceType : EnumBase<PieceType, uint8_t, 6, piece_type_repr, true, true>
+struct PieceType : EnumBase<PieceType, uint8_t, 6, true, true>
 {
     using base = EnumBase;
     using base::EnumBase;
@@ -544,6 +574,24 @@ struct PieceType : EnumBase<PieceType, uint8_t, 6, piece_type_repr, true, true>
     using PieceValueT = int;
     [[nodiscard]] constexpr PieceValueT piece_value() const;
 };
+
+template <>
+struct EnumTraits<PieceType>
+{
+    static constexpr std::string_view repr{"pnbrqk-"};
+
+    [[nodiscard]] static constexpr std::string to_string(const PieceType pt) noexcept {
+        return std::string{repr.at(pt.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<PieceType> from_string(const std::string& s) noexcept {
+        if (s.size() != 1) return std::nullopt;
+        const auto it = repr.find(s[0]);
+        if (it == std::string::npos) return std::nullopt;
+        return PieceType{it};
+    }
+};
+
 
 constexpr PieceType PAWN{0};
 constexpr PieceType KNIGHT{1};
@@ -560,9 +608,8 @@ inline EnumArray<PieceType::PieceValueT, PieceType> piece_type_value{100, 300, 3
     return piece_type_value.at(*this);
 }
 
-inline constexpr std::array<std::string_view, 3> color_repr = {"w", "b", "-"};
 
-struct Color : EnumBase<Color, uint8_t, 2, color_repr>
+struct Color : EnumBase<Color, uint8_t, 2>
 {
     using base = EnumBase;
     using base::EnumBase;
@@ -576,14 +623,22 @@ struct Color : EnumBase<Color, uint8_t, 2, color_repr>
     // Prevent misuse of boolean context or !
     constexpr bool     operator!() const     = delete;
     explicit constexpr operator bool() const = delete;
+};
 
-    [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string_view& sv) noexcept
-    {
-        if (sv.size() != 1) return std::nullopt;
-        const char c   = sv[0];
-        const int  val = c == 'w' ? 0 : c == 'b' ? 1 : c == '-' ? 2 : 3;
-        if (val == 3) return std::nullopt;
-        return std::optional{Color{val}};
+template <>
+struct EnumTraits<Color>
+{
+    static constexpr std::string_view repr = {"wb-"};
+
+    [[nodiscard]] static constexpr std::string to_string(const Color c) noexcept {
+        return std::string{repr.at(c.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<Color> from_string(const std::string& s) noexcept {
+        if (s.size() != 1) return std::nullopt;
+        const auto it = repr.find(s[0]);
+        if (it == std::string::npos) return std::nullopt;
+        return Color{it};
     }
 };
 
@@ -591,10 +646,7 @@ constexpr Color WHITE{0};
 constexpr Color BLACK{1};
 constexpr Color NO_COLOR{2};
 
-inline constexpr std::array<std::string_view, 13> piece_repr = {"P", "p", "N", "n", "B", "b", "R",
-                                                                "r", "Q", "q", "K", "k", "-"};
-
-struct Piece : EnumBase<Piece, uint8_t, 12, piece_repr, true, true>
+struct Piece : EnumBase<Piece, uint8_t, 12, true, true>
 {
     using base = EnumBase;
     using base::EnumBase;
@@ -607,6 +659,22 @@ struct Piece : EnumBase<Piece, uint8_t, 12, piece_repr, true, true>
 
     using PieceValueT = int;
     [[nodiscard]] constexpr PieceValueT piece_value() const { return piece_type_value.at(this->type()); }
+};
+
+template <>
+struct EnumTraits<Piece>
+{
+    static constexpr std::string_view repr{"PpNnBbRrQqKk-"};
+    [[nodiscard]] static constexpr std::string to_string(const Piece pt) noexcept {
+        return std::string{repr.at(pt.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<Piece> from_string(const std::string& s) noexcept {
+        if (s.size() != 1) return std::nullopt;
+        const auto it = repr.find(s[0]);
+        if (it == std::string::npos) return std::nullopt;
+        return Piece{it};
+    }
 };
 
 constexpr Piece W_PAWN{WHITE, PAWN};
@@ -684,9 +752,8 @@ enum CastlingSide : uint8_t
     QUEENSIDE = 1,
 };
 
-inline constexpr std::array<std::string_view, 5> castling_type_repr = {"K", "Q", "k", "q", "-"};
 
-struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
+struct CastlingType : EnumBase<CastlingType, uint8_t, 4>
 {
     using base = EnumBase;
     using base::EnumBase;
@@ -723,6 +790,22 @@ struct CastlingType : EnumBase<CastlingType, uint8_t, 4, castling_type_repr>
         constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
             std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
         return rook_moves.at(*this);
+    }
+};
+
+template <>
+struct EnumTraits<CastlingType>
+{
+    static constexpr std::string_view repr{"KQkq-"};
+    [[nodiscard]] static constexpr std::string to_string(const CastlingType pt) noexcept {
+        return std::string{repr.at(pt.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<CastlingType> from_string(const std::string& s) noexcept {
+        if (s.size() != 1) return std::nullopt;
+        const auto it = repr.find(s[0]);
+        if (it == std::string::npos) return std::nullopt;
+        return CastlingType{it};
     }
 };
 
@@ -799,6 +882,8 @@ struct CastlingRights
 
     [[nodiscard]] constexpr CastlingRights lost_from_move(Move move) const;
 
+
+
     [[nodiscard]] static constexpr std::optional<CastlingRights> from_string(const std::string_view& sv)
     {
         const auto it = std::ranges::find(repr, sv);
@@ -845,13 +930,27 @@ constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUE
 
 constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
-inline constexpr std::array<std::string_view, 4> result_repr = {"1-0", "0-1", "1/2-1/2", "*"};
-struct Result : EnumBase<Result, uint8_t, 3, result_repr>
+struct Result : EnumBase<Result, uint8_t, 3>
 {
     using base = EnumBase;
     using base::EnumBase;
 
     explicit constexpr Result(const Color c) : EnumBase(c.value()) {}
+};
+
+template <>
+struct EnumTraits<Result>
+{
+    static constexpr std::array<std::string_view, Result::total()> repr{"1-0", "0-1", "1/2-1/2", "*"};
+    [[nodiscard]] static constexpr std::string to_string(const Result r) noexcept {
+        return std::string{repr.at(r.index())};
+    }
+
+    [[nodiscard]] static constexpr std::optional<Result> from_string(const std::string& s) noexcept {
+        const auto it = std::ranges::find(repr, s);
+        if (it == repr.end()) return std::nullopt;
+        return Result{std::distance(repr.begin(), it)};
+    }
 };
 
 constexpr Result WIN_WHITE{0};
@@ -1003,7 +1102,7 @@ struct Move
         CastlingRights                  castling_rights;
     };
 
-    static constexpr std::optional<Move> from_uci(const std::string_view& sv, const UciInfo& info);
+    static constexpr std::optional<Move> from_uci(const std::string& s, const UciInfo& info);
 
     friend std::ostream& operator<<(std::ostream& os, const Move mv) { return os << mv.to_string(); }
 
@@ -1068,20 +1167,20 @@ struct std::hash<Move>
     std::size_t operator()(const Move& m) const noexcept { return std::hash<std::uint16_t>()(m.raw()); }
 };
 
-constexpr std::optional<Move> Move::from_uci(const std::string_view& sv, const UciInfo& info)
+constexpr std::optional<Move> Move::from_uci(const std::string& s, const UciInfo& info)
 {
-    if (!(sv.size() == 4 || sv.size() == 5))
+    if (!(s.size() == 4 || s.size() == 5))
         return std::nullopt;
 
-    const auto from = Square::from_string(sv.substr(0, 2));
-    const auto to   = Square::from_string(sv.substr(2, 2));
+    const auto from = Square::from_string(s.substr(0, 2));
+    const auto to   = Square::from_string(s.substr(2, 2));
 
     if (!from || !to)
         return std::nullopt;
 
-    if (sv.size() == 5)
+    if (s.size() == 5)
     {
-        const auto pt = PieceType::from_string(sv.substr(4, 1));
+        const auto pt = PieceType::from_string(s.substr(4, 1));
         if (!pt)
             return std::nullopt;
         return make<PROMOTION>(*from, *to, *pt);
