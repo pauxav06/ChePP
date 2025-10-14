@@ -18,6 +18,10 @@
 #include <unistd.h>
 #endif
 
+// A tmp file should never fail to be deleted even on hard crash like SIGILL or SEGFAULT as they are used to
+// shuffle datasets that can be several hundreds GB.
+// This unfortunaltly means we cannot provide a ifstrem and ofstrem.
+
 class TmpFile {
     std::filesystem::path path_;
     std::fstream fs_;
@@ -81,7 +85,7 @@ public:
         fs_.open(path_, std::ios::in | std::ios::out |
                           std::ios::binary | std::ios::trunc);
         if (!fs_) throw std::runtime_error("Failed to open tmp file");
-        unlink(path_.c_str());
+        unlink(path_.c_str()); // ensures delete
 #endif
     }
 
