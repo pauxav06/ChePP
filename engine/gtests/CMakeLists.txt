@@ -18,7 +18,6 @@ target_include_directories(ChePP_tests PRIVATE
 )
 
 target_link_libraries(ChePP_tests PRIVATE
-        hwy_test
         GTest::gtest_main
         ChePP_engine
 )
