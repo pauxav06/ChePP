@@ -66,7 +66,7 @@ struct Position
     [[nodiscard]] Piece              captured_by_move(Move move) const;
     void               do_move(Move move);
     [[nodiscard]] bool is_quiet(Move move) const;
-    bool                                                     is_tactical(Move move) const;
+    [[nodiscard]] bool                                                     is_tactical(Move move) const;
     [[nodiscard]] bool is_valid(Move move) const;
     [[nodiscard]] std::expected<std::monostate, std::string> is_ok_verbose() const;
     template <bool verbose = false>
@@ -161,14 +161,9 @@ template <typename... Ts>
 template <typename... Ts>
 Bitboard Position::occupancy(const PieceType first, const Ts... rest) const
 {
-    if constexpr (sizeof...(rest) == 0)
-    {
-        return occupancy(first);
-    }
-    else
-    {
-        return occupancy(first) | occupancy(rest...);
-    }
+    if constexpr (sizeof...(rest) == 0) return occupancy(first);
+    else return occupancy(first) | occupancy(rest...);
+
 }
 
 inline Bitboard Position::occupancy(const std::initializer_list<PieceType> types) const
