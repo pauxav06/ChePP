@@ -5,19 +5,20 @@ set (TEST_SOURCES
         perft_tests.cpp
         repetitions_test.cpp
         zobrist_tests.cpp
-        layers_test.cpp
         nnue_test.cpp
+        types_test.cpp
 )
 
 add_executable(ChePP_tests ${TEST_SOURCES})
 
 target_include_directories(ChePP_tests PRIVATE
         ${CMAKE_SOURCE_DIR}/engine/include
+        ${CMAKE_SOURCE_DIR}/engine/gtests
+
 )
 
 target_link_libraries(ChePP_tests PRIVATE
         GTest::gtest_main
-        cpu_flags
         ChePP_engine
 )
 
