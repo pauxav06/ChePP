@@ -44,6 +44,16 @@ namespace chepp::nnue::layers::affine
         Dims dims;
         Opt<kernel> opt;
     };
+
+    template <Kernels... Ks>
+    struct OptVariantFromEnumList {
+        using type = std::variant<Opt<Ks>...>;
+    };
+
+    template <Kernels... Ks>
+    using OptVariantFromEnumList_t = OptVariantFromEnumList<Ks...>::type;
+
+    using test = OptVariantFromEnumList_t<Kernels::SIMD, Kernels::Scalar>;
 }
 
 #endif // CHEPP_AFFINE_H
