@@ -7,6 +7,8 @@ set (TEST_SOURCES
         zobrist_tests.cpp
         nnue_test.cpp
         types_test.cpp
+        affine_test.cpp
+        accum_test.cpp
 )
 
 add_executable(ChePP_tests ${TEST_SOURCES})
@@ -18,6 +20,7 @@ target_include_directories(ChePP_tests PRIVATE
 )
 
 target_link_libraries(ChePP_tests PRIVATE
+        hwy_test
         GTest::gtest_main
         ChePP_engine
 )

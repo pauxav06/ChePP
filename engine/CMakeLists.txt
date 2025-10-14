@@ -1,60 +1,29 @@
-cmake_minimum_required(VERSION 3.14)
+cmake_minimum_required(VERSION 3.5)
+cmake_policy(SET CMP0079 NEW)
 project(ChePP LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 23)
-set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-set(CPU_PROBE_SRC_DIR ${CMAKE_CURRENT_SOURCE_DIR}/cpu_probe)
-set(CPU_PROBE_BUILD_DIR ${CMAKE_CURRENT_BINARY_DIR}/cpu_probe_build)
-set(CPU_PROBE_INSTALL_DIR ${CMAKE_CURRENT_BINARY_DIR}/cpu_probe_install)
-set(GENERATED_DIR ${CMAKE_CURRENT_BINARY_DIR}/generated)
-file(MAKE_DIRECTORY ${CPU_PROBE_BUILD_DIR})
-file(MAKE_DIRECTORY ${CPU_PROBE_INSTALL_DIR})
-file(MAKE_DIRECTORY ${GENERATED_DIR})
+enable_testing()
 
-execute_process(
-        COMMAND ${CMAKE_COMMAND} -S ${CPU_PROBE_SRC_DIR} -B ${CPU_PROBE_BUILD_DIR}
-        -DCMAKE_INSTALL_PREFIX=${CPU_PROBE_INSTALL_DIR}
-        RESULT_VARIABLE cpures
-        OUTPUT_VARIABLE cpu_out
-        ERROR_VARIABLE cpu_err
+FetchContent_Declare(
+        highway
+        GIT_REPOSITORY https://github.com/google/highway.git
+        GIT_TAG master
 )
-message(STATUS "CPU probe configure output:\n${cpu_out}")
-if(NOT cpures EQUAL 0)
-    message(FATAL_ERROR "CPU probe configure failed:\n${cpu_err}")
-endif()
+FetchContent_MakeAvailable(highway)
 
-execute_process(
-        COMMAND ${CMAKE_COMMAND} --build ${CPU_PROBE_BUILD_DIR} --target cpu_feature_flags
-        RESULT_VARIABLE cpures
-        OUTPUT_VARIABLE cpu_out
-        ERROR_VARIABLE cpu_err
+include(FetchContent)
+
+FetchContent_Declare(
+        mdspan
+        GIT_REPOSITORY https://github.com/kokkos/mdspan.git
+        GIT_TAG stable
 )
-message(STATUS "CPU probe build output:\n${cpu_out}")
-if(NOT cpures EQUAL 0)
-    message(FATAL_ERROR "CPU probe build failed:\n${cpu_err}")
-endif()
 
-execute_process(
-        COMMAND ${CPU_PROBE_BUILD_DIR}/cpu_feature_flags
-        WORKING_DIRECTORY ${GENERATED_DIR}
-        RESULT_VARIABLE cpures
-        OUTPUT_VARIABLE cpu_out
-        ERROR_VARIABLE cpu_err
-)
-message(STATUS "CPU probe execution output:\n${cpu_out}")
-if(NOT cpures EQUAL 0)
-    message(FATAL_ERROR "CPU probe execution failed:\n${cpu_err}")
-endif()
-
-include(${GENERATED_DIR}/cpu_flags.cmake)
-add_library(cpu_flags INTERFACE)
-target_compile_options(cpu_flags INTERFACE ${CPU_COMPILE_FLAGS})
-message(" cpu compile flags " ${CPU_COMPILE_FLAGS})
-
+FetchContent_MakeAvailable(mdspan)
 
 if(MSVC)
     add_compile_options(
@@ -96,13 +65,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fathom)
 
-FetchContent_Declare(
-        googletest
-        GIT_REPOSITORY https://github.com/google/googletest.git
-        GIT_TAG main
-)
-FetchContent_MakeAvailable(googletest)
-enable_testing()
+
 
 set(NETWORK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/resources/latest.net)
 set(NETWORK_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/ChePP/engine/layers.h)
@@ -137,15 +100,14 @@ set(ENGINE_SOURCES
 add_library(ChePP_engine STATIC ${ENGINE_SOURCES})
 add_dependencies(ChePP_engine embed_network)
 
-target_link_libraries(ChePP_engine cpu_flags)
+target_link_libraries(ChePP_engine hwy)
 target_include_directories(ChePP_engine PUBLIC
         include/ChePP/engine
         include/ChePP/nnue
         ${CMAKE_CURRENT_SOURCE_DIR}/../external
         ${fathom_SOURCE_DIR}
         ${highway_SOURCE_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}
-        ${GENERATED_DIR}
+        ${mdspan_SOURCE_DIR}/include
 )
 
 target_compile_definitions(ChePP_engine PRIVATE TB_NO_THREADS=1)
