@@ -98,8 +98,11 @@ concept StringRepresentableEnum = requires(T t, std::string s) {
 // f eg, for a Color enum with [WHITE, BLACK, NONE], incrementing will result in the following sequence
 // [WHITE, BLACK, NONE, WHITE, BLACK ...], and decrementing [WHITE, NONE, BLACK, WHITE, NONE, BLACK ...]
 // Loop limits can hence always be the NONE value
-template <typename DerivedT, typename UnderlyingT, std::size_t COUNT, bool EnableInc = false,
-          bool EnableArithmetic = false>
+template <typename DerivedT,
+          typename UnderlyingT,
+          std::size_t COUNT,
+          bool        EnableInc        = false,
+          bool        EnableArithmetic = false>
     requires(std::is_integral_v<UnderlyingT> && std::is_unsigned_v<UnderlyingT>)
 struct EnumBase {
     static constexpr bool EnableInc_v        = EnableInc;
@@ -110,14 +113,11 @@ struct EnumBase {
 
     using ValueT  = UnderlyingT;
     using TraitsT = EnumTraits<DerivedT>;
-    using ReprT   = const std::array<std::string_view, TOTAL_V>; // array of string representation of values
     using IndexT  = std::size_t;
-
-    static constexpr auto& repr_f() { return DerivedT::repr_v; }
 
     // we do not use 0 for NONE because packing is easier if useful values occupy lower bits
     static constexpr ValueT NONE_VALUE = static_cast<ValueT>(COUNT);
-    explicit constexpr operator bool() const noexcept { return m_val != NONE_VALUE; }
+    explicit constexpr      operator bool() const noexcept { return m_val != NONE_VALUE; }
 
     constexpr EnumBase() : m_val(NONE_VALUE){};
 
@@ -254,10 +254,10 @@ template <typename T, typename... Enums>
 struct EnumArray;
 
 template <typename T, typename Enum>
-    requires(
-        std::is_base_of_v<
-            EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::EnableInc_v, Enum::EnableArithmetic_v>, Enum> &&
-        Enum::count() > 0)
+    requires(std::is_base_of_v<
+                 EnumBase<Enum, typename Enum::ValueT, Enum::COUNT_V, Enum::EnableInc_v, Enum::EnableArithmetic_v>,
+                 Enum> &&
+             Enum::count() > 0)
 struct EnumArray<T, Enum> {
     static constexpr std::size_t count = Enum::count();
 
@@ -303,8 +303,11 @@ struct EnumArray<T, Enum> {
 };
 
 template <typename T, typename FirstEnum, typename... RestEnums>
-    requires(std::is_base_of_v<EnumBase<FirstEnum, typename FirstEnum::ValueT, FirstEnum::COUNT_V,
-                                        FirstEnum::EnableInc_v, FirstEnum::EnableArithmetic_v>,
+    requires(std::is_base_of_v<EnumBase<FirstEnum,
+                                        typename FirstEnum::ValueT,
+                                        FirstEnum::COUNT_V,
+                                        FirstEnum::EnableInc_v,
+                                        FirstEnum::EnableArithmetic_v>,
                                FirstEnum> &&
              FirstEnum::count() > 0)
 struct EnumArray<T, FirstEnum, RestEnums...> {
@@ -573,7 +576,7 @@ struct Color : EnumBase<Color, uint8_t, 2> {
     }
     [[nodiscard]] constexpr Color opposite() const noexcept { return ~(*this); }
     // Prevent misuse of boolean context or !
-    constexpr bool operator!() const         = delete;
+    constexpr bool     operator!() const     = delete;
     explicit constexpr operator bool() const = delete;
 };
 
@@ -657,8 +660,8 @@ enum Direction {
 
 constexpr Direction direction_from(const Square a, const Square b) {
     assert(a && b);
-    constexpr std::array dir_table{SOUTH_WEST, SOUTH,      SOUTH_EAST, WEST,      NO_DIRECTION,
-                                   EAST,       NORTH_WEST, NORTH,      NORTH_EAST};
+    constexpr std::array dir_table{
+        SOUTH_WEST, SOUTH, SOUTH_EAST, WEST, NO_DIRECTION, EAST, NORTH_WEST, NORTH, NORTH_EAST};
 
     const int dr = b.rank().value() - a.rank().value();
     const int df = b.file().value() - a.file().value();
@@ -768,8 +771,8 @@ struct CastlingRights {
     constexpr explicit CastlingRights(const Color c) noexcept
         : CastlingRights{CastlingType{c, KINGSIDE}, CastlingType{c, QUEENSIDE}} {}
 
-    static constexpr std::array<std::string_view, NComb> repr = {"-", "K",  "Q",  "KQ",  "k",  "Kk",  "Qk",  "KQk",
-                                                                 "q", "Kq", "Qq", "KQq", "kq", "Kkq", "Qkq", "KQkq"};
+    static constexpr std::array<std::string_view, NComb> repr = {
+        "-", "K", "Q", "KQ", "k", "Kk", "Qk", "KQk", "q", "Kq", "Qq", "KQq", "kq", "Kkq", "Qkq", "KQkq"};
 
     [[nodiscard]] std::string_view to_string() const noexcept { return repr.at(m_mask); }
 

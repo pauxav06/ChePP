@@ -14,15 +14,12 @@ TEST(ZobristTranspositions, EnPassantRightsAffectHash) {
     pos1.from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq e3 0 1");
     pos2.from_fen("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR b KQkq - 0 1");
 
-    std::cout << pos1 << pos2 << std::endl;
-
     EXPECT_NE(pos1.hash(), pos2.hash());
 
     pos1.from_fen("k1K5/3p4/8/4P3/8/8/8/8 b - - 0 1");
     pos2.from_fen("k1K5/8/8/3pP3/8/8/8/8 w - - 0 1");
 
     pos1.do_move(Move::make<NORMAL>(D7, D5));
-    std::cout << pos1 << pos2 << std::endl;
 
     EXPECT_NE(pos1.hash(), pos2.hash());
 

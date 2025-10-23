@@ -16,6 +16,14 @@ FetchContent_Declare(
 FetchContent_MakeAvailable(highway)
 
 include(FetchContent)
+FetchContent_Declare(
+        tl_expected
+        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+        GIT_TAG v1.1.0
+)
+FetchContent_MakeAvailable(tl_expected)
+
+include(FetchContent)
 
 FetchContent_Declare(
         mdspan
@@ -100,7 +108,7 @@ set(ENGINE_SOURCES
 add_library(ChePP_engine STATIC ${ENGINE_SOURCES})
 add_dependencies(ChePP_engine embed_network)
 
-target_link_libraries(ChePP_engine hwy)
+target_link_libraries(ChePP_engine hwy tl::expected)
 target_include_directories(ChePP_engine PUBLIC
         include/ChePP/engine
         include/ChePP/nnue

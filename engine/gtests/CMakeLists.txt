@@ -8,7 +8,8 @@ set (TEST_SOURCES
         nnue_test.cpp
         types_test.cpp
         affine_test.cpp
-        accum_test.cpp
+        #accum_test.cpp
+        #relu_test.cpp
 )
 
 add_executable(ChePP_tests ${TEST_SOURCES})

@@ -28,13 +28,9 @@ namespace Zobrist {
     struct Initialiser {
         Initialiser() {
             auto& gen = prng::thread_local_gen();
-
             PSQ_TABLE.fill_pred([&gen]([[maybe_unused]] auto, [[maybe_unused]] auto) { return prng::next_u64(gen); });
-
             EP_TABLE.fill_pred([&gen]([[maybe_unused]] auto) { return prng::next_u64(gen); });
-
             CASTLING_TABLE.fill_pred([&gen]([[maybe_unused]] auto) { return prng::next_u64(gen); });
-
             SIDE_TABLE = prng::next_u64(gen);
         }
     };

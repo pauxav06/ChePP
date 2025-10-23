@@ -1,12 +1,17 @@
+#include "../../../../cmake-build-debug-coverage/_deps/catch2-src/single_include/catch2/catch.hpp"
+#include "relu.h"
+
+#include <any>
+#include <cmath>
 #include <experimental/mdarray>
 #include <experimental/mdspan>
 #include <hwy/base.h>
 
-#if defined(CHEPP_RELU_INL_H) == defined(HWY_TARGET_TOGGLE)
-#ifdef CHEPP_RELU_INL_H
-#undef CHEPP_RELU_INL_H
+#if defined(CHEPP_RELU_INL_H_) == defined(HWY_TARGET_TOGGLE)
+#ifdef CHEPP_RELU_INL_H_
+#undef CHEPP_RELU_INL_H_
 #else
-#define CHEPP_RELU_INL_H
+#define CHEPP_RELU_INL_H_
 #endif
 
 #include "utils-inl.h"
@@ -18,146 +23,129 @@ namespace chepp::nnue::layers::relu {
     namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
         namespace nn = chepp::nnue::HWY_NAMESPACE;
+
         using namespace std::experimental;
+        using namespace meta;
 
-        template <typename T>
-        struct ClippedReLUParams {
-            T       clip_min = 0;
-            T       clip_max = 127;
-            int32_t shift    = 0;
-            size_t  Unroll   = 0;
-        };
+        template <typename Params>
+        struct Layer;
 
-        template <typename InputT, typename OutputT, size_t Size, ClippedReLUParams<InputT> Params_>
-        struct ScalarNarrowingClippedReLU {
-            ScalarNarrowingClippedReLU() = default;
+        // scalar also serves as fallback in case i simd kernels are not available due to size constraits
+        template <KernelConcept Kernel, TypesConcept Types, DimsConcept Dims, IntegralConstantConcept S>
+        struct Layer<std::tuple<Kernel, Types, Dims, S>> {
+            using extent_type = size_t;
+            using input_type  = Types::in;
+            using output_type = Types::out;
 
-            static void forward(const InputT* input, OutputT* output) {
-                for (size_t i = 0; i < Size; ++i) {
-                    InputT val = input[i];
-                    if constexpr (Params_.shift != 0) val >>= Params_.shift;
-                    val       = std::max(Params_.clip_min, val);
-                    val       = std::min(Params_.clip_max, val);
-                    output[i] = static_cast<OutputT>(val);
+            CONSTEXPR_EXTENT(input_size, Dims::in)
+            CONSTEXPR_EXTENT(output_size, Dims::out)
+
+            static_assert(std::is_integral_v<input_type> && std::is_integral_v<output_type>);
+            static_assert(Dims::in == Dims::out);
+
+            static constexpr extent_type shift = S::value;
+
+            static constexpr input_type max  = static_cast<input_type>(std::numeric_limits<output_type>::max());
+            static constexpr input_type zero = static_cast<input_type>(0);
+
+            static void load_weights([[maybe_unused]] std::any, [[maybe_unused]] std::any) {}
+
+            static void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
+                HWY_ASSERT(input_view.size() == input_size);
+                HWY_ASSERT(output_view.size() == output_size);
+
+                auto* HWY_RESTRICT input_ptr  = input_view.data();
+                auto* HWY_RESTRICT output_ptr = output_view.data();
+
+                std::span<const input_type, input_size> input{input_ptr, input_size};
+                std::span<output_type, output_size>     output{output_ptr, output_size};
+
+                for (extent_type i = 0; i < input.size(); ++i) {
+                    input_type val = input[i];
+                    if constexpr (shift != 0) val >>= shift;
+                    val       = std::max(zero, val);
+                    val       = std::min(max, val);
+                    output[i] = static_cast<output_type>(val);
                 }
             }
         };
 
-        template <size_t Size, typename InputT, ClippedReLUParams Params_>
-        struct SIMDNarrowingClippedReLU {
-            using Din  = hn::ScalableTag<InputT>;
+        template <TypesConcept Types, DimsConcept Dims, IntegralConstantConcept S>
+            requires(utils::is_power_of_two(Dims::in) &&
+                     utils::is_power_of_two(sizeof(typename Types::in) / sizeof(typename Types::out)))
+        struct Layer<std::tuple<Simd, Types, Dims, S>> {
+            using extent_type = size_t;
+            using input_type  = Types::in;
+            using output_type = Types::out;
+
+            CONSTEXPR_EXTENT(input_size, Dims::in)
+            CONSTEXPR_EXTENT(output_size, Dims::out)
+
+            static constexpr extent_type shift = S::value;
+            CONSTEXPR_EXTENT(reductions, sizeof(input_type) / sizeof(output_type))
+
+            static_assert(reductions > 1);
+            static_assert(std::is_integral_v<input_type> && std::is_integral_v<output_type>);
+            static_assert(input_size == output_size);
+
+            using Din  = hn::ScalableTag<input_type>;
             using Vin  = hn::VFromD<Din>;
-            using Dout = hn::RepartitionToNarrow<Din>;
+            using Dout = hn::ScalableTag<output_type>;
             using Vout = hn::VFromD<Dout>;
-            using OutT = hn::TFromD<Dout>;
 
-            static HWY_LANES_CONSTEXPR size_t InLanes   = hn::Lanes(Din());
-            static HWY_LANES_CONSTEXPR size_t OutLanes  = hn::Lanes(Dout());
-            static HWY_LANES_CONSTEXPR size_t ChunksIn  = Size / InLanes;
-            static HWY_LANES_CONSTEXPR size_t ChunksOut = Size / OutLanes;
+            MAYBE_CONSTEXPR_EXTENT(in_lanes, hn::Lanes(Din()));
+            MAYBE_CONSTEXPR_EXTENT(out_lanes, hn::Lanes(Dout()));
+            MAYBE_CONSTEXPR_EXTENT(padded_size, utils::pad_up(1 * input_size, 1 * in_lanes));
+            MAYBE_CONSTEXPR_EXTENT(input_chunks, input_size / in_lanes);
+            MAYBE_CONSTEXPR_EXTENT(output_chunks, input_size / out_lanes);
 
-            using in_extent_t =
-                extents<size_t, nn::extent_if_constexpr_v<ChunksIn / 2>, 2, nn::extent_if_constexpr_v<InLanes>>;
-            using out_extent_t =
-                extents<size_t, nn::extent_if_constexpr_v<ChunksOut>, nn::extent_if_constexpr_v<OutLanes>>;
+            static_assert(input_chunks / reductions == output_chunks);
 
-            using in_t  = mdspan<const InputT, in_extent_t>;
-            using out_t = mdspan<OutT, out_extent_t>;
+            inline static HWY_LANES_CONSTEXPR auto s_input = utils::make_tensor<input_type>(input_chunks, input_size);
+            inline static HWY_LANES_CONSTEXPR auto s_packed_input =
+                utils::make_tensor<input_type>(output_chunks, reductions, in_lanes);
+            inline static HWY_LANES_CONSTEXPR auto s_output = utils::make_tensor<output_type>(output_chunks, out_lanes);
 
-            static HWY_LANES_CONSTEXPR in_extent_t  InExtent{ChunksIn / 2, 2, InLanes};
-            static HWY_LANES_CONSTEXPR out_extent_t OutExtent{ChunksOut, OutLanes};
+            static void load_weights([[maybe_unused]] std::any, [[maybe_unused]] std::any) {}
 
-            HWY_NOINLINE static void forward(const InputT* HWY_RESTRICT input, OutT* HWY_RESTRICT output) {
-                in_t  in{input, InExtent};
-                out_t out{output, OutExtent};
-                HWY_DEFAULT_UNROLL
-                for (size_t c = 0; c < ChunksIn / 2; c++) {
-                    Vin v0 = hn::Load(Din(), &in[c, 0, 0]);
-                    Vin v1 = hn::Load(Din(), &in[c, 1, 0]);
-                    if constexpr (Params_.shift != 0) {
-                        v0 = hn::ShiftLeft<Params_.shift>(v0);
-                        v1 = hn::ShiftLeft<Params_.shift>(v1);
-                    }
+            template <size_t N, typename Tag, typename GetRegFn>
+            static auto ordered_demote_tree(GetRegFn&& get_reg) {
+                if constexpr (N == 1) {
+                    return get_reg(0);
+                } else {
+                    constexpr size_t half = N / 2;
+                    auto             get  = [&](const size_t i) {
+                        return hn::OrderedDemote2To(hn::RepartitionToNarrow<Tag>(), get_reg(2 * i), get_reg(2 * i + 1));
+                    };
+                    return ordered_demote_tree<half, hn::RepartitionToNarrow<Tag>>(get);
+                }
+            }
 
-                    Vout v_out = hn::OrderedDemote2To(Dout(), v0, v1);
-                    if constexpr (Params_.clip_min > std::numeric_limits<OutT>::min() &&
-                                  Params_.clip_min > std::numeric_limits<InputT>::min())
-                        v_out = hn::Max(hn::Set(Dout(), Params_.clip_min), v_out);
-                    if constexpr (Params_.clip_max < std::numeric_limits<OutT>::max() &&
-                                  Params_.clip_max < std::numeric_limits<InputT>::max())
-                        v_out = hn::Min(hn::Set(Dout(), Params_.clip_max), v_out);
+            static void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
+                HWY_ASSERT(input_view.size() == input_size);
+                HWY_ASSERT(output_view.size() == output_size);
 
-                    hn::Store(v_out, Dout(), &out[c, 0]);
+                auto* HWY_RESTRICT input_ptr  = input_view.data();
+                auto* HWY_RESTRICT output_ptr = output_view.data();
+                const auto         in         = s_packed_input.make_const_span(input_ptr, s_packed_input.extent());
+                const auto         out        = s_output.make_span(output_ptr, s_output.extent());
+
+                for (extent_type c = 0; c < in.extent(0); c++) {
+                    nn::RegisterBank<reductions, Vin>::run(
+                        [&](const size_t i) { return hn::Load(Din(), &in[c, i, 0]); },
+                        [&](auto get_reg, auto set_reg) {
+                            if constexpr (shift != 0) {
+                                for (int r = 0; r < reductions; r++) {
+                                    set_reg(r, hn::ShiftRight<shift>(get_reg(r)));
+                                }
+                            }
+                            Vout v_out = ordered_demote_tree<reductions, Din>(get_reg);
+                            v_out      = hn::Max(hn::Zero(Dout()), v_out);
+                            hn::Store(v_out, Dout(), &out[c, 0]);
+                        });
                 }
             }
         };
-
-        template <size_t Size, typename InputT, ClippedReLUParams<InputT> Params_>
-        struct SIMDNarrowingX2ClippedReLU {
-            using Din = hn::ScalableTag<InputT>;
-            using Vin = hn::VFromD<Din>;
-
-            using Dmid = hn::RepartitionToNarrow<Din>;
-            using Vmid = hn::VFromD<Dmid>;
-            using MidT = hn::TFromD<Dmid>;
-
-            using Dout = hn::RepartitionToNarrow<Dmid>;
-            using Vout = hn::VFromD<Dout>;
-            using OutT = hn::TFromD<Dout>;
-
-            static constexpr size_t Unroll = Params_.Unroll;
-
-            static HWY_LANES_CONSTEXPR size_t InLanes   = hn::Lanes(Din());
-            static HWY_LANES_CONSTEXPR size_t MidLanes  = hn::Lanes(Dmid());
-            static HWY_LANES_CONSTEXPR size_t OutLanes  = hn::Lanes(Dout());
-            static HWY_LANES_CONSTEXPR size_t ChunksIn  = Size / InLanes;
-            static HWY_LANES_CONSTEXPR size_t ChunksOut = Size / OutLanes;
-
-            using in_extent_t =
-                extents<size_t, nn::extent_if_constexpr_v<ChunksIn / 4>, 4, nn::extent_if_constexpr_v<InLanes>>;
-
-            using out_extent_t =
-                extents<size_t, nn::extent_if_constexpr_v<ChunksOut>, nn::extent_if_constexpr_v<OutLanes>>;
-
-            static constexpr in_extent_t  InExtent{ChunksIn / 4, 4, InLanes};
-            static constexpr out_extent_t OutExtent{ChunksOut, OutLanes};
-
-            using in_t  = mdspan<const InputT, in_extent_t>;
-            using out_t = mdspan<OutT, out_extent_t>;
-
-            HWY_NOINLINE static void forward(const InputT* HWY_RESTRICT input, OutT* HWY_RESTRICT output) {
-                in_t  in{input, InExtent};
-                out_t out{output, OutExtent};
-
-                HWY_DEFAULT_UNROLL
-                for (size_t c = 0; c < ChunksIn / 4; ++c) {
-                    Vin v0 = hn::Load(Din(), &in[c, 0, 0]);
-                    Vin v1 = hn::Load(Din(), &in[c, 1, 0]);
-                    Vin v2 = hn::Load(Din(), &in[c, 2, 0]);
-                    Vin v3 = hn::Load(Din(), &in[c, 3, 0]);
-
-                    if constexpr (Params_.shift != 0) {
-                        v0 = hn::ShiftRight<Params_.shift>(v0);
-                        v1 = hn::ShiftRight<Params_.shift>(v1);
-                        v2 = hn::ShiftRight<Params_.shift>(v2);
-                        v3 = hn::ShiftRight<Params_.shift>(v3);
-                    }
-
-                    Vmid v01 = hn::OrderedDemote2To(Dmid(), v0, v1);
-                    Vmid v23 = hn::OrderedDemote2To(Dmid(), v2, v3);
-
-                    Vout v_out = hn::OrderedDemote2To(Dout(), v01, v23);
-
-                    if constexpr (Params_.clip_min > std::numeric_limits<OutT>::min())
-                        v_out = hn::Max(hn::Set(Dout(), Params_.clip_min), v_out);
-                    if constexpr (Params_.clip_max < std::numeric_limits<OutT>::max())
-                        v_out = hn::Min(hn::Set(Dout(), Params_.clip_max), v_out);
-
-                    hn::Store(v_out, Dout(), &out[c, 0]);
-                }
-            }
-        };
-
     }; // namespace HWY_NAMESPACE
 } // namespace chepp::nnue::layers::relu
 

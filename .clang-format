@@ -1,30 +1,45 @@
+# Base style
 BasedOnStyle: LLVM
 IndentWidth: 4
 TabWidth: 4
 UseTab: Never
+
+# Braces and short constructs
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
 AllowShortFunctionsOnASingleLine: InlineOnly
+
+# Template formatting
 AlwaysBreakTemplateDeclarations: Yes
-AlwaysBreakAfterReturnType: None
-AlignAfterOpenBracket: Align
+BreakBeforeBinaryOperators: None
+BinPackParameters: false
+BinPackArguments: false
+
+# Alignment
 AlignOperands: true
 AlignConsecutiveAssignments: true
 AlignConsecutiveDeclarations: true
+
+# Columns and indentation
 ColumnLimit: 120
 ConstructorInitializerIndentWidth: 4
 ContinuationIndentWidth: 4
 NamespaceIndentation: All
 IndentCaseLabels: true
+
+# Spaces
 SpaceBeforeParens: ControlStatements
-SpacesInAngles: false
 SpacesInContainerLiterals: true
 SpacesInCStyleCastParentheses: false
 SpacesInParentheses: false
+
+# Other C++ specific options
 Cpp11BracedListStyle: true
 SortIncludes: true
 IncludeBlocks: Preserve
 ReflowComments: true
 PointerAlignment: Left
 
+# Optional: avoid breaking after return type for readability
+AlwaysBreakAfterReturnType: None
