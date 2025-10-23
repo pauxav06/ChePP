@@ -1,12 +1,15 @@
-#include "affine.h"
-#include "matrix.h"
-#include "utils.h"
+#include <hwy/aligned_allocator.h>
 #include <hwy/auto_tune.h>
-#include <iostream>
 
 #include <experimental/mdarray>
 #include <experimental/mdspan>
-#include <hwy/aligned_allocator.h>
+#include <iostream>
+#include <mutex>
+
+#include "affine.h"
+#include "layer_cache.h"
+#include "matrix.h"
+#include "utils.h"
 
 #if defined(CHEPP_AFFINE_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_AFFINE_INL_H_
@@ -15,8 +18,9 @@
 #define CHEPP_AFFINE_INL_H_
 #endif
 
-#include "utils-inl.h"
 #include <hwy/highway.h>
+
+#include "utils-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 namespace chepp::nnue::layers::affine {
@@ -25,117 +29,90 @@ namespace chepp::nnue::layers::affine {
         namespace nn = chepp::nnue::HWY_NAMESPACE;
 
         using namespace std::experimental;
+        using namespace hwy;
         using namespace meta;
 
-        template <Kernels K, Params<K> P>
+        template <typename Params>
         struct Layer;
 
-        template <Params<Kernels::Scalar> P>
-            requires(std::is_same_v<scalar_t<P.types.in>, int8_t> && std::is_same_v<scalar_t<P.types.out>, int32_t>)
-        struct Layer<Kernels::Scalar, P> {
-            static constexpr auto params      = P;
-            using input_type                  = scalar_t<params.types.in>;
-            using output_type                 = scalar_t<params.types.out>;
-            using extent_type                 = size_t;
-            static constexpr extent_type Cols = params.dims.in;
-            static constexpr extent_type Rows = params.dims.out;
+        template <typename Types>
+        concept I8I32Concept =
+            std::is_same_v<typename Types::in, int8_t> && std::is_same_v<typename Types::out, int32_t>;
 
-            using weights_extent_t = extents<extent_type, Rows, Cols>;
-            using biases_extent_t  = extents<extent_type, Cols>;
-            using weight_array_t =
-                mdarray<const input_type, weights_extent_t, layout_right, hwy::AlignedVector<input_type>>;
-            using bias_array_t =
-                mdarray<const output_type, biases_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+        template <KernelConcept Kernel, TypesConcept Types>
+        struct Layer<std::tuple<Kernel, Types>> {
+            using extent_type = size_t;
+            using input_type  = Types::in;
+            using output_type = Types::out;
 
-            weights_extent_t m_weights_extent;
-            biases_extent_t  m_biases_extent;
+            using weights_extent_t = std::extents<extent_type, std::dynamic_extent, std::dynamic_extent>;
+            using biases_extent_t  = std::extents<extent_type, std::dynamic_extent>;
 
-            static constexpr weights_extent_t WeightsExtent{Rows, Cols};
-            static constexpr biases_extent_t  BiasesExtent{Cols};
+            using weights_span_t = std::mdspan<input_type, weights_extent_t>;
+            using biases_span_t  = std::mdspan<output_type, biases_extent_t>;
 
-            void load_weights(const input_type* HWY_RESTRICT w, const output_type* HWY_RESTRICT b) {
-                m_weights = weight_array_t{WeightsExtent};
-                m_biases  = bias_array_t{BiasesExtent};
-                std::memcpy(m_weights.data(), w, m_weights.size());
-                std::memcpy(m_biases.data(), b, m_biases.size());
+            using state_t = AffineState<input_type, output_type>;
+
+            const extent_type              m_input_size;
+            const extent_type              m_output_size;
+            const int                      m_bucket;
+            const std::shared_ptr<state_t> m_state;
+            const weights_span_t           m_weights_span;
+            const biases_span_t            m_biases_span;
+
+            explicit Layer(AffineParams params)
+                : m_input_size(params.dims.in), m_output_size(params.dims.out), m_bucket(params.bucket),
+                  m_state(g_cache.get_or_create(
+                      m_input_size ^ m_output_size ^ m_bucket,
+                      [&]() {
+                          state_t state(m_input_size, m_output_size);
+                          std::memcpy(state.weights.data(), params.weights.data(), params.weights.size_bytes());
+                          std::memcpy(state.biases.data(), params.biases.data(), params.biases.size_bytes());
+                          return state;
+                      })),
+                  m_weights_span(m_state.weights.data(), m_input_size, m_output_size),
+                  m_biases_span(m_state.biases.data(), m_output_size) {
+                HWY_ASSERT(params.weights.size() == m_input_size * m_output_size);
+                HWY_ASSERT(params.biases.size() == m_output_size);
+                HWY_ASSERT(m_state);
             }
 
-            void forward(const input_type* input, output_type* output) const {
-                for (extent_type r = 0; r < Rows; ++r) {
+            void init_state(AffineState<>)
+
+                void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
+                HWY_ASSERT(input_view.size() == m_input_size);
+                HWY_ASSERT(output_view.size() == m_output_size);
+
+                const auto* HWY_RESTRICT input_ptr  = input_view.data();
+                auto* HWY_RESTRICT       output_ptr = output_view.data();
+
+                for (extent_type r = 0; r < m_weights_span.extent(0); ++r) {
                     output_type acc = 0;
-                    for (extent_type c = 0; c < Cols; ++c)
-                        acc += static_cast<output_type>(m_weights[r, c]) * static_cast<output_type>(input[c]);
-                    output[r] = acc + m_biases[r];
+                    for (extent_type c = 0; c < m_weights_span.extent(1); ++c)
+                        acc += static_cast<output_type>(m_weights_span[r, c]) * static_cast<output_type>(input_ptr[c]);
+                    output_ptr[r] = acc + m_biases_span[r];
                 }
             }
-
-          private:
-            weight_array_t m_weights;
-            bias_array_t   m_biases;
         };
 
-        // ============================================================================
-        // SIMD Kernel: int8 -> int32 Affine Layer using VNNI / Dot Product Instructions
-        // ----------------------------------------------------------------------------
-        // This kernel performs an affine transformation:
-        //
-        //     y = W * x + b
-        //
-        // where:
-        //   - x ∈ M(i8)[Rows_ * 1]     : input vector
-        //   - W ∈ M(i8)[Rows_ * Cols_] : weight matrix
-        //   - b ∈ M(i32)[Rows * 1]     : bias vector
-        //   - y ∈ M(i32)[Rows * 1]     : output vector
-        //
-        // To leverage SIMD efficiently, the kernel performs several transformations
-        // on the weight matrix and input vector:
-        //
-        //  1 Pad the input dimension (Cols_) to the next multiple of Pack * Unroll:
-        //      Pack = sizeof(int32_t)/sizeof(int8_t) = 4
-        //      Unroll = loop unroll factor
-        //    This ensures that input elements can be grouped in 4s for VNNI/Dotprod.
-        //
-        //  2 Tiled transposition of weights:
-        //      - First, group columns in blocks of 4 (Pack) to align with lane-wise
-        //        dot-product instructions.
-        //      - Second, perform another tiling to align with the SIMD register width
-        //        (D8Lanes). This ensures contiguous memory accesses during vector loads.
-        //
-        //  3. Forward pass:
-        //      For each block b of output rows and each chunk c of input columns:
-        //          acc[u] = SumOfMulQuadAcc(packed_input[c,u], weights[b,c,u], acc[u])
-        //
-        //      SumOfMulQuadAcc implements the 4×4 lane-wise multiply-accumulate used in VNNI/Neon Dotprod:
-        //          acc[i] += sum_{k=0..3} W[b,c,u,k] * x[c,u,k]
-        //      and then widens the result from int16 → int32.
-        //
-        //      After processing Unroll vectors, a reduction tree sums the partial accumulators:
-        //          acc[0] = sum_{u=0...Unroll-1} acc[u]
-        //
-        //  4. Add biases:
-        //      The first register in the unroll loop is initialized with the bias:
-        //          acc[0] = b[b * D32Lanes : (b+1) * D32Lanes]
-        //      The remaining Unroll vectors start at zero and accumulate partial results.
-        //
-        //  5. Finally, store the output into a padded buffer and copy the first Rows_ elements
-        //    into the output array.
-        // ============================================================================
-        template <Params<Kernels::SIMD> P>
-            requires(std::is_same_v<scalar_t<P.types.in>, int8_t> && std::is_same_v<scalar_t<P.types.out>, int32_t>)
-        struct Layer<Kernels::SIMD, P> {
-            static constexpr auto params        = P;
-            using input_type                    = scalar_t<params.types.in>;
-            using output_type                   = scalar_t<params.types.out>;
-            using extent_type                   = size_t;
-            static constexpr extent_type Cols_  = params.dims.in;
-            static constexpr extent_type Rows_  = params.dims.out;
-            static constexpr extent_type Unroll = params.opt.unroll;
-            static constexpr extent_type Pack   = sizeof(output_type) / sizeof(input_type);
-            static constexpr extent_type Cols   = Cols_;
+        /**
 
-            static_assert(Cols % (Pack * Unroll) == 0);
+        template <TypesConcept Types, DimsConcept Dims, UnrollConcept U, OperationConcept Op>
+            requires (I8I32Concept<Types> && Dims::in % 4 == 0)
+        struct Layer<std::tuple<SimdColMaj, Types, Dims, U, Op>> {
+            using extent_type       = std::size_t;
+            using input_type        = Types::in;
+            using output_type       = Types::out;
 
-            using Di8    = hn::ScalableTag<input_type>;
+            CONSTEXPR_EXTENT(input_size, Dims::in)
+            CONSTEXPR_EXTENT(output_size, Dims::out)
+            CONSTEXPR_EXTENT(unroll, U::value)
+            CONSTEXPR_EXTENT(pack, 4)
+            CONSTEXPR_EXTENT(padded_input_size, utils::pad_up(input_size * 1, pack * unroll))
+            CONSTEXPR_EXTENT(input_padding, padded_input_size -  input_size)
+            CONSTEXPR_EXTENT(input_valid, pack * unroll - input_padding)
+
+            using Di8    = hn::CappedTag<input_type, input_size * 2>;
             using Du8    = hn::RebindToUnsigned<Di8>;
             using Di16   = hn::RepartitionToWide<Di8>;
             using Di32   = hn::RepartitionToWide<Di16>;
@@ -144,68 +121,44 @@ namespace chepp::nnue::layers::affine {
             using Veci16 = hn::VFromD<Di16>;
             using Veci32 = hn::VFromD<Di32>;
 
-            static_assert(std::is_same_v<hn::TFromD<Di32>, output_type>);
 
-            static constexpr extent_type Chunks = Cols / (Pack * Unroll);
 
-            // Lanes migh or might not be constexpr (HWY_CONSTEXPR expands to constexpr or nothing)
-            // However, we can still take advantage of the lane size information when we have it at compile time,
-            // by switching between dynamic / and static extents for mdspans/mdarray.
-            // In case of a mdspan, all offset computations are done at compile time
-            // However, we can not use stack storage for weights, which is fine because it is only allocated once
-            static HWY_LANES_CONSTEXPR extent_type D8Lanes  = hn::Lanes(Di8());
-            static HWY_LANES_CONSTEXPR extent_type D32Lanes = hn::Lanes(Di32());
+            CONSTEXPR_EXTENT(chunks, padded_input_size / (pack * unroll))
+            MAYBE_CONSTEXPR_EXTENT(d8_lanes, hn::Lanes(Di8()))
+            MAYBE_CONSTEXPR_EXTENT(d32_lanes, hn::Lanes(Di32()))
+            MAYBE_CONSTEXPR_EXTENT(padded_output_size, utils::pad_up(1 * output_size, 1 * d32_lanes))
+            MAYBE_CONSTEXPR_EXTENT(output_padding, padded_output_size - output_size)
+            MAYBE_CONSTEXPR_EXTENT(blocks, padded_output_size / d32_lanes)
 
-            static HWY_LANES_CONSTEXPR extent_type Rows       = utils::pad_up(Rows_, D32Lanes);
-            static HWY_LANES_CONSTEXPR extent_type RowPadding = Rows - Rows_;
-            static HWY_LANES_CONSTEXPR extent_type Blocks     = Rows / D32Lanes;
+            inline static HWY_LANES_CONSTEXPR auto s_tiled_weights =
+                utils::make_tensor<input_type>(blocks, chunks, unroll, d8_lanes);
+            inline static HWY_LANES_CONSTEXPR auto s_tiled_biases  = utils::make_tensor<output_type>(blocks, d32_lanes);
+            inline static HWY_LANES_CONSTEXPR auto s_packed_input  = utils::make_tensor<output_type>(chunks, unroll);
+            inline static HWY_LANES_CONSTEXPR auto s_padded_output = utils::make_tensor<output_type>(blocks, d32_lanes);
 
-            using weights_extent_t = extents<extent_type, nn::extent_if_constexpr_v<Blocks>, Chunks, Unroll,
-                                             nn::extent_if_constexpr_v<D8Lanes>>;
-            using biases_extent_t =
-                extents<extent_type, nn::extent_if_constexpr_v<Blocks>, nn::extent_if_constexpr_v<D32Lanes>>;
-            using packed_input_extent_t  = extents<extent_type, Chunks, Unroll>;
-            using padded_output_extent_t = biases_extent_t;
+            inline static decltype(s_tiled_weights)::array_type s_tiled_weights_array;
+            inline static decltype(s_tiled_biases)::array_type  s_tiled_biases_array;
+            inline static std::once_flag                        s_init_flag;
 
-            using packed_input_view_t = mdspan<const output_type, packed_input_extent_t>;
-            using weights_array_t =
-                mdarray<const input_type, weights_extent_t, layout_right, hwy::AlignedVector<input_type>>;
-            using biases_array_t =
-                mdarray<const output_type, biases_extent_t, layout_right, hwy::AlignedVector<output_type>>;
-            using output_array_t =
-                mdarray<output_type, padded_output_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+            static void load_weights(std::span<const input_type> w_view, std::span<const output_type> b_view) {
+                HWY_ASSERT(w_view.size() == input_size * output_size);
+                HWY_ASSERT(b_view.size() == output_size);
 
-            static HWY_LANES_CONSTEXPR weights_extent_t       WeightsExtent{Blocks, Chunks, Unroll, D8Lanes};
-            static HWY_LANES_CONSTEXPR biases_extent_t        BiasesExtent{Blocks, D32Lanes};
-            static HWY_LANES_CONSTEXPR packed_input_extent_t  PackedInputExtent{Chunks, Unroll};
-            static HWY_LANES_CONSTEXPR padded_output_extent_t PaddedOutputExtent = BiasesExtent;
+                std::call_once(s_init_flag, [&]() {
+                    s_tiled_weights_array = s_tiled_weights.make_array(s_tiled_weights.extent());
+                    s_tiled_biases_array  = s_tiled_biases.make_array(s_tiled_biases.extent());
 
-            // for every target, both versions will be compiled, the best one will be chosen at runtime
-            static constexpr auto dot = [](const Vecu8 a, const Veci8 b, const Veci32 acc) {
-                if constexpr (params.opt.operation == decltype(params.opt)::Operation::SumOfMulQuadAcc) {
-                    return hn::SumOfMulQuadAccumulate(Di32(), a, b, acc);
-                } else if constexpr (params.opt.operation == decltype(params.opt)::Operation::SumOfMulPairAdd) {
-                    // This version can overflow but is much faster that the exact emulation of the opeeration
-                    const Veci16 sum0 = hn::SatWidenMulPairwiseAdd(Di16(), a, b);
-                    const Veci32 sum1 = hn::WidenMulPairwiseAdd(Di32(), sum0, hn::Set(Di16(), 1));
-                    return hn::Add(acc, sum1);
-                } else {
-                    static_assert(false, "No int8*int8->int32 operation was found");
-                    return hn::Undefined(Di32());
-                }
-            };
+                    using namespace matrix;
+                    const MatrixView w{w_view.data(), output_size, input_size};
+                    const auto       w_t0 = pad(w, output_padding, input_padding);
+                    const auto       w_t1 = tile_cols(w_t0, pack);
+                    const auto       w_t2 = tile_cols(w_t1, d8_lanes);
+                    materialize(w_t2, s_tiled_weights_array.data());
 
-            void load_weights(const input_type* HWY_RESTRICT w_ptr, const output_type* HWY_RESTRICT b_ptr) {
-                m_weights = weights_array_t{WeightsExtent};
-                m_biases  = biases_array_t{BiasesExtent};
-
-                using namespace matrix;
-                const auto transformed_weights =
-                    tile_cols(tile_cols(pad(MatrixView{w_ptr, Rows_, Cols_}, RowPadding, 0), Pack), D8Lanes);
-                const auto transformed_biases = pad(MatrixView{b_ptr, Rows_, 1}, RowPadding, 0);
-
-                materialize(transformed_weights, m_weights.data());
-                materialize(transformed_biases, m_biases.data());
+                    const MatrixView b{b_view.data(), output_size, 1};
+                    const auto       b_t0 = pad(b, output_padding, 0);
+                    materialize(b_t0, s_tiled_biases_array.data());
+                });
             }
 
             template <extent_type N, typename GetFunc>
@@ -220,34 +173,54 @@ namespace chepp::nnue::layers::affine {
                 }
             }
 
-            void forward(const input_type* HWY_RESTRICT input_ptr, output_type* HWY_RESTRICT output_ptr) const {
-                thread_local output_array_t tmp_out{PaddedOutputExtent};
-                const packed_input_view_t   packed_input{reinterpret_cast<const output_type*>(input_ptr),
-                                                       PackedInputExtent};
+            static constexpr auto dot = [](const Vecu8 a, const Veci8 b, const Veci32 acc) {
+                if constexpr (std::is_same_v<Op, SumOfMulQuadAcc>) {
+                    return hn::SumOfMulQuadAccumulate(Di32(), a, b, acc);
+                } else if constexpr (std::is_same_v<Op, SumOfMulPairAcc>) {
+                    const Veci16 sum0 = hn::SatWidenMulPairwiseAdd(Di16(), a, b);
+                    const Veci32 sum1 = hn::WidenMulPairwiseAdd(Di32(), sum0, hn::Set(Di16(), 1));
+                    return hn::Add(acc, sum1);
+                } else {
+                    static_assert(false, "No int8*int8->int32 operation was found");
+                    return hn::Undefined(Di32());
+                }
+            };
 
-                for (extent_type b = 0; b < m_weights.extent(0); ++b) {
-                    nn::RegisterBank<Unroll, Veci32>::run(
-                        [&](const size_t u) { return u == 0 ? hn::Load(Di32(), &m_biases[b, 0]) : hn::Zero(Di32()); },
+            static void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
+                thread_local auto tmp_out = s_padded_output.make_array(s_padded_output.extent());
+
+                HWY_ASSERT(input_view.size() == input_size);
+                HWY_ASSERT(output_view.size() == output_size);
+
+                auto* HWY_RESTRICT input_ptr        = input_view.data();
+                auto* HWY_RESTRICT output_ptr       = output_view.data();
+                auto* HWY_RESTRICT packed_input_ptr = reinterpret_cast<const output_type * HWY_RESTRICT>(input_ptr);
+
+                const auto packed_input = s_packed_input.make_const_span(packed_input_ptr, s_packed_input.extent());
+
+                for (extent_type b = 0; b < s_tiled_weights_array.extent(0); ++b) {
+                    nn::RegisterBank<unroll, Veci32>::run(
+                        [&](const size_t u) {
+                            return u == 0 ? hn::Load(Di32(), &s_tiled_biases_array[b, 0]) : hn::Zero(Di32());
+                        },
                         [&](auto get_reg, auto set_reg) {
-                            for (extent_type c = 0; c < m_weights.extent(1); ++c) {
-                                for (extent_type u = 0; u < m_weights.extent(2); ++u) {
-                                    set_reg(u, dot(hn::BitCast(Du8(), hn::Set(Di32(), packed_input[c, u])),
-                                                   hn::Load(Di8(), &m_weights[b, c, u, 0]), get_reg(u)));
+                            for (extent_type c = 0; c < s_tiled_weights_array.extent(1); ++c) {
+                                for (extent_type u = 0; u < s_tiled_weights_array.extent(2); ++u) {
+                                    set_reg(u,
+                                            dot(hn::BitCast(Du8(), hn::Set(Di32(), packed_input[c, u])),
+                                                hn::Load(Di8(), &s_tiled_weights_array[b, c, u, 0]),
+                                                get_reg(u)));
                                 }
-                                const Veci32 out = reduce_tree<Unroll>([&](size_t i) { return get_reg(i); });
-                                hn::Store(out, Di32(), &tmp_out[b, 0]);
                             }
+                            const Veci32 out = reduce_tree<unroll>([&](size_t i) { return get_reg(i); });
+                            hn::Store(out, Di32(), &tmp_out[b, 0]);
                         });
-                    std::memcpy(output_ptr, tmp_out.data(), Rows_ * sizeof(output_type));
+                    std::memcpy(output_ptr, tmp_out.data(), output_view.size_bytes());
                 }
             }
-
-          private:
-            weights_array_t m_weights;
-            biases_array_t  m_biases;
         };
+        **/
     }; // namespace HWY_NAMESPACE
-
 } // namespace chepp::nnue::layers::affine
 
 HWY_AFTER_NAMESPACE();

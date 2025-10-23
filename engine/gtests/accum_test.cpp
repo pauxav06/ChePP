@@ -1,6 +1,7 @@
-#include <cassert>
-#include <random>
-#include <vector>
+#include "meta.h"
+#include "utils.h"
+
+#include <hwy/base.h>
 
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "accum_test.cpp"
@@ -10,103 +11,70 @@
 #include "hwy/nanobenchmark.h"
 #include "hwy/tests/hwy_gtest.h"
 #include "hwy/tests/test_util-inl.h"
-#include <hwy/base.h>
 
 #include "accumulator-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 
-namespace chepp::nnue {
-    namespace accum {
-        namespace HWY_NAMESPACE {
-            namespace {
-                template <typename T, typename Alloc>
-                void fill_random(std::vector<T, Alloc>& v, int min, int max, unsigned seed = 1234) {
-                    std::mt19937                       rng(seed);
-                    std::uniform_int_distribution<int> dist(min, max);
-                    for (auto& x : v) x = static_cast<T>(dist(rng));
-                }
+namespace chepp::tests::nnue::layers::accumulator {
+    namespace HWY_NAMESPACE {
+        namespace {
+            namespace hn = hwy::HWY_NAMESPACE;
+            namespace an = chepp::nnue::layers::accumulator::HWY_NAMESPACE;
 
-                template <typename T>
-                void reference_accum(const T* vec, const T* weights, size_t Cols, const int16_t* indices, size_t n,
-                                     T* out) {
-                    for (size_t c = 0; c < Cols; ++c) {
-                        out[c] = vec[c];
-                    }
-                    for (size_t i = 0; i < n; ++i) {
-                        int16_t idx = indices[i];
-                        for (size_t c = 0; c < Cols; ++c) {
-                            out[c] += weights[idx * Cols + c];
-                        }
-                    }
-                }
+            using namespace hn;
+            using namespace chepp::nnue::meta;
+            using namespace chepp::nnue::layers;
+            using namespace chepp::nnue::layers::accumulator;
 
-                template <typename Kernel, size_t Rows, size_t Cols>
-                void accumulator_test() {
-                    std::cout << "Test passed for target: " << hwy::TargetName(HWY_TARGET) << std::endl;
+            void accum() {
+                constexpr size_t in         = 16000;
+                constexpr size_t out        = 8;
+                constexpr size_t max_active = 32;
+                constexpr size_t Iterations = 10000;
 
-                    constexpr size_t Iterations = 100000;
+                hwy::AlignedVector<int16_t> input(max_active);
+                hwy::AlignedVector<int16_t> weights(in * out);
+                hwy::AlignedVector<int16_t> biases(out);
+                hwy::AlignedVector<int16_t> ref_output(out, 0);
+                hwy::AlignedVector<int16_t> simd_output(out, 0);
 
-                    std::vector<int32_t, hwy::AlignedAllocator<int32_t>> weights(Rows * Cols);
-                    std::vector<int32_t, hwy::AlignedAllocator<int32_t>> input(Cols, 0);
-                    std::vector<int32_t, hwy::AlignedAllocator<int32_t>> ref_output(Cols);
-                    std::vector<int32_t, hwy::AlignedAllocator<int32_t>> simd_output(Cols);
-                    std::vector<int16_t, hwy::AlignedAllocator<int16_t>> indices = {0, Rows / 2, Rows - 1};
+                utils::fill_random(weights);
+                utils::fill_random(biases);
+                utils::fill_random(input, static_cast<int16_t>(0), static_cast<int16_t>(in));
 
-                    fill_random(weights, -10, 10);
+                using types = Types<int16_t, int16_t>;
+                using dims  = Dims<in, out>;
 
-                    Kernel kernel;
-                    kernel.load_weights(weights.data());
+                using scalar_params     = ParamComb_t<Scalar, types, dims>;
+                using reference_layer_t = an::Layer<std::tuple_element_t<0, scalar_params>>;
+                reference_layer_t reference_layer;
 
-                    using namespace std::chrono;
-                    int64_t total_ref_duration = 0;
-                    auto    start              = high_resolution_clock::now();
+                using UnrollOptions = std::tuple<Unroll<1>, Unroll<4>, Unroll<8>, Unroll<16>>;
+                using simd_ops      = ParamComb_t<Simd, types, dims, UnrollOptions>;
 
-                    for (size_t iter = 0; iter < Iterations; ++iter) {
-                        reference_accum(input.data(), weights.data(), Cols, indices.data(), indices.size(),
-                                        ref_output.data());
-                    }
-                    auto end = high_resolution_clock::now();
-                    total_ref_duration += duration_cast<nanoseconds>(end - start).count();
+                reference_layer.load_weights(weights.data(), biases.data());
+                reference_layer.forward(input.data(), input.size(), ref_output.data());
 
-                    int64_t total_kernel_duration = 0;
-                    start                         = high_resolution_clock::now();
-                    for (size_t iter = 0; iter < Iterations; ++iter) {
-                        // kernel.forward(input.data(), indices.data(), indices.size(), simd_output.data(), true);
-                    }
-                    end = high_resolution_clock::now();
-                    total_kernel_duration += duration_cast<nanoseconds>(end - start).count();
-
-                    for (size_t c = 0; c < Cols; ++c) HWY_ASSERT_EQ(simd_output[c], ref_output[c]);
-
-                    std::cout << "Reference accumulator avg: " << total_ref_duration / Iterations << " ns\n";
-                    std::cout << "SIMD/Kernel accumulator avg: " << total_kernel_duration / Iterations << " ns\n";
-                }
-
-                void accumulator_all() {
-                    using kernel_t = chepp::nnue::layers::accum::HWY_NAMESPACE::SIMDKernel<int32_t, 32, 1024, int16_t>;
-                    accumulator_test<kernel_t, 32, 1024>();
-                }
-            } // namespace
-        }     // namespace HWY_NAMESPACE
-    }         // namespace accum
-} // namespace chepp::nnue
+                for_each_type<simd_ops>([&]<typename Opt>() {
+                    an::Layer<Opt> layer;
+                    layer.load_weights(weights.data(), biases.data());
+                    layer.forward(input.data(), input.size(), simd_output.data());
+                    HWY_ASSERT_ARRAY_EQ(simd_output.data(), ref_output.data(), simd_output.size());
+                });
+            }
+        } // namespace
+    } // namespace HWY_NAMESPACE
+} // namespace chepp::tests::nnue::layers::accumulator
 
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
-
-namespace chepp::nnue {
-    namespace accum {
-        namespace HWY_NAMESPACE {
-            namespace {
-                HWY_BEFORE_TEST(AccumulatorTest);
-                HWY_EXPORT_AND_TEST_P(AccumulatorTest, accumulator_all);
-                HWY_AFTER_TEST();
-            } // namespace
-        }     // namespace HWY_NAMESPACE
-    }         // namespace accum
-} // namespace chepp::nnue
+namespace chepp::tests::nnue::layers::accumulator {
+    namespace {
+        HWY_BEFORE_TEST(AccumTest);
+        HWY_EXPORT_AND_TEST_P(AccumTest, accum);
+    } // namespace
+} // namespace chepp::tests::nnue::layers::accumulator
 HWY_TEST_MAIN();
-
-#endif
+#endif // HWY_ONCE

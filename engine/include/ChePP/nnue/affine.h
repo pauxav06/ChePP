@@ -2,53 +2,39 @@
 #define CHEPP_AFFINE_H
 
 #include "layers.h"
+#include "types.h"
 #include "utils.h"
+#include <hwy/aligned_allocator.h>
 
 namespace chepp::nnue::layers::affine {
-    using namespace meta;
+    using Scalar = Kernel<0>;
+    // using SimdRowMaj = Kernel<1>; should implement later
+    using SimdColMaj = Kernel<2>;
 
-    enum class Kernels { Scalar, SIMD };
+    using SumOfMulQuadAcc = Operation<0>;
+    using SumOfMulPairAcc = Operation<1>;
 
-    struct Types {
-        ScalarType in;
-        ScalarType out;
+    struct AffineParams {
+        Dims dims;
     };
 
-    struct Dims {
-        size_t in;
-        size_t out;
+    template <typename InT, typename OutT>
+    struct StateParams {
+        int             bucket;
+        std::span<InT>  weights;
+        std::span<OutT> biases;
     };
 
-    template <Kernels K>
-    struct Opt;
+    template <typename InT, typename OutT>
+    struct AffineState {
+        using input_type  = InT;
+        using output_type = OutT;
+        hwy::AlignedVector<input_type>  weights;
+        hwy::AlignedVector<output_type> biases;
 
-    template <>
-    struct Opt<Kernels::Scalar> {};
-
-    template <>
-    struct Opt<Kernels::SIMD> {
-        enum Operation : uint8_t { SumOfMulQuadAcc, SumOfMulPairAdd };
-        size_t    unroll;
-        Operation operation;
+        AffineState(size_t w_size, size_t b_size) : weights(w_size), biases(b_size) {}
     };
 
-    template <Kernels K>
-    struct Params {
-        static constexpr Kernels kernel = K;
-        Types                    types;
-        Dims                     dims;
-        Opt<kernel>              opt;
-    };
-
-    template <Kernels... Ks>
-    struct OptVariantFromEnumList {
-        using type = std::variant<Opt<Ks>...>;
-    };
-
-    template <Kernels... Ks>
-    using OptVariantFromEnumList_t = OptVariantFromEnumList<Ks...>::type;
-
-    using test = OptVariantFromEnumList_t<Kernels::SIMD, Kernels::Scalar>;
 } // namespace chepp::nnue::layers::affine
 
 #endif // CHEPP_AFFINE_H

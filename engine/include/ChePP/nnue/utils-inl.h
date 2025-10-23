@@ -52,6 +52,8 @@ namespace chepp {
             namespace hn = hwy::HWY_NAMESPACE;
             using namespace std::experimental;
 
+            using extent_type = std::size_t;
+
             // The highway documentation warns us about using STL containers for SIMD vectors because they are sizeless
             // and they might blow the stack. We instead should declare them as local variables.
             // However, this would make it impossible to change the register count based on a constexpr param, and
@@ -111,30 +113,23 @@ namespace chepp {
                 }
             };
 
-            template <bool has_constexpr, size_t Value>
-            struct conditional_extent {
-                static constexpr size_t value = has_constexpr ? Value : std::dynamic_extent;
-            };
+#define IF_ELSE(cond, val) _IF_ELSE(cond, val)
+#define _IF_ELSE(cond, val) IF_##cond(val)
 
-            template <size_t Value>
-            constexpr size_t extent_if_constexpr_v = conditional_extent<HWY_HAVE_CONSTEXPR_LANES, Value>::value;
+#define IF_1(val) val
+#define IF_0(val) 0
 
+#define EXTENT_IF(cond, val) (IF_ELSE(cond, val))
+
+#define STATIC_EXTENT(NAME, val) chepp::nnue::utils::extent_wrapper<val> NAME{.value = val};
+
+#define MAYBE_STATIC_EXTENT(NAME, val, cond)                                                                           \
+    chepp::nnue::utils::extent_wrapper<ENTENT_IF(cond, val)> NAME{.value = val};
+
+#define DYNAMIC_EXTENT(NAME, val) chepp::nnue::utils::extent_wrapper<std::dynamic_extent> NAME{.value = val};
         } // namespace HWY_NAMESPACE
-    }     // namespace nnue
+    } // namespace nnue
 } // namespace chepp
 
 HWY_AFTER_NAMESPACE();
-
-#if defined(HWY_HAVE_CONSTEXPR_LANES) && HWY_HAVE_CONSTEXPR_LANES
-#if defined HWY_STATIC_ASSERT
-#undef HWY_STATIC_ASSERT
-#endif
-#define HWY_STATIC_ASSERT(cond, msg) static_assert(cond, msg)
-#else
-#if defined HWY_STATIC_ASSERT
-#undef HWY_STATIC_ASSERT
-#endif
-#define HWY_STATIC_ASSERT(cond, msg) ((void)0)
-#endif
-
 #endif // CHEPP_UNROLLER_INL_H_

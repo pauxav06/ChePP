@@ -1,0 +1,87 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 22,
+    "patch": 0
+  },
+
+  "configurePresets": [
+    {
+      "name": "base",
+      "hidden": true,
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+
+    {
+      "name": "gcc-debug",
+      "displayName": "GCC Debug",
+      "inherits": "base",
+      "binaryDir": "build/gcc-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "/usr/bin/gcc",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++"
+      }
+    },
+    {
+      "name": "gcc-release",
+      "displayName": "GCC Release",
+      "inherits": "base",
+      "binaryDir": "build/gcc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "/usr/bin/gcc",
+        "CMAKE_CXX_COMPILER": "/usr/bin/g++"
+      }
+    },
+
+    {
+      "name": "clang-debug",
+      "displayName": "Clang Debug",
+      "inherits": "base",
+      "binaryDir": "build/clang-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++"
+      }
+    },
+    {
+      "name": "clang-release",
+      "displayName": "Clang Release",
+      "inherits": "base",
+      "binaryDir": "build/clang-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_C_COMPILER": "/usr/bin/clang",
+        "CMAKE_CXX_COMPILER": "/usr/bin/clang++"
+      }
+    },
+    {
+      "name": "clang-mingw-debug",
+      "generator": "Ninja",
+      "binaryDir": "build/clang-mingw-debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_C_COMPILER": "/opt/rocm/llvm/bin/clang",
+        "CMAKE_CXX_COMPILER": "/opt/rocm/llvm/bin/clang++",
+        "CMAKE_C_COMPILER_TARGET": "x86_64-w64-mingw32",
+        "CMAKE_CXX_COMPILER_TARGET": "x86_64-w64-mingw32",
+        "CMAKE_SYSROOT": "/usr/x86_64-w64-mingw32",
+        "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld -L/usr/lib/gcc/x86_64-w64-mingw32/13 -L/usr/x86_64-w64-mingw32/lib"
+      }
+    }
+  ],
+
+  "buildPresets": [
+    { "name": "gcc-debug", "configurePreset": "gcc-debug" },
+    { "name": "gcc-release", "configurePreset": "gcc-release" },
+    { "name": "clang-debug", "configurePreset": "clang-debug" },
+    { "name": "clang-release", "configurePreset": "clang-release" },
+    { "name": "clang-mingw-debug", "configurePreset": "clang-mingw-debug" }
+  ]
+}
