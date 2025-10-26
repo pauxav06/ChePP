@@ -9,7 +9,7 @@ set (TEST_SOURCES
         types_test.cpp
         affine_test.cpp
         #accum_test.cpp
-        #relu_test.cpp
+        relu_test.cpp
 )
 
 add_executable(ChePP_tests ${TEST_SOURCES})
