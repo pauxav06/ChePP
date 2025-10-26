@@ -8,7 +8,7 @@ UseTab: Never
 BreakBeforeBraces: Attach
 AllowShortIfStatementsOnASingleLine: true
 AllowShortLoopsOnASingleLine: true
-AllowShortFunctionsOnASingleLine: InlineOnly
+AllowShortFunctionsOnASingleLine: false
 
 # Template formatting
 AlwaysBreakTemplateDeclarations: Yes
@@ -42,4 +42,4 @@ ReflowComments: true
 PointerAlignment: Left
 
 # Optional: avoid breaking after return type for readability
-AlwaysBreakAfterReturnType: None
+AlwaysBreakAfterReturnType: All

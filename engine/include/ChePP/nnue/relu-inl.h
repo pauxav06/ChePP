@@ -1,4 +1,3 @@
-#include "../../../../cmake-build-debug-coverage/_deps/catch2-src/single_include/catch2/catch.hpp"
 #include "relu.h"
 
 #include <any>
@@ -22,94 +21,155 @@ HWY_BEFORE_NAMESPACE();
 namespace chepp::nnue::layers::relu {
     namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
-        namespace nn = chepp::nnue::HWY_NAMESPACE;
 
         using namespace std::experimental;
-        using namespace meta;
 
-        template <typename Params>
-        struct Layer;
+        CHEPP_BEFORE_LAYER()
 
-        // scalar also serves as fallback in case i simd kernels are not available due to size constraits
-        template <KernelConcept Kernel, TypesConcept Types, DimsConcept Dims, IntegralConstantConcept S>
-        struct Layer<std::tuple<Kernel, Types, Dims, S>> {
-            using extent_type = size_t;
-            using input_type  = Types::in;
-            using output_type = Types::out;
+        template <typename Layer, KernelConcept Kernel>
+        struct State<Layer, Kernel> : Layer::IState {
+            using extent_type = Layer::extent_type;
+            using input_type  = Layer::input_type;
+            using output_type = Layer::output_type;
 
-            CONSTEXPR_EXTENT(input_size, Dims::in)
-            CONSTEXPR_EXTENT(output_size, Dims::out)
+            explicit State(std::shared_ptr<const Layer> layer) : m_layer(layer) {
+            }
 
-            static_assert(std::is_integral_v<input_type> && std::is_integral_v<output_type>);
-            static_assert(Dims::in == Dims::out);
+            [[nodiscard]] HWY_INLINE BufferConstraints<const input_type>
+                                     input_buffer_constraints() const override {
+                return {m_layer->input_size(), sizeof(input_type)};
+            }
+            [[nodiscard]] HWY_INLINE BufferConstraints<output_type>
+                                     output_buffer_constraints() const override {
+                return {m_layer->output_size(), sizeof(output_type)};
+            }
 
-            static constexpr extent_type shift = S::value;
-
-            static constexpr input_type max  = static_cast<input_type>(std::numeric_limits<output_type>::max());
-            static constexpr input_type zero = static_cast<input_type>(0);
-
-            static void load_weights([[maybe_unused]] std::any, [[maybe_unused]] std::any) {}
-
-            static void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
-                HWY_ASSERT(input_view.size() == input_size);
-                HWY_ASSERT(output_view.size() == output_size);
+            void
+            forward(std::span<const input_type> input_view, std::span<output_type> output_view) const override {
+                HWY_ASSERT(input_view.size() >= m_layer->input_size());
+                HWY_ASSERT(output_view.size() >= m_layer->output_size());
 
                 auto* HWY_RESTRICT input_ptr  = input_view.data();
                 auto* HWY_RESTRICT output_ptr = output_view.data();
 
-                std::span<const input_type, input_size> input{input_ptr, input_size};
-                std::span<output_type, output_size>     output{output_ptr, output_size};
+                std::span<const input_type> input{input_ptr, m_layer->input_size()};
+                std::span<output_type>      output{output_ptr, m_layer->output_size()};
 
                 for (extent_type i = 0; i < input.size(); ++i) {
                     input_type val = input[i];
-                    if constexpr (shift != 0) val >>= shift;
-                    val       = std::max(zero, val);
-                    val       = std::min(max, val);
+                    if constexpr (Layer::shift() != 0) val >>= Layer::shift();
+                    val       = std::max(Layer::min(), val);
+                    val       = std::min(Layer::max(), val);
                     output[i] = static_cast<output_type>(val);
                 }
             }
+
+          private:
+            const std::shared_ptr<const Layer> m_layer;
         };
 
-        template <TypesConcept Types, DimsConcept Dims, IntegralConstantConcept S>
-            requires(utils::is_power_of_two(Dims::in) &&
-                     utils::is_power_of_two(sizeof(typename Types::in) / sizeof(typename Types::out)))
-        struct Layer<std::tuple<Simd, Types, Dims, S>> {
-            using extent_type = size_t;
-            using input_type  = Types::in;
-            using output_type = Types::out;
+        template <typename Layer, UnrollConcept U>
+        struct State<Layer, Simd, U> : Layer::IState {
+            using extent_type = Layer::extent_type;
+            using input_type  = Layer::input_type;
+            using output_type = Layer::output_type;
 
-            CONSTEXPR_EXTENT(input_size, Dims::in)
-            CONSTEXPR_EXTENT(output_size, Dims::out)
-
-            static constexpr extent_type shift = S::value;
-            CONSTEXPR_EXTENT(reductions, sizeof(input_type) / sizeof(output_type))
-
-            static_assert(reductions > 1);
-            static_assert(std::is_integral_v<input_type> && std::is_integral_v<output_type>);
-            static_assert(input_size == output_size);
+            [[nodiscard]] HWY_INLINE static constexpr extent_type
+            factor() {
+                return sizeof(input_type) / sizeof(output_type);
+            }
+            [[nodiscard]] HWY_INLINE static constexpr extent_type
+            unroll() {
+                return U::value;
+            }
 
             using Din  = hn::ScalableTag<input_type>;
             using Vin  = hn::VFromD<Din>;
             using Dout = hn::ScalableTag<output_type>;
             using Vout = hn::VFromD<Dout>;
 
-            MAYBE_CONSTEXPR_EXTENT(in_lanes, hn::Lanes(Din()));
-            MAYBE_CONSTEXPR_EXTENT(out_lanes, hn::Lanes(Dout()));
-            MAYBE_CONSTEXPR_EXTENT(padded_size, utils::pad_up(1 * input_size, 1 * in_lanes));
-            MAYBE_CONSTEXPR_EXTENT(input_chunks, input_size / in_lanes);
-            MAYBE_CONSTEXPR_EXTENT(output_chunks, input_size / out_lanes);
+            [[nodiscard]] HWY_INLINE static HWY_LANES_CONSTEXPR extent_type
+            in_lanes() {
+                return hn::Lanes(Din());
+            }
+            [[nodiscard]] HWY_INLINE static HWY_LANES_CONSTEXPR extent_type
+            out_lanes() {
+                return hn::Lanes(Dout());
+            }
+            [[nodiscard]] HWY_INLINE static HWY_LANES_CONSTEXPR extent_type
+            input_align() {
+                return unroll() * in_lanes() * factor();
+            }
+            [[nodiscard]] HWY_INLINE static HWY_LANES_CONSTEXPR extent_type
+            output_align() {
+                return unroll() * out_lanes();
+            }
 
-            static_assert(input_chunks / reductions == output_chunks);
+            explicit State(const std::shared_ptr<const Layer> layer) : m_layer(std::move(layer)) {
+                HWY_ASSERT(input_size() == output_size());
+                HWY_ASSERT(input_chunks() / factor() == output_chunks());
+            }
 
-            inline static HWY_LANES_CONSTEXPR auto s_input = utils::make_tensor<input_type>(input_chunks, input_size);
-            inline static HWY_LANES_CONSTEXPR auto s_packed_input =
-                utils::make_tensor<input_type>(output_chunks, reductions, in_lanes);
-            inline static HWY_LANES_CONSTEXPR auto s_output = utils::make_tensor<output_type>(output_chunks, out_lanes);
+            [[nodiscard]] HWY_INLINE extent_type
+            input_size() const {
+                return m_layer->input_size();
+            }
+            [[nodiscard]] HWY_INLINE extent_type
+            output_size() const {
+                return m_layer->output_size();
+            }
+            [[nodiscard]] HWY_INLINE extent_type
+            padded_input_size() const {
+                return utils::pad_up(input_size(), input_align());
+            }
+            [[nodiscard]] HWY_INLINE extent_type
+            padded_output_size() const {
+                return utils::pad_up(output_size(), output_align());
+            }
+            [[nodiscard]] HWY_INLINE extent_type
+            input_chunks() const {
+                return padded_input_size() / (in_lanes() * unroll());
+            }
+            [[nodiscard]] HWY_INLINE extent_type
+            output_chunks() const {
+                return padded_input_size() / (out_lanes() * unroll());
+            }
 
-            static void load_weights([[maybe_unused]] std::any, [[maybe_unused]] std::any) {}
+            [[nodiscard]] HWY_INLINE BufferConstraints<const input_type>
+                                     input_buffer_constraints() const override {
+                return {padded_input_size(), in_lanes() * sizeof(input_type)};
+            }
+            [[nodiscard]] HWY_INLINE BufferConstraints<output_type>
+                                     output_buffer_constraints() const override {
+                return {padded_output_size(), out_lanes() * sizeof(output_type)};
+            }
+
+            [[nodiscard]] HWY_INLINE auto
+            input_span(const std::span<const input_type> span) const {
+                using ext_t = extents<extent_type,
+                                      std::dynamic_extent,
+                                      unroll(),
+                                      factor(),
+                                      EXTENT_IF_LANES_CONSTEXPR(in_lanes())>;
+                HWY_ASSERT(span.size() >= padded_input_size());
+                auto* HWY_RESTRICT ptr = span.data();
+                ext_t              ext{output_chunks(), unroll(), factor(), in_lanes()};
+                return mdspan<const input_type, ext_t>{ptr, ext};
+            }
+
+            [[nodiscard]] HWY_INLINE auto
+            output_span(const std::span<output_type> span) const {
+                using ext_t =
+                    std::extents<extent_type, std::dynamic_extent, unroll(), EXTENT_IF_LANES_CONSTEXPR(out_lanes())>;
+                HWY_ASSERT(span.size() >= padded_output_size());
+                auto* HWY_RESTRICT ptr = span.data();
+                ext_t              ext{output_chunks(), unroll(), out_lanes()};
+                return mdspan<output_type, ext_t>{ptr, ext};
+            }
 
             template <size_t N, typename Tag, typename GetRegFn>
-            static auto ordered_demote_tree(GetRegFn&& get_reg) {
+            [[nodiscard]] HWY_INLINE static auto
+            ordered_demote_tree(GetRegFn&& get_reg) {
                 if constexpr (N == 1) {
                     return get_reg(0);
                 } else {
@@ -121,31 +181,35 @@ namespace chepp::nnue::layers::relu {
                 }
             }
 
-            static void forward(std::span<const input_type> input_view, std::span<output_type> output_view) {
-                HWY_ASSERT(input_view.size() == input_size);
-                HWY_ASSERT(output_view.size() == output_size);
+            void
+            forward(std::span<const input_type> input, std::span<output_type> output) const override {
+                const auto in  = input_span(input);
+                const auto out = output_span(output);
 
-                auto* HWY_RESTRICT input_ptr  = input_view.data();
-                auto* HWY_RESTRICT output_ptr = output_view.data();
-                const auto         in         = s_packed_input.make_const_span(input_ptr, s_packed_input.extent());
-                const auto         out        = s_output.make_span(output_ptr, s_output.extent());
-
-                for (extent_type c = 0; c < in.extent(0); c++) {
-                    nn::RegisterBank<reductions, Vin>::run(
-                        [&](const size_t i) { return hn::Load(Din(), &in[c, i, 0]); },
+                for (extent_type c = 0; c < in.extent(0); ++c) {
+                    nnue::HWY_NAMESPACE::RegisterBank<unroll() * factor(), Vin>::run(
+                        [&](const size_t i) { return hn::Load(Din(), &in[c, i / factor(), i % factor(), 0]); },
                         [&](auto get_reg, auto set_reg) {
-                            if constexpr (shift != 0) {
-                                for (int r = 0; r < reductions; r++) {
-                                    set_reg(r, hn::ShiftRight<shift>(get_reg(r)));
+                            if constexpr (Layer::shift() != 0) {
+                                for (extent_type r = 0; r < unroll() * factor(); ++r) {
+                                    set_reg(r, hn::ShiftRight<Layer::shift()>(get_reg(r)));
                                 }
                             }
-                            Vout v_out = ordered_demote_tree<reductions, Din>(get_reg);
-                            v_out      = hn::Max(hn::Zero(Dout()), v_out);
-                            hn::Store(v_out, Dout(), &out[c, 0]);
+                            for (extent_type u = 0; u < in.extent(1); ++u) {
+                                Vout v_out = ordered_demote_tree<factor(), Din>(
+                                    [&](const size_t i) { return get_reg(u * factor() + i); });
+                                v_out = hn::Max(hn::Zero(Dout()), v_out);
+                                hn::Store(v_out, Dout(), &out[c, u, 0]);
+                            }
                         });
                 }
             }
+
+          private:
+            const std::shared_ptr<const Layer> m_layer;
         };
+
+        CHEPP_AFTER_LAYER()
     }; // namespace HWY_NAMESPACE
 } // namespace chepp::nnue::layers::relu
 

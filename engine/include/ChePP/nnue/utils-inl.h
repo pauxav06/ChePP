@@ -65,7 +65,8 @@ namespace chepp {
             template <size_t N, typename VecT>
             struct RegisterBank {
                 template <typename Func, typename Init>
-                static HWY_INLINE void run(Init&& init, Func&& f) {
+                static HWY_INLINE void
+                run(Init&& init, Func&& f) {
                     static_assert(N <= 16, "Unroll factor exceeds 16");
                     using D = hn::DFromV<VecT>;
 
@@ -113,13 +114,14 @@ namespace chepp {
                 }
             };
 
-#define IF_ELSE(cond, val) _IF_ELSE(cond, val)
-#define _IF_ELSE(cond, val) IF_##cond(val)
+#define IF_ELSE(cond, val, other) _IF_ELSE(cond, val, other)
+#define _IF_ELSE(cond, val, other) IF_##cond(val, other)
 
-#define IF_1(val) val
-#define IF_0(val) 0
+#define IF_1(val, other) (val)
+#define IF_0(val, other) (other)
 
-#define EXTENT_IF(cond, val) (IF_ELSE(cond, val))
+#define EXTENT_IF(cond, val) (IF_ELSE(cond, val, std::dynamic_extent))
+#define EXTENT_IF_LANES_CONSTEXPR(val) EXTENT_IF(HWY_HAVE_CONSTEXPR_LANES, val)
 
 #define STATIC_EXTENT(NAME, val) chepp::nnue::utils::extent_wrapper<val> NAME{.value = val};
 

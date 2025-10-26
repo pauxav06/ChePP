@@ -7,14 +7,15 @@
 #include <stdint.h>
 #include <type_traits>
 
-namespace chepp::tests::utils {
+namespace chepp::utils {
 
     template <typename T>
-    void fill_random(T*       ptr,
-                     size_t   n,
-                     T        min  = std::numeric_limits<T>::min(),
-                     T        max  = std::numeric_limits<T>::max(),
-                     unsigned seed = 1234) {
+    void
+    fill_random(T*       ptr,
+                size_t   n,
+                T        min  = std::numeric_limits<T>::min(),
+                T        max  = std::numeric_limits<T>::max(),
+                unsigned seed = 1234) {
         std::mt19937 rng(seed);
 
         using dist_t = std::
@@ -26,10 +27,11 @@ namespace chepp::tests::utils {
     }
 
     template <typename Container>
-    void fill_random(Container&                     c,
-                     typename Container::value_type min  = std::numeric_limits<typename Container::value_type>::min(),
-                     typename Container::value_type max  = std::numeric_limits<typename Container::value_type>::max(),
-                     unsigned                       seed = 1234) {
+    void
+    fill_random(Container&                     c,
+                typename Container::value_type min  = std::numeric_limits<typename Container::value_type>::min(),
+                typename Container::value_type max  = std::numeric_limits<typename Container::value_type>::max(),
+                unsigned                       seed = 1234) {
         using T = Container::value_type;
         std::mt19937 rng(seed);
 
@@ -40,6 +42,6 @@ namespace chepp::tests::utils {
 
         for (auto& x : c) x = static_cast<T>(dist(rng));
     }
-} // namespace chepp::tests::utils
+} // namespace chepp::utils
 
 #endif // CHEPP_UTILS_H
