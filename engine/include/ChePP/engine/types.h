@@ -206,13 +206,13 @@ struct EnumBase {
         return DerivedT(NONE_VALUE);
     }
 
-    [[nodiscard]] constexpr std::string
+    [[nodiscard]] std::string
     to_string() const noexcept
         requires(StringRepresentableEnum<DerivedT>)
     {
         return std::string{TraitsT::to_string(static_cast<DerivedT>(value()))};
     }
-    [[nodiscard]] static constexpr std::expected<DerivedT, std::string>
+    [[nodiscard]] static std::expected<DerivedT, std::string>
     from_string(const std::string_view s)
         requires(StringRepresentableEnum<DerivedT>)
     {
@@ -580,7 +580,7 @@ struct EnumTraits<File> {
         return std::string{repr.at(f.index())};
     }
 
-    [[nodiscard]] static constexpr std::expected<File, std::string>
+    [[nodiscard]] static std::expected<File, std::string>
     from_string(const std::string_view s) noexcept {
         if (s == "-") {
             return File::none();

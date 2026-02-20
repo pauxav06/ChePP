@@ -1,4 +1,5 @@
 #include <argparse.hpp>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
@@ -10,81 +11,122 @@ using json   = nlohmann::json;
 namespace fs = std::filesystem;
 
 template <typename T>
-std::string litteral_suffix() {
+std::string
+litteral_suffix() {
     return "";
 }
 template <>
-std::string litteral_suffix<float>() {
+std::string
+litteral_suffix<float>() {
     return "f";
 }
 template <>
-std::string litteral_suffix<double>() {
+std::string
+litteral_suffix<double>() {
     return "";
 }
 template <>
-std::string litteral_suffix<uint8_t>() {
+std::string
+litteral_suffix<uint8_t>() {
     return "U";
 }
 template <>
-std::string litteral_suffix<uint16_t>() {
+std::string
+litteral_suffix<uint16_t>() {
     return "U";
 }
 template <>
-std::string litteral_suffix<uint32_t>() {
+std::string
+litteral_suffix<uint32_t>() {
     return "U";
 }
 template <>
-std::string litteral_suffix<uint64_t>() {
+std::string
+litteral_suffix<uint64_t>() {
     return "ULL";
 }
 
 template <typename T>
 struct type_name {
-    static std::string name() { return "unknown"; }
+    static std::string
+    name() {
+        return "unknown";
+    }
 };
 template <>
 struct type_name<float> {
-    static std::string name() { return "float"; }
+    static std::string
+    name() {
+        return "float";
+    }
 };
 template <>
 struct type_name<double> {
-    static std::string name() { return "double"; }
+    static std::string
+    name() {
+        return "double";
+    }
 };
 template <>
 struct type_name<int8_t> {
-    static std::string name() { return "int8_t"; }
+    static std::string
+    name() {
+        return "int8_t";
+    }
 };
 template <>
 struct type_name<uint8_t> {
-    static std::string name() { return "uint8_t"; }
+    static std::string
+    name() {
+        return "uint8_t";
+    }
 };
 template <>
 struct type_name<int16_t> {
-    static std::string name() { return "int16_t"; }
+    static std::string
+    name() {
+        return "int16_t";
+    }
 };
 template <>
 struct type_name<uint16_t> {
-    static std::string name() { return "uint16_t"; }
+    static std::string
+    name() {
+        return "uint16_t";
+    }
 };
 template <>
 struct type_name<int32_t> {
-    static std::string name() { return "int32_t"; }
+    static std::string
+    name() {
+        return "int32_t";
+    }
 };
 template <>
 struct type_name<uint32_t> {
-    static std::string name() { return "uint32_t"; }
+    static std::string
+    name() {
+        return "uint32_t";
+    }
 };
 template <>
 struct type_name<int64_t> {
-    static std::string name() { return "int64_t"; }
+    static std::string
+    name() {
+        return "int64_t";
+    }
 };
 template <>
 struct type_name<uint64_t> {
-    static std::string name() { return "uint64_t"; }
+    static std::string
+    name() {
+        return "uint64_t";
+    }
 };
 
 template <typename Func>
-void dispatch_type(const std::string& type_str, Func&& func) {
+void
+dispatch_type(const std::string& type_str, Func&& func) {
     if (type_str == "float")
         func.template operator()<float>();
     else if (type_str == "double")
@@ -110,13 +152,15 @@ void dispatch_type(const std::string& type_str, Func&& func) {
 }
 
 template <typename T>
-void write_header(std::ofstream& out_h, const std::string& name, size_t reps, size_t flat_size) {
+void
+write_header(std::ofstream& out_h, const std::string& name, size_t reps, size_t flat_size) {
     out_h << "alignas(64) extern const " << type_name<T>::name() << " " << name << "[" << reps << "][" << flat_size
           << "];\n";
 }
 
 template <typename T>
-void write_cpp(std::ofstream& out_cpp, const std::string& name, const std::vector<std::vector<T>>& data) {
+void
+write_cpp(std::ofstream& out_cpp, const std::string& name, const std::vector<std::vector<T>>& data) {
     size_t reps      = data.size();
     size_t flat_size = data[0].size();
 
@@ -136,7 +180,8 @@ void write_cpp(std::ofstream& out_cpp, const std::string& name, const std::vecto
 }
 
 template <typename T>
-void process_layer(std::ifstream& bin, const json& layer, std::ofstream& out_h, std::ofstream& out_cpp) {
+void
+process_layer(std::ifstream& bin, const json& layer, std::ofstream& out_h, std::ofstream& out_cpp) {
     std::string name = layer["name"];
     size_t      rows = layer["rows"];
     size_t      cols = layer["cols"];
@@ -155,7 +200,8 @@ void process_layer(std::ifstream& bin, const json& layer, std::ofstream& out_h, 
     write_cpp<T>(out_cpp, name, all_reps);
 }
 
-int main(int argc, char** argv) {
+int
+main(int argc, char** argv) {
     argparse::ArgumentParser program("bin2cpp");
     program.add_argument("-i", "--input").required().help("Input binary file");
     program.add_argument("--header").required().help("Output header name");
