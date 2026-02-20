@@ -43,12 +43,18 @@ namespace chepp::nnue::utils {
         using T = Container::value_type;
         std::mt19937 rng(seed);
 
-        using dist_t = std::
-            conditional_t<std::is_integral_v<T>, std::uniform_int_distribution<T>, std::uniform_real_distribution<T>>;
+        using dist_t = std::conditional_t<std::is_integral_v<T>,
+                                          std::conditional_t<std::is_signed_v<T>,
+                                                             std::uniform_int_distribution<std::intmax_t>,
+                                                             std::uniform_int_distribution<std::uintmax_t>>,
+                                          std::uniform_real_distribution<long double>>;
+        using res_t  = typename dist_t::result_type;
 
         dist_t dist(min, max);
 
-        for (auto& x : c) x = static_cast<T>(dist(rng));
+        for (auto& x : c) {
+            x = static_cast<T>(std::clamp(static_cast<res_t>(min), static_cast<res_t>(max), dist(rng)));
+        }
     }
 
     template <int Begin, int End, int Step = 1, typename Func>
