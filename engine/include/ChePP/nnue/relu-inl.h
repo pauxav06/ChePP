@@ -19,6 +19,7 @@ namespace chepp::nnue::layers {
         using namespace utils;
 
         template <typename InT, std::size_t IS, typename OutT, unsigned Q, default_config_t cfg>
+            requires(std::is_same_v<default_config_t, decltype(cfg)>)
         struct Kernel<ClippedReLULayer<InT, IS, OutT, Q>, cfg> final : ClippedReLULayer<InT, IS, OutT, Q>::IKernel {
             using Layer            = ClippedReLULayer<InT, IS, OutT, Q>;
             using extent_type      = Layer::extent_type;
@@ -50,7 +51,7 @@ namespace chepp::nnue::layers {
         };
 
         template <typename InT, std::size_t IS, typename OutT, unsigned Q, ClippedReluSimd cfg>
-            requires(cfg.unroll * (sizeof(InT) / sizeof(OutT)) <= 32)
+            requires(std::is_same_v<ClippedReluSimd, decltype(cfg)> && cfg.unroll * (sizeof(InT) / sizeof(OutT)) <= 32)
         struct Kernel<ClippedReLULayer<InT, IS, OutT, Q>, cfg> final : ClippedReLULayer<InT, IS, OutT, Q>::IKernel {
             using Layer       = ClippedReLULayer<InT, IS, OutT, Q>;
             using extent_type = Layer::extent_type;

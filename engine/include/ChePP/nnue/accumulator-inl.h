@@ -23,6 +23,7 @@ namespace chepp::nnue::layers {
         namespace hn = hwy::HWY_NAMESPACE;
 
         template <typename IdxT, std::size_t IS, typename OutT, std::size_t OS, default_config_t cfg>
+            requires(std::is_same_v<default_config_t, decltype(cfg)>)
         struct Kernel<AccumulatorLayer<IdxT, IS, OutT, OS>, cfg> final : AccumulatorLayer<IdxT, IS, OutT, OS>::IKernel {
             using Layer      = AccumulatorLayer<IdxT, IS, OutT, OS>;
             using index_type = Layer::index_type;
@@ -77,6 +78,7 @@ namespace chepp::nnue::layers {
         };
 
         template <typename IdxT, std::size_t IS, typename OutT, std::size_t OS, AccumulatorSimd cfg>
+            requires(std::is_same_v<AccumulatorSimd, decltype(cfg)>)
         struct Kernel<AccumulatorLayer<IdxT, IS, OutT, OS>, cfg> final : AccumulatorLayer<IdxT, IS, OutT, OS>::IKernel {
             using Layer      = AccumulatorLayer<IdxT, IS, OutT, OS>;
             using index_type = Layer::index_type;
