@@ -23,6 +23,7 @@ if(MSVC)
             /W4
             /permissive-
             /Zi
+            /RTC-
     )
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
         add_compile_options(/O2)
