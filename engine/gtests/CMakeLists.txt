@@ -17,13 +17,12 @@ enable_testing()
 
 set (TEST_SOURCES
         perft_tests.cpp
-        #repetitions_test.cpp
-        #zobrist_tests.cpp
-        #nnue_test.cpp
-        #types_test.cpp
-        #affine_test.cpp
-        #accum_test.cpp
-        #relu_test.cpp
+        repetitions_test.cpp
+        zobrist_tests.cpp
+        types_test.cpp
+        affine_test.cpp
+        accum_test.cpp
+        relu_test.cpp
         #network_test.cpp
 )
 

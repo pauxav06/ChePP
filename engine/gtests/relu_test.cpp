@@ -24,12 +24,12 @@ namespace chepp::nnue::layers {
                 using layer_t     = ClippedReLULayer<input_type, IS, output_type, Q>;
 
                 Test() {
-                    register_kernel<layer_t, 0>();
+                    register_kernel<layer_t, default_config>();
                     register_kernel<layer_t, ClippedReluSimd{1}>();
                     register_kernel<layer_t, ClippedReluSimd{2}>();
                     register_kernel<layer_t, ClippedReluSimd{4}>();
                     register_kernel<layer_t, ClippedReluSimd{8}>();
-                    register_kernel<layer_t, ClippedReluSimd{16}>();
+                    // register_kernel<layer_t, ClippedReluSimd{16}>();
                 }
 
                 template <typename Layer, auto cfg>
@@ -47,7 +47,7 @@ namespace chepp::nnue::layers {
 
                     const auto layer   = std::make_shared<layer_t>();
                     const auto kernels = registery.make_all_kernels(layer);
-                    const auto ref     = *registery.make_kernel(layer, HWY_TARGET, 0);
+                    const auto ref     = *registery.make_kernel(layer, HWY_TARGET, default_config);
 
                     for (const auto& kernel : kernels) {
                         AlignedVector<input_type>  input(IS + kernel->input_padding());

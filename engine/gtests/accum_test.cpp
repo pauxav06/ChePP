@@ -24,7 +24,7 @@ namespace chepp::nnue::layers {
                 using layer_t = AccumulatorLayer<idx_t, IS, type, OS>;
 
                 Test() {
-                    register_kernel<layer_t, 0>();
+                    register_kernel<layer_t, default_config>();
                     register_kernel<layer_t, AccumulatorSimd{1}>();
                     register_kernel<layer_t, AccumulatorSimd{2}>();
                     register_kernel<layer_t, AccumulatorSimd{4}>();
@@ -50,7 +50,7 @@ namespace chepp::nnue::layers {
 
                     const auto layer   = std::make_shared<layer_t>(weights, biases);
                     const auto kernels = registery.make_all_kernels(layer);
-                    const auto ref     = *registery.make_kernel(layer, HWY_TARGET, 0);
+                    const auto ref     = *registery.make_kernel(layer, HWY_TARGET, default_config);
 
                     for (const auto& kernel : kernels) {
                         AlignedVector<type> output(OS + kernel->padding());

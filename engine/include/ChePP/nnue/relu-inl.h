@@ -18,7 +18,7 @@ namespace chepp::nnue::layers {
         namespace hn = hwy::HWY_NAMESPACE;
         using namespace utils;
 
-        template <typename InT, std::size_t IS, typename OutT, unsigned Q, auto cfg>
+        template <typename InT, std::size_t IS, typename OutT, unsigned Q, default_config_t cfg>
         struct Kernel<ClippedReLULayer<InT, IS, OutT, Q>, cfg> final : ClippedReLULayer<InT, IS, OutT, Q>::IKernel {
             using Layer            = ClippedReLULayer<InT, IS, OutT, Q>;
             using extent_type      = Layer::extent_type;

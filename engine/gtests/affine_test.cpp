@@ -29,7 +29,7 @@ namespace chepp::nnue::layers {
                 using layer_t = AffineLayer<input_type, IS, output_type, OS, weights_type, bias_type>;
 
                 Test() {
-                    register_kernel<layer_t, 0>();
+                    register_kernel<layer_t, default_config>();
                     register_kernel<layer_t, AffineSimdColMaj{1, AffineOperation::SumOfMulQuadAdd}>();
                     register_kernel<layer_t, AffineSimdColMaj{2, AffineOperation::SumOfMulQuadAdd}>();
                     register_kernel<layer_t, AffineSimdColMaj{4, AffineOperation::SumOfMulQuadAdd}>();
@@ -69,7 +69,7 @@ namespace chepp::nnue::layers {
 
                     const auto layer   = std::make_shared<layer_t>(weights, biases);
                     const auto kernels = registery.make_all_kernels(layer);
-                    const auto ref     = registery.make_kernel(layer, HWY_TARGET, 0).value();
+                    const auto ref     = registery.make_kernel(layer, HWY_TARGET, default_config).value();
 
                     for (const auto& kernel : kernels) {
                         AlignedVector<input_type>  input(IS + kernel->input_padding());

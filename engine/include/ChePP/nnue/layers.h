@@ -11,6 +11,7 @@
 #include <generator>
 #include <memory>
 #include <memory_resource>
+#include <numeric>
 #include <string>
 #include <type_traits>
 #include <typeindex>
@@ -37,6 +38,14 @@ namespace chepp::nnue {
             virtual ~KernelBase() = default;
         };
 
+        struct default_config_t {
+            constexpr bool
+            operator==(const default_config_t&) const {
+                return true;
+            }
+        };
+        static constexpr default_config_t default_config;
+
         struct ILayer {
             virtual ~ILayer() = default;
             [[nodiscard]] virtual double
@@ -52,6 +61,14 @@ namespace chepp::nnue {
         };
     } // namespace layers
 } // namespace chepp::nnue
+
+template <>
+struct std::hash<chepp::nnue::layers::default_config_t> {
+    std::size_t
+    operator()(const chepp::nnue::layers::default_config_t&) const noexcept {
+        return {};
+    }
+};
 
 template <>
 struct std::hash<chepp::nnue::layers::KernelKey> {

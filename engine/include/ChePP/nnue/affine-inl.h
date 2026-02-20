@@ -29,7 +29,13 @@ namespace chepp::nnue::layers {
         using namespace hwy;
         using namespace utils;
 
-        template <typename InT, std::size_t IS, typename OutT, std::size_t OS, typename WT, typename BT, auto cfg>
+        template <typename InT,
+                  std::size_t IS,
+                  typename OutT,
+                  std::size_t OS,
+                  typename WT,
+                  typename BT,
+                  default_config_t cfg>
         struct Kernel<AffineLayer<InT, IS, OutT, OS, WT, BT>, cfg> final
             : AffineLayer<InT, IS, OutT, OS, WT, BT>::IKernel {
             using Layer = AffineLayer<InT, IS, OutT, OS, WT, BT>;
