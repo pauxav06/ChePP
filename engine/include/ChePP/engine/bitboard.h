@@ -6,6 +6,7 @@
 #include <array>
 #include <cassert>
 #include <cstdlib>
+#include <hwy/base.h>
 #include <mutex>
 #include <random>
 #include <ranges>
@@ -518,7 +519,7 @@ namespace Movegen {
                     attacks};
             }
 
-            [[nodiscard]] constexpr __always_inline Bitboard
+            [[nodiscard]] constexpr HWY_INLINE Bitboard
             attack(Square sq, Bitboard occupancy) const {
                 return m_attacks[m_offsets[sq] + m_indexers[sq].index(occupancy)];
             }
@@ -538,7 +539,7 @@ namespace Movegen {
                 : m_mask(mask), m_shift(64 - mask.popcount()), m_magic(find_magic(mask, blockers)) {
             }
 
-            [[nodiscard]] constexpr __always_inline index_type
+            [[nodiscard]] constexpr HWY_INLINE index_type
             index(const mask_type blockers) const {
                 return static_cast<index_type>(((blockers & m_mask).value() * m_magic) >> m_shift);
             }
@@ -587,7 +588,7 @@ namespace Movegen {
             explicit constexpr PEXTIndexer(const mask_type mask, const std::vector<mask_type>&) : m_mask(mask) {
             }
 
-            [[nodiscard]] constexpr __always_inline index_type
+            [[nodiscard]] constexpr HWY_INLINE index_type
             index(mask_type blockers) const {
                 return static_cast<index_type>(pext(blockers.value(), m_mask.value()));
             }
