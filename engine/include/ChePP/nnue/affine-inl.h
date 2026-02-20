@@ -36,6 +36,7 @@ namespace chepp::nnue::layers {
                   typename WT,
                   typename BT,
                   default_config_t cfg>
+            requires(std::is_same_v<default_config_t, decltype(cfg)>)
         struct Kernel<AffineLayer<InT, IS, OutT, OS, WT, BT>, cfg> final
             : AffineLayer<InT, IS, OutT, OS, WT, BT>::IKernel {
             using Layer = AffineLayer<InT, IS, OutT, OS, WT, BT>;
@@ -79,7 +80,8 @@ namespace chepp::nnue::layers {
                   typename WT,
                   typename BT,
                   AffineSimdColMaj cfg>
-            requires(std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
+            requires(std::is_same_v<AffineSimdColMaj, decltype(cfg)> &&
+                     std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
                      is_power_of_two(cfg.unroll))
         struct Kernel<AffineLayer<InT, IS, OutT, OS, WT, BT>, cfg> final
             : AffineLayer<InT, IS, OutT, OS, WT, BT>::IKernel {
@@ -213,7 +215,8 @@ namespace chepp::nnue::layers {
                   typename WT,
                   typename BT,
                   AffineSimdRowMaj cfg>
-            requires(std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
+            requires(std::is_same_v<AffineSimdRowMaj, decltype(cfg)> &&
+                     std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
                      is_power_of_two(cfg.unroll))
         struct Kernel<AffineLayer<InT, IS, OutT, OS, WT, BT>, cfg> : AffineLayer<InT, IS, OutT, OS, WT, BT>::IKernel {
             using Layer = AffineLayer<InT, IS, OutT, OS, WT, BT>;
