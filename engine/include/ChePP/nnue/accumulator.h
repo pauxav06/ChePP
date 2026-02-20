@@ -57,7 +57,7 @@ namespace chepp::nnue::layers {
         benchmark(const KernelBase& ref) const override {
             const auto&                    kernel = dynamic_cast<const IKernel&>(ref);
             hwy::AlignedVector<index_type> inputs(input_size() / 100);
-            std::ranges::iota(inputs, 0);
+            std::iota(inputs.begin(), inputs.end(), 0);
             hwy::AlignedVector<value_type> outputs(output_size() + kernel.padding());
             hwy::FuncInput                 func_input[1]{1};
             hwy::Result                    result[1]{};

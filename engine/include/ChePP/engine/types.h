@@ -1534,7 +1534,7 @@ struct Fen {
     Square                   ep_square;
     uint16_t                 halfmove{}, fullmove{};
 
-    [[nodiscard]] static constexpr std::expected<Fen, std::string>
+    [[nodiscard]] static std::expected<Fen, std::string>
     from_string(const std::string& s) noexcept {
         auto err = [](const std::string& msg) {
             return std::unexpected{format_error("error while parsing fen: ", msg)};
@@ -1611,7 +1611,7 @@ struct Fen {
         return fen;
     }
 
-    [[nodiscard]] constexpr std::string
+    [[nodiscard]] std::string
     to_string() const {
         std::ostringstream oss;
 
