@@ -29,7 +29,7 @@ struct Position {
         do_move(move);
     }
     explicit Position(const Fen& fen);
-    static constexpr Position
+    static Position
     from_fen(const Fen& fen) {
         return Position{fen};
     }
