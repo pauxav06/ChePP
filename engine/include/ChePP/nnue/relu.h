@@ -2,58 +2,92 @@
 #define CHEPP_RELU_H_
 
 #include "layers.h"
-#include "types.h"
 #include "utils.h"
 
-namespace chepp::nnue::layers::relu {
-    using Scalar = Kernel<0>;
-    using Simd   = Kernel<1>;
+#include <hwy/base.h>
 
-    CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(Shift, int8_t)
-
-    template <TypesConcept Types, ShiftConcept Shift>
-    struct Layer : LayerBase<Layer<Types, Shift>> {
+namespace chepp::nnue::layers {
+    template <typename InT, std::size_t IS, typename OutT, unsigned Q>
+        requires(std::is_integral_v<InT> && std::is_integral_v<OutT> && std::is_signed_v<InT> &&
+                 !std::is_signed_v<OutT> && sizeof(InT) >= sizeof(OutT) && utils::is_power_of_two(Q))
+    struct ClippedReLULayer final : ILayer {
         using extent_type = size_t;
-        using input_type  = Types::in;
-        using output_type = Types::out;
+        using input_type  = InT;
+        using output_type = OutT;
 
-        static_assert(std::is_integral_v<input_type> && std::is_integral_v<output_type>);
-        static_assert(sizeof(output_type) < sizeof(input_type));
+        static constexpr int reductions = sizeof(OutT) / sizeof(InT);
+        static constexpr int quantize   = Q;
+        static constexpr int shift      = std::bit_width(Q) - 1;
 
-        struct Params {
-            Dims dims;
+        static constexpr input_type min{static_cast<input_type>(0)};
+        static constexpr input_type max{std::numeric_limits<std::make_signed_t<output_type>>::max()};
+
+        [[nodiscard]] std::size_t static constexpr size() {
+            return IS;
+        }
+
+        struct IKernel : KernelBase {
+            virtual void
+            forward(const input_type* input, output_type* output) const = 0;
+            [[nodiscard]] virtual std::size_t
+            input_padding() const {
+                return 0;
+            }
+            [[nodiscard]] virtual std::size_t
+            output_padding() const {
+                return 0;
+            }
         };
 
-        explicit Layer(const Params params) : m_input_size(params.dims.in), m_output_size(params.dims.out) {
-            HWY_ASSERT(m_input_size == m_output_size);
+        [[nodiscard]] double
+        benchmark(const KernelBase& ref) const override {
+            const auto&                    kernel = dynamic_cast<const IKernel&>(ref);
+            hwy::AlignedVector<input_type> inputs(size() + kernel.input_padding());
+            fill_random(inputs);
+            hwy::AlignedVector<output_type> outputs(size() + kernel.output_padding());
+            /**
+            return utils::benchmark([&] {
+                kernel.forward(inputs.data(), outputs.data());
+                return outputs.back();
+            }, 0.01);
+            **/
+            hwy::FuncInput func_input[1]{1};
+            hwy::Result    result[1]{};
+            hwy::Params    params{};
+            params.verbose           = false;
+            params.target_rel_mad    = 1;
+            params.precision_divisor = 1;
+            params.seconds_per_eval  = 4e-5;
+            if (!hwy::MeasureClosure(
+                    [&](unsigned int) -> hwy::FuncOutput {
+                        kernel.forward(inputs.data(), outputs.data());
+                        return outputs.back();
+                    },
+                    func_input,
+                    std::size(func_input),
+                    result,
+                    params)) {
+                return std::numeric_limits<double>::max();
+            }
+            return result->ticks;
         }
-
-        [[nodiscard]] HWY_INLINE extent_type
-        input_size() const {
-            return m_input_size;
-        }
-        [[nodiscard]] HWY_INLINE extent_type
-        output_size() const {
-            return m_output_size;
-        }
-        [[nodiscard]] HWY_INLINE static constexpr Shift_t
-        shift() {
-            return Shift::value;
-        }
-        [[nodiscard]] HWY_INLINE static constexpr input_type
-        min() {
-            return static_cast<input_type>(0);
-        }
-        [[nodiscard]] HWY_INLINE static constexpr input_type
-        max() {
-            return static_cast<input_type>(std::numeric_limits<output_type>::max());
-        }
-
-      private:
-        const extent_type m_input_size{};
-        const extent_type m_output_size{};
     };
 
-} // namespace chepp::nnue::layers::relu
+    struct ClippedReluSimd {
+        int unroll;
+
+        bool
+        operator==(const ClippedReluSimd&) const = default;
+    };
+
+} // namespace chepp::nnue::layers
+
+template <>
+struct std::hash<chepp::nnue::layers::ClippedReluSimd> {
+    std::size_t
+    operator()(const chepp::nnue::layers::ClippedReluSimd& cfg) const noexcept {
+        return cfg.unroll;
+    }
+};
 
 #endif // CHEPP_RELU_H

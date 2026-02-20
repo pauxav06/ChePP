@@ -2,7 +2,6 @@
 // Created by paul on 7/30/25.
 //
 
-#include <ChePP/engine/init.h>
 #include <ChePP/engine/position.h>
 #include <gtest/gtest.h>
 

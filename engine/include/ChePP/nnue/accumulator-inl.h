@@ -1,9 +1,10 @@
 #include "accumulator.h"
+#include "matrix.h"
 #include <cassert>
 #include <cstring>
-#include <experimental/mdarray>
-#include <experimental/mdspan>
 #include <hwy/aligned_allocator.h>
+#include <hwy/cache_control.h>
+#include <mdspan>
 #include <vector>
 
 #if defined(CHEPP_ACCUM_INL_H_) == defined(HWY_TARGET_TOGGLE)
@@ -13,198 +14,187 @@
 #define CHEPP_ACCUM_INL_H_
 #endif
 
-#include "utils-inl.h"
+#include "layer-inl.h"
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
-namespace chepp::nnue::layers::accumulator {
+namespace chepp::nnue::layers {
     namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
-        namespace nn = chepp::nnue::HWY_NAMESPACE;
 
-        using namespace std::experimental;
-        using namespace meta;
+        template <typename IdxT, std::size_t IS, typename OutT, std::size_t OS, auto cfg>
+        struct Kernel<AccumulatorLayer<IdxT, IS, OutT, OS>, cfg> final : AccumulatorLayer<IdxT, IS, OutT, OS>::IKernel {
+            using Layer      = AccumulatorLayer<IdxT, IS, OutT, OS>;
+            using index_type = Layer::index_type;
+            using value_type = Layer::value_type;
 
-        template <typename Params>
-        struct Layer;
+            using weights_extents_t = std::extents<std::size_t, Layer::input_size(), Layer::output_size()>;
+            using biases_extents_t  = std::extents<std::size_t, Layer::output_size()>;
+            using weights_view_t    = std::mdspan<const value_type, weights_extents_t>;
+            using biases_view_t     = std::mdspan<const value_type, biases_extents_t>;
 
-        template <KernelConcept Kernel, TypesConcept Types, DimsConcept Dims>
-        struct Layer<std::tuple<Kernel, Types, Dims>> {
-
-            using input_type  = Types::in;
-            using output_type = Types::out;
-
-            // transposed
-            static constexpr size_t Rows    = Dims::in;
-            static constexpr size_t Columns = Dims::out;
-
-            using idx_span_t = std::span<const input_type>;
-
-            using bias_extent_t = extents<size_t, Columns>;
-            using bias_array_t =
-                mdarray<const output_type, bias_extent_t, layout_right, hwy::AlignedVector<output_type>>;
-
-            using weights_extent_t = extents<size_t, Rows, Columns>;
-            using weight_array_t =
-                mdarray<const output_type, weights_extent_t, layout_right, hwy::AlignedVector<output_type>>;
-
-            static constexpr weights_extent_t WeightsExtent{Rows, Columns};
-            static constexpr bias_extent_t    BiasExtent{Columns};
-
-            weight_array_t m_weights;
-            bias_array_t   m_biases;
-
-            void load_weights(const output_type* HWY_RESTRICT weights, const output_type* HWY_RESTRICT biases) {
-                m_weights = weight_array_t(WeightsExtent);
-                m_biases  = bias_array_t(BiasExtent);
-                std::memcpy(m_weights.data(), weights, m_weights.size());
-                std::memcpy(m_biases.data(), biases, m_biases.size());
+            explicit Kernel(const std::shared_ptr<Layer>& layer)
+                : m_layer(layer), m_weights(std::data(m_layer->weights()), weights_extents_t{}),
+                  m_biases(std::data(m_layer->biases()), biases_extents_t{}) {
             }
 
-            void forward(const input_type* HWY_RESTRICT idx_ptr,
-                         const size_t                   n_idx,
-                         output_type* HWY_RESTRICT      out_ptr) const {
-                for (size_t c = 0; c < m_biases.extent(0); ++c) {
-                    out_ptr[c] = m_biases[c];
-                }
-                for (size_t i = 0; i < n_idx; ++i) {
-                    input_type idx = idx_ptr[i];
-                    for (size_t c = 0; c < m_weights.extent(1); ++c) {
-                        out_ptr[c] += m_weights[idx, c];
+            void
+            forward(const index_type* HWY_RESTRICT idx,
+                    const std::size_t              nb_idx,
+                    value_type* HWY_RESTRICT       out_ptr) const override {
+                std::memcpy(out_ptr, std::data(m_layer->biases()), std::size(m_layer->biases()) * sizeof(value_type));
+                for (std::size_t i = 0; i < nb_idx; ++i) {
+                    for (std::size_t j = 0; j < Layer::output_size(); ++j) {
+                        out_ptr[j] += m_weights[idx[i], j];
                     }
                 }
             }
 
-            void forward_incremental(const input_type* HWY_RESTRICT input_ptr,
-                                     const input_type* HWY_RESTRICT added_ptr,
-                                     const size_t                   n_added,
-                                     const input_type* HWY_RESTRICT removed_ptr,
-                                     const size_t                   n_removed,
-                                     output_type* HWY_RESTRICT      out_ptr) const {
-                for (size_t c = 0; c < m_biases.extent(0); ++c) {
-                    out_ptr[c] = input_ptr[c];
-                }
-                for (size_t i = 0; i < n_added; ++i) {
-                    input_type idx = added_ptr[i];
-                    for (size_t c = 0; c < m_weights.extent(1); ++c) {
-                        out_ptr[c] += m_weights[idx, c];
+            void
+            forward_incremental(const value_type* HWY_RESTRICT input_ptr,
+                                const index_type* HWY_RESTRICT added,
+                                const std::size_t              nb_added,
+                                const index_type* HWY_RESTRICT removed,
+                                const std::size_t              nb_removed,
+                                value_type* HWY_RESTRICT       out_ptr) const override {
+                std::memcpy(out_ptr, input_ptr, Layer::output_size() * sizeof(value_type));
+                for (std::size_t i = 0; i < nb_added; ++i) {
+                    for (std::size_t j = 0; j < Layer::output_size(); ++j) {
+                        out_ptr[j] += m_weights[added[i], j];
                     }
                 }
-                for (size_t i = 0; i < n_removed; ++i) {
-                    input_type idx = removed_ptr[i];
-                    for (size_t c = 0; c < m_weights.extent(1); ++c) {
-                        out_ptr[c] -= m_weights[idx, c];
+                for (std::size_t i = 0; i < nb_removed; ++i) {
+                    for (std::size_t j = 0; j < Layer::output_size(); ++j) {
+                        out_ptr[j] -= m_weights[removed[i], j];
                     }
                 }
             }
+
+          private:
+            std::shared_ptr<Layer> m_layer;
+            weights_view_t         m_weights;
+            biases_view_t          m_biases;
         };
 
-        template <TypesConcept Types, DimsConcept Dims, UnrollConcept U>
-        struct Layer<std::tuple<Simd, Types, Dims, U>> {
+        template <typename IdxT, std::size_t IS, typename OutT, std::size_t OS, AccumulatorSimd cfg>
+        struct Kernel<AccumulatorLayer<IdxT, IS, OutT, OS>, cfg> final : AccumulatorLayer<IdxT, IS, OutT, OS>::IKernel {
+            using Layer      = AccumulatorLayer<IdxT, IS, OutT, OS>;
+            using index_type = Layer::index_type;
+            using value_type = Layer::value_type;
 
-            using input_type  = Types::in;
-            using output_type = Types::out;
+            static constexpr std::size_t unroll = cfg.unroll;
 
-            static constexpr size_t Rows    = Dims::in;
-            static constexpr size_t Columns = Dims::out;
-            static constexpr size_t Unroll  = U::value;
-
-            using D   = hn::CappedTag<input_type, Columns>;
+            using D   = hn::ScalableTag<value_type>;
             using Vec = hn::VFromD<D>;
 
-            static HWY_LANES_CONSTEXPR size_t Lanes  = hn::Lanes(D());
-            static HWY_LANES_CONSTEXPR size_t Chunks = Columns / (Lanes * Unroll);
+            HWY_STATIC_CONSTEXPR std::size_t m_lanes{hn::Lanes(D())};
+            HWY_STATIC_CONSTEXPR std::size_t m_padded_output_size{pad_up(Layer::output_size(), m_lanes* unroll)};
+            HWY_STATIC_CONSTEXPR std::size_t m_output_padding{m_padded_output_size - Layer::output_size()};
+            HWY_STATIC_CONSTEXPR std::size_t m_chunks{m_padded_output_size / (m_lanes * unroll)};
 
-            using output_extent_t =
-                extents<size_t, nn::extent_if_constexpr_v<Chunks>, Unroll, nn::extent_if_constexpr_v<Lanes>>;
-            using const_output_view   = mdspan<const input_type, output_extent_t>;
-            using output_view_t       = mdspan<input_type, output_extent_t>;
-            using sparse_input_span_t = std::span<const input_type>;
+            using output_extents_t =
+                std::extents<std::size_t, HWY_CONSTEXPR_EXT(m_chunks), unroll, HWY_CONSTEXPR_EXT(m_lanes)>;
+            using output_view_t     = std::mdspan<value_type, output_extents_t>;
+            using input_extents_t   = output_extents_t;
+            using input_view_t      = std::mdspan<const value_type, input_extents_t>;
+            using weights_extents_t = std::extents<std::size_t,
+                                                   Layer::input_size(),
+                                                   HWY_CONSTEXPR_EXT(m_chunks),
+                                                   unroll,
+                                                   HWY_CONSTEXPR_EXT(m_lanes)>;
+            using weight_view_t     = std::mdspan<const value_type, weights_extents_t>;
+            using bias_extents_t =
+                std::extents<std::size_t, HWY_CONSTEXPR_EXT(m_chunks), unroll, HWY_CONSTEXPR_EXT(m_lanes)>;
+            using bias_view_t = std::mdspan<const value_type, bias_extents_t>;
 
-            using weights_extent_t = extents<size_t,
-                                             Rows,
-                                             nn::extent_if_constexpr_v<Chunks>,
-                                             nn::extent_if_constexpr_v<Unroll>,
-                                             nn::extent_if_constexpr_v<Lanes>>;
+            HWY_STATIC_CONSTEXPR output_extents_t m_output_extents{m_chunks, unroll, m_lanes};
 
-            using weight_array_t =
-                mdarray<const output_type, weights_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+            explicit Kernel(const std::shared_ptr<Layer>& layer)
+                : m_layer(layer), m_weights_storage(Layer::input_size() * m_padded_output_size),
+                  m_weights(std::data(m_weights_storage), Layer::input_size(), m_chunks, unroll, m_lanes),
+                  m_biases_storage(m_padded_output_size),
+                  m_biases(std::data(m_biases_storage), m_chunks, unroll, m_lanes) {
+                const matrix::MatrixView w{std::data(m_layer->weights()), Layer::input_size(), Layer::output_size()};
+                const auto               w_t0 = pad(w, 0, m_output_padding);
 
-            using bias_extent_t = extents<size_t,
-                                          nn::extent_if_constexpr_v<Chunks>,
-                                          nn::extent_if_constexpr_v<Unroll>,
-                                          nn::extent_if_constexpr_v<Lanes>>;
-            using bias_array_t =
-                mdarray<const output_type, bias_extent_t, layout_right, hwy::AlignedVector<output_type>>;
+                const matrix::MatrixView b{std::data(m_layer->biases()), 1, Layer::output_size()};
+                const auto               b_t0 = pad(b, 0, m_output_padding);
 
-            static HWY_LANES_CONSTEXPR weights_extent_t WeightsExtent{Rows, Chunks, Unroll, Lanes};
-            static HWY_LANES_CONSTEXPR bias_extent_t    BiasExtent{Chunks, Unroll, Lanes};
-            static HWY_LANES_CONSTEXPR output_extent_t  OutputView{Chunks, Unroll, Lanes};
-
-            weight_array_t m_weights;
-            bias_array_t   m_biases;
-
-            void load_weights(const output_type* HWY_RESTRICT weights, const output_type* HWY_RESTRICT biases) {
-                m_weights = weight_array_t(WeightsExtent);
-                m_biases  = bias_array_t(BiasExtent);
-                std::memcpy(m_weights.data(), weights, m_weights.size());
-                std::memcpy(m_biases.data(), biases, m_biases.size());
+                materialize(w_t0, std::data(m_weights_storage));
+                materialize(b_t0, std::data(m_biases_storage));
             }
 
-            void forward(const input_type* HWY_RESTRICT idx_ptr,
-                         const size_t                   n_idx,
-                         output_type* HWY_RESTRICT      out_ptr) const {
+            [[nodiscard]] std::size_t
+            padding() const noexcept {
+                return m_output_padding;
+            }
 
-                output_view_t       out{out_ptr, OutputView};
-                sparse_input_span_t indices{idx_ptr, n_idx};
+            void
+            forward(const index_type* HWY_RESTRICT idx_ptr,
+                    const std::size_t              n_idx,
+                    value_type* HWY_RESTRICT       out_ptr) const override {
 
-                for (size_t c = 0; c < Chunks; ++c) {
-                    chepp::nnue::HWY_NAMESPACE::RegisterBank<Unroll, Vec>::run(
-                        [&](const size_t u) { return hn::Load(D(), &m_biases[c, u, 0]); },
-                        [&](auto get_reg, auto set_reg) {
-                            for (const auto idx : indices) {
-                                for (size_t u = 0; u < Unroll; ++u) {
-                                    set_reg(u, get_reg(u) + hn::Load(D(), &m_weights[idx, c, u, 0]));
-                                }
-                            }
-                            for (size_t u = 0; u < Unroll; ++u) hn::Store(get_reg(u), D(), &out[c, u, 0]);
-                        });
+                output_view_t out{out_ptr, m_output_extents};
+
+                DECLARE_REG_BANK(unroll, Vec)
+                for (std::size_t c{0}; c < out.extent(0); ++c) {
+                    for (std::size_t u{0}; u < out.extent(1); ++u) {
+                        *regs[u] = hn::Load(D(), &m_biases[c, u, 0]);
+                    }
+                    for (std::size_t i{0}; i < n_idx; ++i) {
+                        if (i + 1 < n_idx) {
+                            hwy::Prefetch(&m_weights[idx_ptr[i + 1], c, 0, 0]);
+                        }
+                        for (std::size_t u{0}; u < out.extent(1); ++u) {
+                            *regs[u] += hn::Load(D(), &m_weights[idx_ptr[i], c, u, 0]);
+                        }
+                    }
+                    for (std::size_t u{0}; u < out.extent(1); ++u) {
+                        hn::Store(*regs[u], D(), &out[c, u, 0]);
+                    }
                 }
             }
 
-            void forward_incremental(const input_type* HWY_RESTRICT input_ptr,
-                                     const input_type* HWY_RESTRICT added_ptr,
-                                     const size_t                   n_added,
-                                     const input_type* HWY_RESTRICT removed_ptr,
-                                     const size_t                   n_removed,
-                                     output_type* HWY_RESTRICT      out_ptr) const {
+            void
+            forward_incremental(const value_type* HWY_RESTRICT input_ptr,
+                                const index_type* HWY_RESTRICT added_ptr,
+                                const size_t                   n_added,
+                                const index_type* HWY_RESTRICT removed_ptr,
+                                const size_t                   n_removed,
+                                value_type* HWY_RESTRICT       out_ptr) const override {
 
-                const_output_view   curr{input_ptr, OutputView};
-                output_view_t       out{out_ptr, OutputView};
-                sparse_input_span_t added{added_ptr, n_added};
-                sparse_input_span_t removed{removed_ptr, n_removed};
+                input_view_t  input{input_ptr, m_output_extents};
+                output_view_t out{out_ptr, m_output_extents};
 
-                for (size_t c = 0; c < Chunks; ++c) {
-                    chepp::nnue::HWY_NAMESPACE::RegisterBank<Unroll, Vec>::run(
-                        [&](const size_t u) { return hn::Load(D(), &curr[c, u, 0]); },
-                        [&](auto get_reg, auto set_reg) {
-                            for (const auto idx : added) {
-                                for (size_t u = 0; u < Unroll; ++u) {
-                                    set_reg(u, get_reg(u) + hn::Load(D(), &m_weights[idx, c, u, 0]));
-                                }
-                            }
-                            for (const auto idx : removed) {
-                                for (size_t u = 0; u < Unroll; ++u) {
-                                    set_reg(u, get_reg(u) - hn::Load(D(), &m_weights[idx, c, u, 0]));
-                                }
-                            }
-                            for (size_t u = 0; u < Unroll; ++u) hn::Store(get_reg(u), D(), &out[c, u, 0]);
-                        });
+                DECLARE_REG_BANK(unroll, Vec)
+                for (std::size_t c{0}; c < out.extent(0); ++c) {
+                    for (std::size_t u{0}; u < out.extent(1); ++u) {
+                        *regs[u] = hn::Load(D(), &input[c, u, 0]);
+                    }
+                    for (std::size_t i{0}; i < n_added; ++i) {
+                        for (std::size_t u{0}; u < out.extent(1); ++u) {
+                            *regs[u] += hn::Load(D(), &m_weights[added_ptr[i], c, u, 0]);
+                        }
+                    }
+                    for (std::size_t i{0}; i < n_removed; ++i) {
+                        for (std::size_t u{0}; u < out.extent(1); ++u) {
+                            *regs[u] -= hn::Load(D(), &m_weights[removed_ptr[i], c, u, 0]);
+                        }
+                    }
+                    for (std::size_t u{0}; u < out.extent(1); ++u) {
+                        hn::Store(*regs[u], D(), &out[c, u, 0]);
+                    }
                 }
             }
+
+            std::shared_ptr<Layer>         m_layer;
+            hwy::AlignedVector<value_type> m_weights_storage;
+            weight_view_t                  m_weights;
+            hwy::AlignedVector<value_type> m_biases_storage;
+            bias_view_t                    m_biases;
         };
     } // namespace HWY_NAMESPACE
-} // namespace chepp::nnue::layers::accumulator
+} // namespace chepp::nnue::layers
 HWY_AFTER_NAMESPACE();
 
 #endif
