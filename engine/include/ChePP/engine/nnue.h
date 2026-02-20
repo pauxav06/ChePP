@@ -10,9 +10,15 @@
 #include <cstring>
 #include <vector>
 
+#include "accumulator.h"
+#include "affine.h"
+#include "layers.h"
 #include "position.h"
+#include "relu.h"
 
-namespace nnue {
+#include <iomanip>
+
+namespace chepp::nnue {
     struct FeatureTransformer {
         static constexpr auto MaxChanges = 32;
         using FeatureT                   = uint16_t;
@@ -20,48 +26,38 @@ namespace nnue {
 
         static constexpr size_t n_features_v = 32 * 11 * 64;
 
-        static bool needs_refresh(const Position& cur, const Position& prev, const Color view) {
+        static bool
+        needs_refresh(const Position& prev, const Position& cur, const Color view) {
             return prev.ksq(view) != cur.ksq(view);
         }
 
-        static std::pair<RetT, RetT> get_features(const Position& cur, const Position& prev, const Color view,
-                                                  const bool refresh)
+        static RetT
+        get_refresh_features(const Position& pos, const Color side) {
+            RetT res{};
+            for (const Square sq : pos.occupancy()) {
+                res.push_back(get_index(side, pos.ksq(side), sq, pos.piece_at(sq)));
+            }
+            return res;
+        }
 
-        {
-            RetT add_v;
-            RetT rem_v;
-
-            if (refresh) {
-                for (const Square sq : cur.occupancy()) {
-                    add_v.push_back(get_index(view, cur.ksq(view), sq, cur.piece_at(sq)));
-                }
-            } else {
-                auto add = [&](const Square sq, const Piece pc) {
-                    add_v.push_back(get_index(view, cur.ksq(view), sq, pc));
-                };
-                auto rem = [&](const Square sq, const Piece pc) {
-                    rem_v.push_back(get_index(view, cur.ksq(view), sq, pc));
-                };
-
-                const EnumArray<Bitboard, Color> color_diff = {
-                    prev.occupancy(WHITE) ^ cur.occupancy(WHITE),
-                    prev.occupancy(BLACK) ^ cur.occupancy(BLACK),
-                };
-
-                for (const auto c : {WHITE, BLACK}) {
-                    for (const Square sq : color_diff.at(c)) {
-                        if (prev.occupancy(c).is_set(sq))
-                            rem(sq, prev.piece_at(sq));
-                        else
-                            add(sq, cur.piece_at(sq));
+        static std::pair<RetT, RetT>
+        get_incremental_features(const Position& prev, const Position& cur, const Color side) {
+            std::pair<RetT, RetT> res{};
+            for (const auto color : Color::all()) {
+                for (const auto sq : prev.occupancy(color) ^ cur.occupancy(color)) {
+                    if (prev.occupancy(color).is_set(sq)) {
+                        res.second.push_back(get_index(side, prev.ksq(side), sq, prev.piece_at(sq)));
+                    } else {
+                        res.first.push_back(get_index(side, cur.ksq(side), sq, cur.piece_at(sq)));
                     }
                 }
             }
-            return {add_v, rem_v};
+            return res;
         }
 
       private:
-        static int king_square_index(Square ksq) {
+        static int
+        king_square_index(Square ksq) {
             static EnumArray<int, Square> WKSqH = {0,  1,  2,  3,  3,  2,  1,  0,  4,  5,  6,  7,  7,  6,  5,  4,
                                                    8,  9,  10, 11, 11, 10, 9,  8,  12, 13, 14, 15, 15, 14, 13, 12,
                                                    16, 17, 18, 19, 19, 18, 17, 16, 20, 21, 22, 23, 23, 22, 21, 20,
@@ -70,7 +66,8 @@ namespace nnue {
             return WKSqH[ksq];
         }
 
-        static int get_index(Color view, Square king_square, Square piece_square, Piece piece) {
+        static int
+        get_index(Color view, Square king_square, Square piece_square, Piece piece) {
             auto relative_piece_square = (view == WHITE ? piece_square : piece_square.flipped_horizontally());
             auto relative_king_square  = (view == WHITE ? king_square : king_square.flipped_horizontally());
             if (king_square.file() > FILE_D) {
@@ -81,324 +78,302 @@ namespace nnue {
         }
     };
 
-    template <typename Arch>
-    struct Network;
+    using namespace layers;
 
-    struct Accumulator {
-        static constexpr auto AccSz  = 1024;
-        static constexpr auto PsqtSz = 8;
+    struct Arch : std::enable_shared_from_this<Arch> {
+        static constexpr std::size_t buckets = 8;
+        using ft                             = FeatureTransformer;
+        using accum_t                        = AccumulatorLayer<uint16_t, ft::n_features_v, int16_t, 1024>;
+        using psqt_t                         = AccumulatorLayer<uint16_t, ft::n_features_v, int32_t, buckets>;
+        using act0_t                         = ClippedReLULayer<int16_t, 1024, uint8_t, 1>;
+        using l1_t                           = AffineLayer<uint8_t, 2048, int32_t, 16, int8_t, int32_t>;
+        using act1_t                         = ClippedReLULayer<int32_t, 16, uint8_t, 64>;
+        using l2_t                           = AffineLayer<uint8_t, 16, int32_t, 32, int8_t, int32_t>;
+        using act2_t                         = ClippedReLULayer<int32_t, 32, uint8_t, 64>;
+        using l3_t                           = AffineLayer<uint8_t, 32, int32_t, 1, int8_t, int32_t>;
 
-        using AccumulatorT = std::array<int16_t, AccSz>;
-        using PsqtT        = std::array<int32_t, PsqtSz>;
+        inline static KernelRegistry registry{};
 
-        Accumulator() = default;
-        explicit Accumulator(const Position& pos) {
-            /**
-            const auto [wadd, wrem] = FeatureTransformer::get_features(pos, pos, WHITE, true);
-            refresh_acc(WHITE, wadd);
-            const auto [badd, brem] = FeatureTransformer::get_features(pos, pos, BLACK, true);
-            refresh_acc(BLACK, badd);
-            m_bucket = (pos.occupancy().popcount() - 1) / 4;
-            **/
+        static void
+        register_kernels();
+        static void
+        init_kernels() {
+            std::call_once(register_flag, [&] {
+                register_kernels();
+                accum_kernel = registry.get_best_kernel(accum_layer);
+                psqt_kernel  = registry.get_best_kernel(psqt_layer);
+                act0_kernel  = registry.get_best_kernel(act0_layer);
+                l1_kernels   = create_array<buckets>([&](auto i) { return registry.get_best_kernel(l1_layers.at(i)); });
+                act1_kernel  = registry.get_best_kernel(act1_layer);
+                l2_kernels   = create_array<buckets>([&](auto i) { return registry.get_best_kernel(l2_layers.at(i)); });
+                act2_kernel  = registry.get_best_kernel(act2_layer);
+                l3_kernels   = create_array<buckets>([&](auto i) { return registry.get_best_kernel(l3_layer.at(i)); });
+            });
         }
 
-        explicit Accumulator(const Accumulator& acc_prev, const Position& pos_cur, const Position& pos_prev) {
-            /**
-            update(acc_prev, pos_cur, pos_prev, WHITE);
-            update(acc_prev, pos_cur, pos_prev, BLACK);
-            m_bucket = (pos_cur.occupancy().popcount() - 1) / 4;
-            **/
-        }
+        struct Network {
+            explicit Network()
+                : m_accum_allocator(accum_t::output_size() +
+                                    std::max(accum_kernel->padding(), act0_kernel->input_padding())),
+                  m_psqt_allocator(psqt_t::output_size() + psqt_kernel->padding()),
+                  m_act0_out(act0_t::size() * 2 +
+                             std::max(act0_kernel->output_padding(), l1_kernels[0]->input_padding())),
+                  m_l1_out(l1_t::output_size() +
+                           std::max(l1_kernels[0]->output_padding(), act1_kernel->input_padding())),
+                  m_act1_out(act1_t::size() + std::max(act1_kernel->output_padding(), l2_kernels[0]->input_padding())),
+                  m_l2_out(l2_t::output_size() +
+                           std::max(l2_kernels[0]->output_padding(), act2_kernel->input_padding())),
+                  m_act2_out(act2_t::size() + std::max(act2_kernel->output_padding(), l3_kernels[0]->input_padding())),
+                  m_out(l3_t::output_size() + l3_kernels[0]->output_padding()) {
+            }
 
-        static Accumulator bench_refresh(const Position& pos) { return Accumulator(pos); }
+            int32_t
+            forward(const Color side) {
+                const auto [pos, psqt] = forward_bucket(side, m_bucket);
+                return pos + psqt;
+            }
 
-        [[nodiscard]] size_t bucket() const { return m_bucket; }
+            void
+            dbg_uci(const Color side) {
+                std::cout << "\n================ NNUE Debug (UCI) ================\n";
+                std::cout << "Side to move: " << (side == WHITE ? "WHITE" : "BLACK") << "\n";
+                std::cout << "Active bucket: " << m_bucket << "\n\n";
 
-      private:
-        void update(const Accumulator& prev, const Position& pos_cur, const Position& pos_prev, const Color view) {
-            const bool needs_refresh = FeatureTransformer::needs_refresh(pos_cur, pos_prev, view);
-            const auto [add, rem]    = FeatureTransformer::get_features(pos_cur, pos_prev, view, needs_refresh);
-            if (needs_refresh)
-                refresh_acc(view, add);
-            else
-                update_acc(prev, view, add, rem);
-        }
+                std::cout << std::setw(8) << "Bucket" << std::setw(12) << "PSQT" << std::setw(12) << "Pos"
+                          << std::setw(12) << "Total"
+                          << "   Active\n";
 
-        // horribly slow and memory bound function, how to make it faster?
-        // we cannot tile weights because they are accessed sparsely, and doing one feature at a time
-        // would force intermediate stores bc we don't have enough registers
-        void refresh_acc(const Color view, const FeatureTransformer::RetT& features){
-            /**
-            using namespace simd;
-            using AccumTag = pick_tag_t<int16_t>;
-            using Vec16    = register_type_t<AccumTag>;
-            using PsqtTag  = pick_tag_t<int32_t, PsqtSz * sizeof(int32_t) * 8>;
-            using Vec32    = register_type_t<PsqtTag>;
+                std::cout << "---------------------------------------------------\n";
 
-            auto acc  = reinterpret_cast<Vec16*>(m_accumulators.at(view).data());
-            auto psqt = reinterpret_cast<Vec32*>(m_psqts.at(view).data());
+                for (std::size_t b = 0; b < buckets; ++b) {
+                    const auto [pos, psqt] = forward_bucket(side, b);
+                    auto total             = pos + psqt;
 
-            __builtin_prefetch(acc_biases, 0, 3);
-            __builtin_prefetch(psqt_biases, 0, 1);
-
-            const auto acc_bias = reinterpret_cast<const Vec16*>(&acc_biases[0][0]);
-
-            static constexpr int elems_per_reg  = lane_count_v<AccumTag>;
-            static constexpr int n_regs         = register_count_v<typename AccumTag::arch> / 2;
-            static constexpr int elems_per_bloc = n_regs * elems_per_reg;
-            static constexpr int n_blocks       = sizeof(m_accumulators[WHITE]) / sizeof(int16_t) / elems_per_bloc;
-
-            for (int b = 0; b < n_blocks; ++b)
-            {
-                Vec16 accumulators[n_regs];
-
-                for (int r = 0; r < n_regs; ++r)
-                    accumulators[r] = acc_bias[b * n_regs + r];
-
-                for (const auto f : features)
-                {
-                    const auto weights = &reinterpret_cast<const Vec16*>(&acc_weights[0][f * AccSz])[b * n_regs];
-                    for (int r = 0; r < n_regs; ++r)
-                        accumulators[r] = add<AccumTag>(weights[r], accumulators[r]);
+                    std::cout << std::setw(8) << b << std::setw(12) << psqt << std::setw(12) << pos << std::setw(12)
+                              << total << "   " << (b == m_bucket ? "<-- ACTIVE" : "") << "\n";
                 }
 
-                for (int r = 0; r < n_regs; ++r)
-                    acc[b * n_regs + r] = accumulators[r];
+                std::cout << "===================================================\n\n";
             }
 
-            const auto* psqt_bias        = reinterpret_cast<const Vec32*>(psqt_biases);
-            auto        psqt_accumulator = psqt_bias[0];
-            for (const auto f : features)
-            {
-                const auto w     = reinterpret_cast<const Vec32*>(&psqt_weights[0][f * PsqtSz]);
-                psqt_accumulator = add<PsqtTag>(psqt_accumulator, w[0]);
+            void
+            init(const Position& pos) {
+                m_bucket = (pos.occupancy().popcount() - 1) / 4;
+                for (const Color side : Color::all()) {
+                    m_accum_stack.at(side).resize(1);
+                    m_psqt_stack.at(side).resize(1);
+                    m_accum_stack.at(side).at(0) = m_accum_allocator.get();
+                    m_psqt_stack.at(side).at(0)  = m_psqt_allocator.get();
+                    refresh(pos, side);
+                }
             }
-            psqt[0] = psqt_accumulator;
-            **/
+
+            void
+            update(const Position& prev, const Position& next) {
+                m_bucket = (next.occupancy().popcount() - 1) / 4;
+                for (const Color side : Color::all()) {
+                    m_accum_stack.at(side).push_back(m_accum_allocator.get());
+                    m_psqt_stack.at(side).push_back(m_psqt_allocator.get());
+                    if (ft::needs_refresh(prev, next, side)) {
+                        refresh(next, side);
+                    } else {
+                        update(prev, next, side);
+                    }
+                }
+            }
+
+            void
+            undo() {
+                for (const Color side : Color::all()) {
+                    m_accum_stack.at(side).pop_back();
+                    m_psqt_stack.at(side).pop_back();
+                }
+            }
+
+            template <typename T>
+            struct Alloc {
+                static constexpr std::size_t none = std::numeric_limits<std::size_t>::max();
+                Alloc(std::size_t size)
+                    : m_mem({MAX_PLY * 2 + Square::count(), size}), m_free(MAX_PLY * 2 + Square::count()) {
+                    std::ranges::iota(m_free, 0);
+                }
+
+                struct Handle {
+                    Handle() noexcept = default;
+                    Handle(Alloc* alloc, std::size_t idx) : m_alloc(alloc), m_idx(idx) {
+                    }
+
+                    Handle(const Handle& other) = delete;
+                    Handle&
+                    operator=(const Handle& other) = delete;
+
+                    Handle(Handle&& other) noexcept
+                        : m_alloc(std::exchange(other.m_alloc, nullptr)), m_idx(std::exchange(other.m_idx, none)) {
+                    }
+
+                    Handle&
+                    operator=(Handle&& other) noexcept {
+                        if (std::addressof(other) != this) {
+                            m_alloc = std::exchange(other.m_alloc, nullptr);
+                            m_idx   = std::exchange(other.m_idx, none);
+                        }
+                        return *this;
+                    }
+
+                    [[nodiscard]] explicit operator bool() {
+                        return m_alloc != nullptr && m_idx != none;
+                    }
+
+                    [[nodiscard]] std::span<T>
+                    mem() const {
+                        auto res = m_alloc->m_mem[{m_idx}];
+                        return {res.data(), res.size()};
+                    }
+
+                    ~Handle() {
+                        if (*this) {
+                            m_alloc->free(m_idx);
+                        }
+                    }
+
+                  private:
+                    Alloc*      m_alloc{nullptr};
+                    std::size_t m_idx{none};
+                };
+
+                Handle
+                get() {
+                    if (const auto idx = allocate(); idx != none) {
+                        return {this, idx};
+                    }
+                    return {};
+                }
+
+                void
+                free(std::size_t idx) {
+                    if (idx != none) {
+                        m_free.push_back(idx);
+                    }
+                }
+
+                std::size_t
+                allocate() {
+                    HWY_ASSERT(!m_free.empty());
+                    auto res = m_free.back();
+                    m_free.pop_back();
+                    return res;
+                }
+
+              private:
+                hwy::AlignedNDArray<T, 2> m_mem;
+                std::vector<std::size_t>  m_free;
+            };
+
+          private:
+            std::pair<int32_t, int32_t>
+            forward_bucket(const Color side, const std::size_t bucket) {
+                act0_kernel->forward(m_accum_stack.at(side).back().mem().data(), m_act0_out.data());
+                act0_kernel->forward(m_accum_stack.at(~side).back().mem().data(),
+                                     m_act0_out.data() + accum_t::output_size());
+                // std::ranges::copy(m_act0_out | std::views::take(10), std::ostream_iterator<int>{std::cout, " "});
+
+                l1_kernels.at(bucket)->forward(m_act0_out.data(), m_l1_out.data());
+                act1_kernel->forward(m_l1_out.data(), m_act1_out.data());
+                l2_kernels.at(bucket)->forward(m_act1_out.data(), m_l2_out.data());
+                act2_kernel->forward(m_l2_out.data(), m_act2_out.data());
+                l3_kernels.at(bucket)->forward(m_act2_out.data(), m_out.data());
+
+                auto out = m_out[0];
+                out *= 600;
+                out /= (64 * 127);
+
+                const int32_t psqt =
+                    (m_psqt_stack.at(side).back().mem()[bucket] - m_psqt_stack.at(~side).back().mem()[bucket]) / 2;
+
+                return {out, psqt};
+            }
+            void
+            refresh(const Position& pos, const Color side) {
+                const auto features = ft::get_refresh_features(pos, side);
+                accum_kernel->forward(features.data(), features.size(), m_accum_stack.at(side).back().mem().data());
+                psqt_kernel->forward(features.data(), features.size(), m_psqt_stack.at(side).back().mem().data());
+            }
+
+            void
+            update(const Position& prev, const Position& next, const Color side) {
+                const auto idx                                = m_psqt_stack.at(side).size() - 1;
+                const auto [added_features, removed_features] = ft::get_incremental_features(prev, next, side);
+                accum_kernel->forward_incremental(m_accum_stack.at(side).at(idx - 1).mem().data(),
+                                                  added_features.data(),
+                                                  added_features.size(),
+                                                  removed_features.data(),
+                                                  removed_features.size(),
+                                                  m_accum_stack.at(side).at(idx).mem().data());
+                psqt_kernel->forward_incremental(m_psqt_stack.at(side).at(idx - 1).mem().data(),
+                                                 added_features.data(),
+                                                 added_features.size(),
+                                                 removed_features.data(),
+                                                 removed_features.size(),
+                                                 m_psqt_stack.at(side).at(idx).mem().data());
+            }
+
+            struct CacheEntry {
+                Alloc<int16_t>::Handle accum_handle;
+                Alloc<int32_t>::Handle psqt_handle;
+                Position               position;
+            };
+
+            Alloc<int16_t>                                        m_accum_allocator;
+            Alloc<int32_t>                                        m_psqt_allocator;
+            EnumArray<std::vector<Alloc<int16_t>::Handle>, Color> m_accum_stack{};
+            EnumArray<std::vector<Alloc<int32_t>::Handle>, Color> m_psqt_stack{};
+            EnumArray<CacheEntry, Color, Square>                  m_cache{};
+            hwy::AlignedVector<uint8_t>                           m_act0_out{};
+            hwy::AlignedVector<int32_t>                           m_l1_out{};
+            hwy::AlignedVector<uint8_t>                           m_act1_out{};
+            hwy::AlignedVector<int32_t>                           m_l2_out{};
+            hwy::AlignedVector<uint8_t>                           m_act2_out{};
+            hwy::AlignedVector<int32_t>                           m_out{};
+            std::size_t                                           m_bucket{};
         };
 
-        void update_acc(const Accumulator& previous, const Color view, const FeatureTransformer::RetT& added_features,
-                        const FeatureTransformer::RetT& removed_features) {
-            /**
-            using namespace simd;
-            using AccumTag = pick_tag_t<int16_t>;
-            using Vec16    = register_type_t<AccumTag>;
-            using PsqtTag  = pick_tag_t<int32_t, 8 * 32>;
-            using Vec32    = register_type_t<PsqtTag>;
-
-            auto acc  = reinterpret_cast<Vec16*>(m_accumulators.at(view).data());
-            auto psqt = reinterpret_cast<Vec32*>(m_psqts.at(view).data());
-
-            __builtin_prefetch(acc_biases, 0, 3);
-            __builtin_prefetch(psqt_biases, 0, 1);
-
-            const auto acc_bias = reinterpret_cast<const Vec16*>(previous.m_accumulators.at(view).data());
-
-            static constexpr int elems_per_reg  = lane_count_v<AccumTag>;
-            static constexpr int n_regs         = register_count_v<typename AccumTag::arch> / 2;
-            static constexpr int elems_per_bloc = n_regs * elems_per_reg;
-            static constexpr int n_blocks       = sizeof(m_accumulators[WHITE]) / sizeof(int16_t) / elems_per_bloc;
-
-            for (int b = 0; b < n_blocks; ++b)
-            {
-                Vec16 accumulators[n_regs];
-
-                for (int r = 0; r < n_regs; ++r)
-                    accumulators[r] = acc_bias[b * n_regs + r];
-
-                for (const auto f : added_features)
-                {
-                    const auto weights = &reinterpret_cast<const Vec16*>(&acc_weights[0][f * AccSz])[b * n_regs];
-                    for (int r = 0; r < n_regs; ++r)
-                        accumulators[r] = add<AccumTag>(weights[r], accumulators[r]);
-                }
-                for (const auto f : removed_features)
-                {
-                    const auto weights = &reinterpret_cast<const Vec16*>(&acc_weights[0][f * AccSz])[b * n_regs];
-                    for (int r = 0; r < n_regs; ++r)
-                        accumulators[r] = sub<AccumTag>(accumulators[r], weights[r]);
-                }
-
-                for (int r = 0; r < n_regs; ++r)
-                    acc[b * n_regs + r] = accumulators[r];
-            }
-
-            const auto* psqt_bias        = reinterpret_cast<const Vec32*>(previous.m_psqts.at(view).data());
-            auto        psqt_accumulator = psqt_bias[0];
-            for (const auto f : added_features)
-            {
-                const auto w     = reinterpret_cast<const Vec32*>(&psqt_weights[0][f * PsqtSz]);
-                psqt_accumulator = add<PsqtTag>(psqt_accumulator, w[0]);
-            }
-            for (const auto f : removed_features)
-            {
-                const auto w     = reinterpret_cast<const Vec32*>(&psqt_weights[0][f * PsqtSz]);
-                psqt_accumulator = sub<PsqtTag>(psqt_accumulator, w[0]);
-            }
-            psqt[0] = psqt_accumulator;
-            **/
+        static Network
+        make_network() {
+            init_kernels();
+            return Network{};
         }
 
-      public:
-        alignas(64) EnumArray<AccumulatorT, Color> m_accumulators{};
-        alignas(64) EnumArray<PsqtT, Color> m_psqts{};
-        size_t m_bucket{};
-    };
+        inline static std::shared_ptr<accum_t> accum_layer{std::make_shared<accum_t>(acc_weights[0], acc_biases[0])};
+        inline static std::shared_ptr<accum_t::IKernel> accum_kernel;
 
-    struct Accumulators {
-        using Acc         = Accumulator;
-        using ConstAcc    = const Acc;
-        using AccRef      = Acc&;
-        using ConstAccRef = ConstAcc&;
+        inline static std::shared_ptr<psqt_t> psqt_layer{std::make_shared<psqt_t>(psqt_weights[0], psqt_biases[0])};
+        inline static std::shared_ptr<psqt_t::IKernel> psqt_kernel;
 
-        explicit Accumulators(const Position& pos) {
-            m_accumulators.reserve(MAX_PLY);
-            m_accumulators.emplace_back(pos);
-        }
+        inline static std::shared_ptr<act0_t>          act0_layer{std::make_shared<act0_t>()};
+        inline static std::shared_ptr<act0_t::IKernel> act0_kernel;
 
-        std::span<Acc>                    accumulators() { return m_accumulators; }
-        [[nodiscard]] std::span<ConstAcc> accumulators() const { return m_accumulators; }
+        inline static std::array<std::shared_ptr<l1_t>, buckets> l1_layers{
+            create_array<buckets>([](auto i) { return std::make_shared<l1_t>(l1_weights[i], l1_biases[i]); })};
+        inline static std::array<std::shared_ptr<l1_t::IKernel>, buckets> l1_kernels;
 
-        AccRef                    last() { return m_accumulators.back(); }
-        [[nodiscard]] ConstAccRef last() const { return m_accumulators.back(); }
+        inline static std::shared_ptr<act1_t>          act1_layer{std::make_shared<act1_t>()};
+        inline static std::shared_ptr<act1_t::IKernel> act1_kernel;
 
-        [[nodiscard]] const Accumulator& operator[](const size_t i) const { return m_accumulators[i]; }
-        Accumulator&                     operator[](const size_t i) { return m_accumulators[i]; }
+        inline static std::array<std::shared_ptr<l2_t>, buckets> l2_layers{
+            create_array<buckets>([](auto i) { return std::make_shared<l2_t>(l2_weights[i], l2_biases[i]); })};
+        inline static std::array<std::shared_ptr<l2_t::IKernel>, buckets> l2_kernels;
 
-        [[nodiscard]] uint32_t ply() const { return static_cast<int>(m_accumulators.size() - 1); }
+        inline static std::shared_ptr<act2_t>          act2_layer{std::make_shared<act2_t>()};
+        inline static std::shared_ptr<act2_t::IKernel> act2_kernel;
 
-        void do_move(const Position& prev, const Position& next) {
-            m_accumulators.emplace_back(m_accumulators.back(), next, prev);
-        }
-
-        void undo_move() { m_accumulators.pop_back(); }
-
-        using Handle = VectorHandle<Accumulator>;
-
-        Handle handle_to_last() {
-            return VectorHandle{&m_accumulators, static_cast<unsigned>(m_accumulators.size() - 1)};
-        }
+        inline static std::array<std::shared_ptr<l3_t>, buckets> l3_layer{
+            create_array<buckets>([](auto i) { return std::make_shared<l3_t>(out_weights[i], out_biases[i]); })};
+        inline static std::array<std::shared_ptr<l3_t::IKernel>, buckets> l3_kernels;
 
       private:
-        std::vector<Accumulator> m_accumulators{};
+        inline static std::once_flag register_flag;
     };
 
-    template <std::size_t Buckets_ = 8, std::size_t AccSz_ = 1024, std::size_t PsqtSz_ = 8, std::size_t L1Sz_ = 16,
-              std::size_t L2Sz_ = 32>
-    struct ArchTpl {
-        /**
-        static constexpr std::size_t Buckets = Buckets_;
-        static constexpr std::size_t AccSz   = AccSz_;
-        static constexpr std::size_t PsqtSz  = PsqtSz_;
-        static constexpr std::size_t L1Sz    = L1Sz_;
-        static constexpr std::size_t L2Sz    = L2Sz_;
-
-        using layer1  = affine::AffineLayer<L1Sz, 2 * AccSz>;
-        using l1_relu = relu::ClippedRelu32_8<L1Sz, 6>;
-
-        using layer2  = affine::AffineLayer<L2Sz, L1Sz>;
-        using l2_relu = relu::ClippedRelu32_8<L2Sz, 6>;
-
-        using layer3  = affine::AffineLayer<1, L2Sz>;
-
-        using ft_relu = relu::QuantizedClippedRelu16_8<AccSz>;
-        **/
-    };
-
-    template <typename Arch>
-    struct Network {
-        /**
-        using arch_t    = Arch;
-        using layer1_t  = typename arch_t::layer1;
-        using l1_relu_t = typename arch_t::l1_relu;
-        using layer2_t  = typename arch_t::layer2;
-        using l2_relu_t = typename arch_t::l2_relu;
-        using layer3_t  = typename arch_t::layer3;
-        using ft_relu_t = typename arch_t::ft_relu;
-
-        static constexpr std::size_t Buckets = arch_t::Buckets;
-        static constexpr std::size_t AccSz   = arch_t::AccSz;
-        static constexpr std::size_t L1Sz    = arch_t::L1Sz;
-        static constexpr std::size_t L2Sz    = arch_t::L2Sz;
-
-        std::array<layer1_t, Buckets> m_l1{};
-        std::array<layer2_t, Buckets> m_l2{};
-        std::array<layer3_t, Buckets> m_l3{};
-        **/
-
-        Network() = default;
-
-        template <typename L1WArr, typename L1BArr, typename L2WArr, typename L2BArr, typename OUTWArr,
-                  typename OUTBArr>
-        void load_weights(const L1WArr& l1_w, const L1BArr& l1_b, const L2WArr& l2_w, const L2BArr& l2_b,
-                          const OUTWArr& out_w, const OUTBArr& out_b) {
-            /**
-            for (std::size_t b = 0; b < Buckets; ++b)
-            {
-                m_l1.at(b).load_weights(l1_w[b], l1_b[b]);
-                m_l2.at(b).load_weights(l2_w[b], l2_b[b]);
-                m_l3.at(b).load_weights(out_w[b], out_b[b]);
-            }
-            **/
-        }
-
-        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view, std::size_t bucket) const {
-            /**
-            alignas(64) thread_local std::array<int8_t, 2 * AccSz> l1_in{};
-            alignas(64) thread_local std::array<int32_t, L1Sz>     l1_out{};
-            alignas(64) thread_local std::array<int8_t, L1Sz>      l2_in{};
-            alignas(64) thread_local std::array<int32_t, L2Sz>     l2_out{};
-            alignas(64) thread_local std::array<int8_t, L2Sz>      l3_in{};
-            alignas(64) thread_local int32_t                       out{};
-
-            ft_relu_t::forward(acc.m_accumulators.at(view).data(), l1_in.data());
-            ft_relu_t::forward(acc.m_accumulators.at(~view).data(), l1_in.data() + AccSz);
-            m_l1[bucket].forward(l1_in.data(), l1_out.data());
-            l1_relu_t::forward(l1_out.data(), l2_in.data());
-            m_l2[bucket].forward(l2_in.data(), l2_out.data());
-            l2_relu_t::forward(l2_out.data(), l3_in.data());
-            m_l3[bucket].forward(l3_in.data(), &out);
-
-            out *= 600;
-            out /= (64 * 127);
-
-            const int32_t psqt = (acc.m_psqts[view][bucket] - acc.m_psqts[~view][bucket]) / 2;
-
-            return out + psqt;
-            **/
-            return 0;
-        }
-
-        [[nodiscard]] int32_t evaluate(const Accumulator& acc, Color view) const {
-            return evaluate(acc, view, acc.m_bucket);
-        }
-
-        void evaluate_uci(const Accumulator& acc, const Color view) const {
-            /**
-            for (std::size_t i = 0; i < Buckets; ++i)
-            {
-                std::cout << std::format("Eval for bucket {} : {}", i, evaluate(acc, view, i));
-                if (i == acc.m_bucket)
-                {
-                    std::cout << " <- active bucket";
-                }
-                std::cout << std::endl;
-            }
-            **/
-        }
-
-        [[nodiscard]] int32_t bench_eval(const Accumulator& acc, Color view) const { return evaluate(acc, view); }
-    };
-
-    inline Network<ArchTpl<>> network;
-
-    struct Initialiser {
-        Initialiser() {
-            /**
-            network.load_weights(l1_weights, l1_biases, l2_weights, l2_biases, out_weights, out_biases);
-            **/
-        }
-    };
-} // namespace nnue
+} // namespace chepp::nnue
 
 #endif

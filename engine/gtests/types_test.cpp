@@ -3,6 +3,7 @@
 //
 
 #include "types.h"
+#include "utils.h"
 
 #include <gtest/gtest.h>
 #include <random>
@@ -46,7 +47,8 @@ TYPED_TEST(EnumStringTest, RoundtripConversion) {
     }
 }
 
-std::string random_string(const size_t length) {
+std::string
+random_string(const size_t length) {
     const std::string chars = "abcdefghijklmnopqrstuvwxyz"
                               "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
                               "0123456789";
@@ -80,9 +82,9 @@ TYPED_TEST(EnumStringTest, InjectiveAndOptionalIfInvalid) {
     constexpr size_t iter = 10000;
 
     for (size_t i = 0; i < iter; i++) {
-        const std::string              str    = random_string(dis(gen));
-        const std::optional<TypeParam> e      = TypeParam::from_string(str);
-        const bool                     in_map = map.contains(str);
+        const std::string                           str    = random_string(dis(gen));
+        const std::expected<TypeParam, std::string> e      = TypeParam::from_string(str);
+        const bool                                  in_map = map.contains(str);
         if (e.has_value()) {
             if (in_map) {
                 EXPECT_TRUE(e.has_value());
@@ -200,8 +202,8 @@ TEST(MoveFromUciTest, NormalPawnMove) {
     EnumArray<Piece, Square> pieces{};
     pieces.fill(NO_PIECE);
     pieces[E2] = W_PAWN;
-    Move::UciInfo info{pieces, NO_SQUARE, CastlingRights::none()};
-    auto          mv = Move::from_uci("e2e4", info);
+    Move::UCICtx info{pieces, NO_SQUARE, CastlingRights::none()};
+    auto         mv = Move::from_uci("e2e4", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->from_sq().to_string(), "e2");
     EXPECT_EQ(mv->to_sq().to_string(), "e4");
@@ -211,13 +213,13 @@ TEST(MoveFromUciTest, EnPassant) {
     EnumArray<Piece, Square> pieces{};
     pieces.fill(NO_PIECE);
     pieces[E5] = W_PAWN;
-    Move::UciInfo info{pieces, D6, CastlingRights::none()};
-    auto          mv = Move::from_uci("e5d6", info);
+    Move::UCICtx info{pieces, D6, CastlingRights::none()};
+    auto         mv = Move::from_uci("e5d6", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->type_of(), EN_PASSANT);
 
-    Move::UciInfo info1{pieces, NO_SQUARE, CastlingRights::none()};
-    auto          mv1 = Move::from_uci("e5d6", info1);
+    Move::UCICtx info1{pieces, NO_SQUARE, CastlingRights::none()};
+    auto         mv1 = Move::from_uci("e5d6", info1);
     ASSERT_TRUE(mv1.has_value());
     EXPECT_EQ(mv1->type_of(), NORMAL);
 }
@@ -228,7 +230,7 @@ TEST(MoveFromUciTest, Castling) {
     pieces[E1] = W_KING;
     pieces[H1] = W_ROOK;
     CastlingRights cr{WHITE_KINGSIDE};
-    Move::UciInfo  info{pieces, NO_SQUARE, cr};
+    Move::UCICtx   info{pieces, NO_SQUARE, cr};
     auto           mv = Move::from_uci("e1g1", info);
     ASSERT_TRUE(mv.has_value());
     EXPECT_EQ(mv->type_of(), CASTLING);
@@ -236,8 +238,8 @@ TEST(MoveFromUciTest, Castling) {
 
     cr.remove(CastlingRights::all());
 
-    Move::UciInfo info1{pieces, NO_SQUARE, cr};
-    auto          mv1 = Move::from_uci("e1g1", info1);
+    Move::UCICtx info1{pieces, NO_SQUARE, cr};
+    auto         mv1 = Move::from_uci("e1g1", info1);
     ASSERT_TRUE(mv1.has_value());
     EXPECT_EQ(mv1->type_of(), NORMAL);
 }

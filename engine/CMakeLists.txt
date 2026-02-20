@@ -1,12 +1,4 @@
-cmake_minimum_required(VERSION 3.5)
 cmake_policy(SET CMP0079 NEW)
-project(ChePP LANGUAGES C CXX)
-
-set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
-
-include(FetchContent)
-
-enable_testing()
 
 FetchContent_Declare(
         highway
@@ -15,23 +7,16 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(highway)
 
-include(FetchContent)
-FetchContent_Declare(
-        tl_expected
-        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
-        GIT_TAG v1.1.0
-)
-FetchContent_MakeAvailable(tl_expected)
-
-include(FetchContent)
+set(HWY_ENABLE_CONTRIB ON)
+set(HWY_ENABLE_LTO ON)
+add_compile_definitions(HWY_AUTOTUNE_STDSORT)
 
 FetchContent_Declare(
-        mdspan
-        GIT_REPOSITORY https://github.com/kokkos/mdspan.git
-        GIT_TAG stable
+        fathom
+        GIT_REPOSITORY https://github.com/basil00/Fathom.git
+        GIT_TAG master
 )
-
-FetchContent_MakeAvailable(mdspan)
+FetchContent_MakeAvailable(fathom)
 
 if(MSVC)
     add_compile_options(
@@ -54,26 +39,15 @@ else()
             -march=native
     )
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_compile_options(-O3)
+        add_compile_options(-O3 -ffast-math -flto -Ofast -fstrict-aliasing -fomit-frame-pointer)
+        add_link_options(-flto)
     else()
         add_compile_options(-O)
-        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-            message(STATUS "Enabling AddressSanitizer")
-            add_compile_options(-fsanitize=address -fno-omit-frame-pointer)
-            add_link_options(-fsanitize=address)
-        endif()
+        message(STATUS "Enabling AddressSanitizer")
+        add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer)
+        add_link_options(-fsanitize=address,undefined)
     endif()
 endif()
-
-
-FetchContent_Declare(
-        fathom
-        GIT_REPOSITORY https://github.com/basil00/Fathom.git
-        GIT_TAG master
-)
-FetchContent_MakeAvailable(fathom)
-
-
 
 set(NETWORK_BIN ${CMAKE_CURRENT_SOURCE_DIR}/resources/latest.net)
 set(NETWORK_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/include/ChePP/engine/layers.h)
@@ -103,49 +77,32 @@ add_custom_target(embed_network ALL
 set(ENGINE_SOURCES
         ${fathom_SOURCE_DIR}/src/tbprobe.c
         ${NETWORK_SOURCE}
+        src/nnue.cpp
 )
 
 add_library(ChePP_engine STATIC ${ENGINE_SOURCES})
 add_dependencies(ChePP_engine embed_network)
 
-target_link_libraries(ChePP_engine hwy tl::expected)
+target_link_libraries(ChePP_engine hwy)
 target_include_directories(ChePP_engine PUBLIC
         include/ChePP/engine
         include/ChePP/nnue
+        src
         ${CMAKE_CURRENT_SOURCE_DIR}/../external
         ${fathom_SOURCE_DIR}
         ${highway_SOURCE_DIR}
-        ${mdspan_SOURCE_DIR}/include
 )
 
 target_compile_definitions(ChePP_engine PRIVATE TB_NO_THREADS=1)
 
+add_executable(ChePP src/main.cpp)
 
-execute_process(
-        COMMAND git rev-parse --short HEAD
-        WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
-        OUTPUT_VARIABLE GIT_HASH
-        ERROR_QUIET
-        OUTPUT_STRIP_TRAILING_WHITESPACE
+set_target_properties(ChePP PROPERTIES
+        BUILD_RPATH "/opt/gcc-cpp26/lib64"
 )
-if(NOT GIT_HASH)
-    set(GIT_HASH "nogit")
-endif()
-set(ENGINE_VERSION "${GIT_HASH}" CACHE STRING "Engine version string")
-
-
-add_executable(ChePP_${ENGINE_VERSION} src/main.cpp)
-target_link_libraries(ChePP_${ENGINE_VERSION} PRIVATE ChePP_engine)
-
-set_target_properties(ChePP_${ENGINE_VERSION} PROPERTIES
+target_link_libraries(ChePP PRIVATE ChePP_engine)
+set_target_properties(ChePP PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin/versions
 )
-
-# add_executable(ChePP_benchmark src/benchmark.cpp)
-# target_link_libraries(ChePP_benchmark PRIVATE ChePP_engine)
-# add_dependencies(ChePP_benchmark ChePP_engine)
-# set_target_properties(ChePP_benchmark PROPERTIES
-#     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/../bin
-# )
 
 add_subdirectory(gtests)

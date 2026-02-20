@@ -4,8 +4,6 @@
 
 #ifndef CHEPP_UCI_H
 #define CHEPP_UCI_H
-
-#include "init.h"
 #include "position.h"
 #include "search.h"
 #include "tb.h"
@@ -26,14 +24,23 @@ inline auto uci_cb_none = []() { return true; };
 
 class EngineParameter {
   public:
-    explicit EngineParameter(std::string name, UciCallbacT cb = uci_cb_none)
-        : m_name(std::move(name)), m_cb(std::move(cb)) {}
+    explicit EngineParameter(const std::string& name, UciCallbacT cb = uci_cb_none)
+        : m_name(name), m_cb(std::move(cb)) {
+    }
     virtual ~EngineParameter() = default;
 
-    [[nodiscard]] const std::string&  name() { return m_name; };
-    [[nodiscard]] virtual std::string uci_declare() const = 0;
-    virtual bool                      parse([[maybe_unused]] const std::string& value) { return m_cb(); };
-    [[nodiscard]] virtual std::string value_str() const = 0;
+    [[nodiscard]] const std::string&
+    name() {
+        return m_name;
+    };
+    [[nodiscard]] virtual std::string
+    uci_declare() const = 0;
+    virtual bool
+    parse([[maybe_unused]] const std::string& value) {
+        return m_cb();
+    };
+    [[nodiscard]] virtual std::string
+    value_str() const = 0;
 
   protected:
     std::string m_name;
@@ -43,14 +50,17 @@ class EngineParameter {
 template <typename T>
 class ValueEngineParameter : public EngineParameter {
   public:
-    explicit ValueEngineParameter(std::string name, T& underlying, T init, UciCallbacT cb = uci_cb_none)
-        : EngineParameter(std::move(name), std::move(cb)), m_init(std::move(init)), m_value(underlying) {
+    explicit ValueEngineParameter(const std::string& name, T& underlying, T init, UciCallbacT cb = uci_cb_none)
+        : EngineParameter(name, std::move(cb)), m_init(std::move(init)), m_value(underlying) {
         m_value = m_init;
     }
 
     ~ValueEngineParameter() override = default;
 
-    [[nodiscard]] T value() const { return m_value; }
+    [[nodiscard]] T
+    value() const {
+        return m_value;
+    }
 
   protected:
     T  m_init{};
@@ -59,14 +69,20 @@ class ValueEngineParameter : public EngineParameter {
 
 class EngineParamCheck final : public ValueEngineParameter<bool> {
   public:
-    explicit EngineParamCheck(std::string name, bool& underlying, const bool def = false, UciCallbacT cb = uci_cb_none)
-        : ValueEngineParameter(std::move(name), underlying, def, std::move(cb)) {}
+    explicit EngineParamCheck(const std::string& name,
+                              bool&              underlying,
+                              const bool         def = false,
+                              UciCallbacT        cb  = uci_cb_none)
+        : ValueEngineParameter(name, underlying, def, std::move(cb)) {
+    }
 
-    [[nodiscard]] std::string uci_declare() const override {
+    [[nodiscard]] std::string
+    uci_declare() const override {
         return "option name " + m_name + " type check default " + (m_init ? "true" : "false");
     }
 
-    bool parse(const std::string& v) override {
+    bool
+    parse(const std::string& v) override {
         if (v == "true" || v == "1") {
             m_value = true;
             return EngineParameter::parse(v);
@@ -78,24 +94,36 @@ class EngineParamCheck final : public ValueEngineParameter<bool> {
         return false;
     }
 
-    [[nodiscard]] std::string value_str() const override { return m_value ? "true" : "false"; }
+    [[nodiscard]] std::string
+    value_str() const override {
+        return m_value ? "true" : "false";
+    }
 };
 
 class EngineParamSpin final : public ValueEngineParameter<int> {
   public:
-    EngineParamSpin(std::string name, int& underlying, const int init, const int min, const int max,
-                    UciCallbacT cb = uci_cb_none)
-        : ValueEngineParameter(std::move(name), underlying, init, std::move(cb)), m_min(min), m_max(max) {}
+    EngineParamSpin(const std::string& name,
+                    int&               underlying,
+                    const int          init,
+                    const int          min,
+                    const int          max,
+                    UciCallbacT        cb = uci_cb_none)
+        : ValueEngineParameter(name, underlying, init, std::move(cb)), m_min(min), m_max(max) {
+    }
 
-    [[nodiscard]] std::string uci_declare() const override {
+    [[nodiscard]] std::string
+    uci_declare() const override {
         return "option name " + m_name + " type spin default " + std::to_string(m_init) + " min " +
                std::to_string(m_min) + " max " + std::to_string(m_max);
     }
 
-    bool parse(const std::string& v) override {
+    bool
+    parse(const std::string& v) override {
         try {
             const int val = std::stoi(v);
-            if (val < m_min || val > m_max) return false;
+            if (val < m_min || val > m_max) {
+                return false;
+            }
             m_value = val;
             return EngineParameter::parse(v);
         } catch (...) {
@@ -103,7 +131,10 @@ class EngineParamSpin final : public ValueEngineParameter<int> {
         }
     }
 
-    [[nodiscard]] std::string value_str() const override { return std::to_string(m_value); }
+    [[nodiscard]] std::string
+    value_str() const override {
+        return std::to_string(m_value);
+    }
 
   private:
     int m_min, m_max;
@@ -111,19 +142,24 @@ class EngineParamSpin final : public ValueEngineParameter<int> {
 
 class EngineParamCombo final : public ValueEngineParameter<std::string> {
   public:
-    EngineParamCombo(std::string name, std::string& underlying, std::string def, std::vector<std::string> choices,
-                     UciCallbacT cb = uci_cb_none)
-        : ValueEngineParameter(std::move(name), underlying, std::move(def), std::move(cb)),
-          m_choices(std::move(choices)) {}
+    EngineParamCombo(const std::string&       name,
+                     std::string&             underlying,
+                     std::string              def,
+                     std::vector<std::string> choices,
+                     UciCallbacT              cb = uci_cb_none)
+        : ValueEngineParameter(name, underlying, std::move(def), std::move(cb)), m_choices(std::move(choices)) {
+    }
 
-    [[nodiscard]] std::string uci_declare() const override {
+    [[nodiscard]] std::string
+    uci_declare() const override {
         std::ostringstream ss;
         ss << "option name " << m_name << " type combo default " << m_init;
         for (const auto& c : m_choices) ss << " var " << c;
         return ss.str();
     }
 
-    bool parse(const std::string& v) override {
+    bool
+    parse(const std::string& v) override {
         if (std::ranges::find(m_choices, v) != m_choices.end()) {
             m_value = v;
             return EngineParameter::parse(v);
@@ -131,7 +167,10 @@ class EngineParamCombo final : public ValueEngineParameter<std::string> {
         return false;
     }
 
-    [[nodiscard]] std::string value_str() const override { return m_value; }
+    [[nodiscard]] std::string
+    value_str() const override {
+        return m_value;
+    }
 
   private:
     std::vector<std::string> m_choices;
@@ -139,38 +178,57 @@ class EngineParamCombo final : public ValueEngineParameter<std::string> {
 
 class EngineParamString final : public ValueEngineParameter<std::string> {
   public:
-    explicit EngineParamString(std::string name, std::string& underlying, std::string init = "",
-                               UciCallbacT cb = uci_cb_none)
-        : ValueEngineParameter(std::move(name), underlying, std::move(init), std::move(cb)) {}
+    explicit EngineParamString(const std::string& name,
+                               std::string&       underlying,
+                               std::string        init = "",
+                               UciCallbacT        cb   = uci_cb_none)
+        : ValueEngineParameter(name, underlying, std::move(init), std::move(cb)) {
+    }
 
-    [[nodiscard]] std::string uci_declare() const override {
+    [[nodiscard]] std::string
+    uci_declare() const override {
         return "option name " + m_name + " type string default " + m_init;
     }
 
-    bool parse(const std::string& v) override {
+    bool
+    parse(const std::string& v) override {
         m_value = v;
         return EngineParameter::parse(v);
     }
 
-    [[nodiscard]] std::string value_str() const override { return m_value; }
+    [[nodiscard]] std::string
+    value_str() const override {
+        return m_value;
+    }
 };
 
 class EngineParamButton final : public EngineParameter {
   public:
     explicit EngineParamButton(const std::string& name, UciCallbacT cb = uci_cb_none)
-        : EngineParameter(name, std::move(cb)) {}
+        : EngineParameter(name, std::move(cb)) {
+    }
 
-    [[nodiscard]] std::string uci_declare() const override { return "option name " + m_name + " type button"; }
+    [[nodiscard]] std::string
+    uci_declare() const override {
+        return "option name " + m_name + " type button";
+    }
 
-    bool parse(const std::string& v) override { return EngineParameter::parse(v); }
+    bool
+    parse(const std::string& v) override {
+        return EngineParameter::parse(v);
+    }
 
-    [[nodiscard]] std::string value_str() const override { return "<button>"; }
+    [[nodiscard]] std::string
+    value_str() const override {
+        return "<button>";
+    }
 };
 
 class EngineParameterHandler {
   public:
     template <typename T, typename... Args>
-    T* add(Args&&... args) {
+    T*
+    add(Args&&... args) {
         auto param                  = std::make_unique<T>(std::forward<Args>(args)...);
         T*   ptr                    = param.get();
         m_params_map[param->name()] = ptr;
@@ -178,42 +236,59 @@ class EngineParameterHandler {
         return ptr;
     }
 
-    void print_uci_options(std::ostream& os) const {
+    void
+    print_uci_options(std::ostream& os) const {
         for (const auto& p : m_params) os << p->uci_declare() << "\n";
     }
 
-    bool set(const std::string& name, const std::string& value) {
+    bool
+    set(const std::string& name, const std::string& value) {
         auto it = m_params_map.find(name);
         if (it == m_params_map.end()) return false;
         return it->second->parse(value);
     }
 
-    bool handle_setoption(const std::string& command) {
+    bool
+    handle_setoption(const std::string& command) {
         std::istringstream iss(command);
         std::string        token;
         iss >> token;
         iss >> token;
 
-        if (token != "name") return false;
+        if (token != "name") {
+            return false;
+        }
 
         std::string name, value;
         std::string word;
 
         while (iss >> word) {
-            if (word == "value") break;
-            if (!name.empty()) name += " ";
+            if (word == "value") {
+                break;
+            }
+            if (!name.empty()) {
+                name += " ";
+            }
             name += word;
         }
 
         std::getline(iss, value);
-        if (!value.empty() && value[0] == ' ') value.erase(0, 1);
+        if (!value.empty() && value[0] == ' ') {
+            value.erase(0, 1);
+        }
 
-        if (name.empty()) return false;
+        if (name.empty()) {
+            return false;
+        }
 
         auto it = m_params_map.find(name);
-        if (it == m_params_map.end()) return false;
+        if (it == m_params_map.end()) {
+            return false;
+        }
 
-        if (value.empty()) value = "true";
+        if (value.empty()) {
+            value = "true";
+        }
         return it->second->parse(value);
     }
 
@@ -252,13 +327,15 @@ class UCIEngine {
         m_param_handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this]() {
             m_tt.reset();
             m_tt.init(m_params.hash_size);
-            std::cout << std::format("info string Hash Resized to {}", m_params.hash_size) << std::endl;
+            std::cout << format_error("info string Hash Resized to ", m_params.hash_size) << std::endl;
             return true;
         });
         m_param_handler.add<EngineParamSpin>("Threads", m_params.threads, 1, 1, std::thread::hardware_concurrency());
         m_param_handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this]() {
             const bool val = init_tb(m_params.tb_path);
-            if (val) std::cout << "info string set tb path" << std::endl;
+            if (val) {
+                std::cout << "info string set tb path" << std::endl;
+            }
             return val;
         });
         m_param_handler.add<EngineParamButton>("Clear Hash", [this]() {
@@ -268,8 +345,8 @@ class UCIEngine {
         });
         if (enable_tuning) // to tune magic values
         {
-            m_param_handler.add<EngineParamSpin>("AspWin min depth",
-                                                 m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
+            m_param_handler.add<EngineParamSpin>(
+                "AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
         }
         m_tt.init(m_params.hash_size);
         if (auto err = m_pos.set_fen<true>(start_fen); !err) {
@@ -277,7 +354,8 @@ class UCIEngine {
         }
     }
 
-    void uci() const {
+    void
+    uci() const {
         if (m_state != Waiting) return;
         std::cout << "id name ChePP\n";
         std::cout << "id author Paul\n";
@@ -285,27 +363,33 @@ class UCIEngine {
         std::cout << "uciok" << std::endl;
     }
 
-    void isready() const {
+    void
+    isready() const {
         if (m_state != Waiting) return;
         std::cout << "readyok" << std::endl;
     }
 
-    void ucinewgame() {
-        if (m_state != Waiting) return;
+    void
+    ucinewgame() {
+        if (m_state != Waiting) {
+            return;
+        }
         m_tt.reset();
         m_pos.clear();
         m_pos.set_fen(start_fen);
     }
 
-    static std::expected<std::vector<Move>, std::string> parse_moves(std::istringstream& iss, Position& movegen) {
+    static std::expected<std::vector<Move>, std::string>
+    parse_moves(std::istringstream& iss, Position& movegen) {
         std::string       token;
         std::vector<Move> moves{};
         while (iss >> token) {
-            auto move = Move::from_uci(token, {.pieces          = movegen.pieces(),
-                                               .ep_square       = movegen.ep_square(),
-                                               .castling_rights = movegen.castling_rights()});
+            auto move = Move::from_uci(token,
+                                       {.pieces          = movegen.pieces(),
+                                        .ep_square       = movegen.ep_square(),
+                                        .castling_rights = movegen.castling_rights()});
             if (!move || !movegen.is_valid(*move)) {
-                return std::unexpected(std::format("invalid move {}", token));
+                return std::unexpected(format_error("invalid move ", token));
             }
             moves.push_back(*move);
             movegen.do_move(*move);
@@ -313,8 +397,11 @@ class UCIEngine {
         return moves;
     }
 
-    void position(const std::string& cmd) {
-        if (m_state != Waiting) return;
+    void
+    position(const std::string& cmd) {
+        if (m_state != Waiting) {
+            return;
+        }
 
         std::istringstream iss(cmd);
         std::string        token;
@@ -328,7 +415,6 @@ class UCIEngine {
         std::vector<Move> moves;
         std::string       fen;
 
-        Position movegen;
         if (type == "startpos") {
             fen = std::string(start_fen);
         } else if (type == "fen") {
@@ -338,12 +424,14 @@ class UCIEngine {
                 fen += part;
             }
         }
-        if (auto err = movegen.from_fen(fen); !err) {
-            std::cerr << "Invalid fen: " << err.error() << std::endl;
+        auto movegen{Fen::from_string(fen).transform(&Position::from_fen)};
+
+        if (!movegen) {
+            std::cerr << "Invalid fen: " << movegen.error() << std::endl;
             return;
         }
         if (iss >> token && token == "moves") {
-            auto err = parse_moves(iss, movegen);
+            auto err = parse_moves(iss, *movegen);
             if (!err) {
                 std::cerr << "Invalid move: " << err.error() << std::endl;
                 return;
@@ -356,7 +444,8 @@ class UCIEngine {
         }
     }
 
-    void go(const std::string& cmd) {
+    void
+    go(const std::string& cmd) {
         if (m_state != Waiting) return;
 
         TimeManager::UCIConstraints constraints;
@@ -390,18 +479,23 @@ class UCIEngine {
         m_state = Searching;
     }
 
-    void eval() const {
+    void
+    eval() const {
         std::cout << m_pos.last() << std::endl;
-        const nnue::Accumulator accum{m_pos.last()};
+        auto network = chepp::nnue::Arch::make_network();
+        network.init(m_pos.last());
+
         std::cout << "Evaluation for " << m_pos.last().side_to_move() << " (cp): " << std::endl;
-        nnue::network.evaluate_uci(accum, m_pos.last().side_to_move());
+        network.dbg_uci(m_pos.last().side_to_move());
     }
 
-    static void bench() {
+    static void
+    bench() {
+        /**
         static constexpr int n_positions = 10; // just to not get messed up by cache
         Positions            pos;
         auto                 err = pos.set_fen(start_fen);
-        nnue::Accumulators   accum{pos.last()};
+        chepp::nnue::Accumulators   accum{pos.last()};
         for (int i = 0; i < n_positions; i++) {
             auto moves = gen_legal(pos.last());
             pos.do_move(moves[0]);
@@ -415,34 +509,38 @@ class UCIEngine {
 
         auto start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < n_iterations; i++) {
-            tot += nnue::network.evaluate(accum[distrib(rng)], WHITE);
+            tot += chepp::nnue::network.evaluate(accum[distrib(rng)], WHITE);
         }
         auto end = std::chrono::high_resolution_clock::now();
         auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         auto ns  = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-        std::cout << std::format("Time for {} evaluations: {} ({}ns/it) (tot {})", n_iterations, ms.count(),
-                                 ns.count() / n_iterations, tot)
+        std::cout << "Time for " << n_iterations << " evaluations: " << ms.count()
+                  << " (" << ns.count() / n_iterations << " ns/it) (tot "<<  tot <<  ")"
                   << std::endl;
 
         start = std::chrono::high_resolution_clock::now();
         for (size_t i = 0; i < n_iterations; i++) {
-            nnue::Accumulator::bench_refresh(pos[distrib(rng)]);
+            chepp::nnue::Accumulator::bench_refresh(pos[distrib(rng)]);
         }
         end = std::chrono::high_resolution_clock::now();
         ms  = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
         ns  = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-        std::cout << std::format("Time for {} refreshes: {} ({}ns/it) (tot {})", n_iterations, ms.count(),
-                                 ns.count() / n_iterations, tot)
+        std::cout << "time for " << n_iterations << " refreshes: " << ms.count()
+                  << " (" << ns.count() / n_iterations << " ns/it) (tot "<<  tot <<  ")"
                   << std::endl;
+
+                  **/
     }
 
-    void stop() {
+    void
+    stop() {
         m_thread_handler.stop_all();
         if (m_worker.joinable()) m_worker.join();
     }
-    void handle_command(const std::string& line) {
+    void
+    handle_command(const std::string& line) {
         if (line == "uci") {
             uci();
         } else if (line == "isready") {
@@ -470,7 +568,8 @@ class UCIEngine {
         }
     }
 
-    int loop(std::istream& in) {
+    int
+    loop(std::istream& in) {
         std::string line;
         while (m_state != Terminated && std::getline(in, line)) {
             handle_command(line);

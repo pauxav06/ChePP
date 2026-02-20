@@ -85,7 +85,8 @@ struct SearchThread {
     SearchStack m_search_stack;
     Move        root_best_move;
 
-    void init_cache() {
+    void
+    init_cache() {
         for (int improving = 0; improving < 2; ++improving) {
             for (int d = 1; d < MAX_MOVES; ++d) {
                 m_cache.lmp[improving][d] = m_parameters.lmp(improving, d);
@@ -101,28 +102,46 @@ struct SearchThread {
         }
     }
 
-    [[nodiscard]] int                      ply() const { return m_search_stack.ply(); }
-    [[nodiscard]] SearchStack::Node&       ss() { return m_search_stack[m_search_stack.ply()]; }
-    [[nodiscard]] const SearchStack::Node& ss() const { return m_search_stack[m_search_stack.ply()]; }
-    void do_move(const Move move, const bool update_nnue = true) { m_search_stack.do_move(move, update_nnue); }
-    void undo_move(const bool update_nnue = true) { m_search_stack.undo_move(update_nnue); }
+    [[nodiscard]] int
+    ply() const {
+        return m_search_stack.ply();
+    }
+    [[nodiscard]] SearchStack::Node&
+    ss() {
+        return m_search_stack[m_search_stack.ply()];
+    }
+    [[nodiscard]] const SearchStack::Node&
+    ss() const {
+        return m_search_stack[m_search_stack.ply()];
+    }
+    void
+    do_move(const Move move, const bool update_nnue = true) {
+        m_search_stack.do_move(move, update_nnue);
+    }
+    void
+    undo_move(const bool update_nnue = true) {
+        m_search_stack.undo_move(update_nnue);
+    }
 
-    int32_t evaluate() {
+    int32_t
+    evaluate() {
         // assert(!ss().position->in_check(ss().position->side_to_move()));
         // assert(!is_draw());
 
-        auto eval = nnue::network.evaluate(ss().accumulator(), ss().position->side_to_move());
+        auto eval = ss().network->forward(ss().position->side_to_move());
         eval      = std::clamp(eval, LOSS_TB + 1, WIN_TB - 1);
         eval -= eval * ss().position->halfmove_clock() / 101;
         return eval;
     }
 
-    [[nodiscard]] bool is_draw() const {
+    [[nodiscard]] bool
+    is_draw() const {
         return ss().is_repetition || ss().position->halfmove_clock() >= 100 ||
                ss().position->is_insufficient_material();
     }
 
-    [[nodiscard]] MoveList get_pv(const Position& startpos, const Move first_move) const {
+    [[nodiscard]] MoveList
+    get_pv(const Position& startpos, const Move first_move) const {
         Positions positions{};
         positions.set_pos(startpos);
         Move     move = first_move;
@@ -141,7 +160,8 @@ struct SearchThread {
         return moves;
     }
 
-    static std::string format_pv_line(const MoveList& pv_line) {
+    static std::string
+    format_pv_line(const MoveList& pv_line) {
         std::ostringstream oss;
         for (const auto m : pv_line) {
             oss << m << " ";
@@ -149,7 +169,8 @@ struct SearchThread {
         return oss.str();
     }
 
-    [[nodiscard]] bool causes_draw(const Move move) {
+    [[nodiscard]] bool
+    causes_draw(const Move move) {
         bool ret = false;
         do_move(move, false);
         if (is_draw()) ret = true;
@@ -157,13 +178,18 @@ struct SearchThread {
         return ret;
     }
 
-    void IterativeDeepening();
-    int  AspirationWindow(int depth, int prev_eval);
-    int  Negamax(int depth, int alpha, int beta, bool cutnode);
-    int  QSearch(int alpha, int beta);
+    void
+    IterativeDeepening();
+    int
+    AspirationWindow(int depth, int prev_eval);
+    int
+    Negamax(int depth, int alpha, int beta, bool cutnode);
+    int
+    QSearch(int alpha, int beta);
 };
 
-inline void SearchThread::IterativeDeepening() {
+inline void
+SearchThread::IterativeDeepening() {
     int prev_eval        = evaluate();
     m_statistics.t_start = std::chrono::high_resolution_clock::now();
 
@@ -194,12 +220,16 @@ inline void SearchThread::IterativeDeepening() {
                     auto t_now = std::chrono::high_resolution_clock::now();
                     auto time_since_start =
                         std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
-                    time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
-                    int         nps  = m_statistics.nodes / time_since_start.count();
-                    auto        pv   = get_pv(ss().position(), root_best_move);
-                    std::string uci_output =
-                        std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}", score, depth,
-                                    m_statistics.nodes, nps, m_statistics.tb_hits, format_pv_line(pv));
+                    time_since_start       = std::max(time_since_start, std::chrono::milliseconds(1));
+                    int         nps        = m_statistics.nodes / time_since_start.count();
+                    auto        pv         = get_pv(ss().position(), root_best_move);
+                    std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
+                                                         score,
+                                                         depth,
+                                                         m_statistics.nodes,
+                                                         nps,
+                                                         m_statistics.tb_hits,
+                                                         format_pv_line(pv));
                     std::cout << uci_output << std::endl;
 
                     TimeManager::UpdateInfo update_info;
@@ -211,7 +241,8 @@ inline void SearchThread::IterativeDeepening() {
     }
 }
 
-inline int SearchThread::AspirationWindow(const int depth, const int prev_eval) {
+inline int
+SearchThread::AspirationWindow(const int depth, const int prev_eval) {
     if (depth < m_parameters.aspiration_window_activation_depth) {
         int eval       = Negamax(depth, -INF_SCORE, INF_SCORE, false);
         root_best_move = ss().best_move;
@@ -248,7 +279,8 @@ inline int SearchThread::AspirationWindow(const int depth, const int prev_eval) 
     return eval;
 }
 
-inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
+inline int
+SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
     // assert(depth >= 0);
 
     // quiescence search supposed to prevent horizon effect
@@ -353,7 +385,10 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
             if (moves.empty()) moves = gen_moves(pos());
             MoveSelector move_selector{moves | std::views::filter(std::bind_front(&Position::is_tactical, pos())) |
                                            std::views::filter(std::bind_front(&Position::is_legal, pos())),
-                                       MoveSelector::Stage::ProbCut, ss(), m_parameters.scoring_parameters, tt_move};
+                                       MoveSelector::Stage::ProbCut,
+                                       ss(),
+                                       m_parameters.scoring_parameters,
+                                       tt_move};
 
             int score = 0;
 
@@ -395,8 +430,11 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
 
     if (moves.empty()) moves = gen_moves(pos());
     MoveSelector::Stage stage = false && is_root && depth > 7 ? MoveSelector::Stage::Root : MoveSelector::Stage::Search;
-    MoveSelector        selector{moves | std::views::filter(std::bind_front(&Position::is_legal, pos())), stage, ss(),
-                          m_parameters.scoring_parameters, tt_move};
+    MoveSelector        selector{moves | std::views::filter(std::bind_front(&Position::is_legal, pos())),
+                          stage,
+                          ss(),
+                          m_parameters.scoring_parameters,
+                          tt_move};
 
     struct ExploredMove {
         Move move;
@@ -580,8 +618,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
 
     TT::Bound bound = (best_score >= beta) ? TT::LOWER : (best_score <= alpha_org || !is_pv) ? TT::UPPER : TT::EXACT;
     if (!ss().excluded)
-        m_tt->store(ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, local_best_move,
-                    ss().static_eval);
+        m_tt->store(
+            ss().position->hash(), depth, TT::store_score(best_score, ply()), bound, local_best_move, ss().static_eval);
 
     if (alpha != alpha_org && !ss().excluded) {
         ss().best_move = local_best_move;
@@ -590,7 +628,8 @@ inline int SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
     return best_score;
 }
 
-inline int SearchThread::QSearch(int alpha, int beta) {
+inline int
+SearchThread::QSearch(int alpha, int beta) {
     // assert(beta > -INF && beta < INF);
 
     if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) m_tm->update_time();
@@ -629,8 +668,11 @@ inline int SearchThread::QSearch(int alpha, int beta) {
             return pos->is_tactical(move) && pos->is_legal(move);
     };
 
-    MoveSelector selector{moves | std::views::filter(filter), MoveSelector::Stage::QSearch, ss(),
-                          m_parameters.scoring_parameters, tt_move};
+    MoveSelector selector{moves | std::views::filter(filter),
+                          MoveSelector::Stage::QSearch,
+                          ss(),
+                          m_parameters.scoring_parameters,
+                          tt_move};
 
     int  best_eval  = stand_pat;
     Move best_move  = Move::none();
@@ -681,16 +723,20 @@ struct SearchThreadHandler {
     TimeManager m_tm{};
     TT*         m_tt;
 
-    void set(const size_t numThreads, const SearchThread::Parameters& params, const TimeManager::Params& tm_params,
-             const TimeManager::UCIConstraints& tm_constraints, TT* tt, const Positions& pos) {
+    void
+    set(const size_t                       numThreads,
+        const SearchThread::Parameters&    params,
+        const TimeManager::Params&         tm_params,
+        const TimeManager::UCIConstraints& tm_constraints,
+        TT*                                tt,
+        const Positions&                   pos) {
         threads.clear();
         threads.reserve(numThreads);
         workers.clear();
         workers.reserve(threads.size());
-        const TimeManager::InitInfo tm_init{
-            .side         = pos.last().side_to_move(),
-            .moves_played = (pos.last().full_move_clock() / 2),
-            .static_eval  = nnue::network.evaluate(nnue::Accumulator(pos.last()), pos.last().side_to_move())};
+        const TimeManager::InitInfo tm_init{.side         = pos.last().side_to_move(),
+                                            .moves_played = (pos.last().full_move_clock() / 2),
+                                            .static_eval  = 0 /* TODO fix init eval */};
         m_tm = TimeManager{tm_params, tm_init, tm_constraints};
         m_tt = tt;
         for (size_t i = 0; i < numThreads; i++) {
@@ -698,7 +744,8 @@ struct SearchThreadHandler {
         }
     }
 
-    void start() {
+    void
+    start() {
         workers.clear();
         m_tt->new_generation();
         m_tm.start();
@@ -719,7 +766,8 @@ struct SearchThreadHandler {
         workers.clear();
     }
 
-    [[nodiscard]] Move get_best_move() const {
+    [[nodiscard]] Move
+    get_best_move() const {
         std::unordered_map<Move, int> move_votes;
 
         for (const auto& t : threads) move_votes[t->root_best_move]++;
@@ -730,7 +778,10 @@ struct SearchThreadHandler {
         return it != move_votes.end() ? Move{it->first} : Move{};
     }
 
-    void stop_all() { m_tm.stop(); }
+    void
+    stop_all() {
+        m_tm.stop();
+    }
 };
 
 #endif // SEARCHER_H

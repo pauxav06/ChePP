@@ -1,192 +1,164 @@
 #ifndef CHEPP_NNUE_LAYERS_H_
 #define CHEPP_NNUE_LAYERS_H_
 
-#include "hwy/base.h"
-#include "hwy/targets.h"
-#include "meta.h"
-#include "types.h"
+#include <algorithm>
 
+#include "utils.h"
+
+#include <coroutine>
 #include <cstddef>
-#include <cstdint>
-#include <expected>
+#include <functional>
+#include <generator>
 #include <memory>
-#include <span>
+#include <memory_resource>
 #include <string>
 #include <type_traits>
+#include <typeindex>
+#include <typeinfo>
+#include <utility>
+#include <variant>
 
-#define CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(NAME, BASE_TYPE)                                                       \
-    struct NAME##_tag {};                                                                                              \
-                                                                                                                       \
-    using NAME##_t = BASE_TYPE;                                                                                        \
-                                                                                                                       \
-    template <NAME##_t V>                                                                                              \
-    struct NAME : std::integral_constant<NAME##_t, V>, NAME##_tag {};                                                  \
-                                                                                                                       \
-    template <typename T>                                                                                              \
-    concept NAME##Concept = std::derived_from<T, NAME##_tag> && requires {                                             \
-        typename T::value_type;                                                                                        \
-        { T::value } -> std::convertible_to<typename T::value_type>;                                                   \
-    } && std::is_base_of_v<std::integral_constant<typename T::value_type, T::value>, T>;
+#include <hwy/auto_tune.h>
+#include <hwy/nanobenchmark.h>
+#include <hwy/targets.h>
 
-namespace chepp::nnue::layers {
-    CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(Kernel, uint8_t);
-    CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(Operation, uint8_t);
-    CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(Unroll, uint8_t);
-    CHEPP_NNUE_DEFINE_INTEGER_CONSTANT_TYPE(Quantization, uint8_t);
+namespace chepp::nnue {
+    namespace layers {
 
-    template <typename T>
-    concept TypesConcept = requires {
-        typename T::in;
-        typename T::out;
-    };
+        using namespace utils;
 
-    template <typename In, typename Out>
-    struct Types {
-        using in  = In;
-        using out = Out;
-    };
+        using extent_type = size_t;
 
-    struct Dims {
-        const size_t in;
-        const size_t out;
-    };
+        template <size_t, typename, auto>
+        struct Kernel;
 
-    template <typename C, typename T>
-    concept BufferConstraintConcept = requires(C c, std::span<T> s) {
-        { c.span_satisfies(s) } -> std::convertible_to<bool>;
-        { C::merge(c, c) } -> std::same_as<C>;
-    };
-
-    struct SizeConstraint {
-        std::size_t min_size = 0;
-
-        template <typename T>
-        constexpr bool
-        span_satisfies(std::span<T> s) const noexcept {
-            return s.size() >= min_size;
-        }
-
-        static constexpr SizeConstraint
-        merge(SizeConstraint a, SizeConstraint b) noexcept {
-            return {std::max(a.min_size, b.min_size)};
-        }
-    };
-
-    struct AlignConstraint {
-        std::size_t alignment = 1;
-
-        template <typename T>
-        constexpr bool
-        span_satisfies(std::span<T> s) const noexcept {
-            return std::bit_cast<std::uintptr_t>(s.data()) % alignment == 0;
-        }
-
-        static constexpr AlignConstraint
-        merge(AlignConstraint a, AlignConstraint b) noexcept {
-            return {std::max(a.alignment, b.alignment)};
-        }
-    };
-
-    template <typename T, typename... Cs>
-        requires(BufferConstraintConcept<Cs, T> && ...)
-    struct BufferConstraintAggregate {
-        using value_type = T;
-        std::tuple<Cs...> constraints;
-
-        constexpr BufferConstraintAggregate() noexcept : constraints(Cs{}...) {
-        }
-
-        constexpr BufferConstraintAggregate(Cs... cs) noexcept : constraints(cs...) {
-        }
-
-        template <typename... Args>
-            requires(sizeof...(Args) == sizeof...(Cs)) && (std::constructible_from<Cs, Args> && ...)
-        constexpr BufferConstraintAggregate(Args... args) noexcept : constraints(Cs{args}...) {
-        }
-
-        static constexpr auto
-        merge(const BufferConstraintAggregate& a, const BufferConstraintAggregate& b) noexcept {
-            return BufferConstraints(Cs::merge(std::get<Cs>(a.constraints), std::get<Cs>(b.constraints))...);
-        }
-
-        constexpr bool
-        span_satisfies(std::span<T> s) const noexcept {
-            return (std::get<Cs>(constraints).span_satisfies(s) && ...);
-        }
-
-        template <typename C>
-        constexpr const auto&
-        get() const noexcept {
-            return std::get<C>(constraints);
-        }
-
-        template <typename C>
-        constexpr const C&
-        get(C) const noexcept {
-            return std::get<C>(constraints);
-        }
-
-        static constexpr std::string
-        to_string() noexcept {
-            std::ostringstream oss;
-            ((oss << "Constraint " << typeid(Cs).name() << "\n"), ...);
-            return oss.str();
-        }
-    };
-
-    template <typename T>
-    using BufferConstraints = BufferConstraintAggregate<T, SizeConstraint, AlignConstraint>;
-
-    template <typename T>
-    concept LayerConcept = requires {
-        typename T::input_type;
-        typename T::output_type;
-    };
-
-    // A immutable conceptual layer describing an operation on matrices.
-    // Used to create stateful layers that can perform that operation.
-    // These stateful layers hold a shared pointer to this layer in case they need to be reconfigured at runtime
-    // using the init() method
-    template <typename Derived>
-    struct LayerBase : std::enable_shared_from_this<Derived> {
-        struct IState {
-            using input_type  = Derived::input_type;
-            using output_type = Derived::output_type;
-            using input_bc    = BufferConstraints<const input_type>;
-            using output_bc   = BufferConstraints<output_type>;
-
-            virtual ~IState() = default;
-            virtual void
-            init() {
-            }
-            virtual HWY_INLINE input_bc
-            input_buffer_constraints() const = 0;
-            virtual HWY_INLINE output_bc
-                         output_buffer_constraints() const                                  = 0;
-            virtual void forward(std::span<const input_type>, std::span<output_type>) const = 0;
+        struct KernelBase {
+            using sfinae_flag     = void;
+            virtual ~KernelBase() = default;
         };
+
+        struct ILayer {
+            virtual ~ILayer() = default;
+            [[nodiscard]] virtual double
+            benchmark(const KernelBase&) const = 0;
+        };
+
+        struct KernelKey {
+            std::size_t     target;
+            std::type_index cfg;
+
+            bool
+            operator==(const KernelKey&) const = default;
+        };
+    } // namespace layers
+} // namespace chepp::nnue
+
+template <>
+struct std::hash<chepp::nnue::layers::KernelKey> {
+    std::size_t
+    operator()(const chepp::nnue::layers::KernelKey& k) const noexcept {
+        return std::hash<std::type_index>{}(k.cfg) ^ std::hash<std::size_t>{}(k.target);
+    }
+};
+
+namespace chepp::nnue {
+    using namespace layers;
+    struct KernelRegistry {
+        template <typename CfgType>
+        inline static std::unordered_map<CfgType, std::type_index> cfg_mapping{};
+
+        template <typename CfgType>
+        inline static std::mutex cfg_mtx;
+
+        std::mutex m_kernels_mtx;
+
+        using KernelFactory = std::function<std::shared_ptr<KernelBase>(std::shared_ptr<ILayer>)>;
+        std::unordered_map<std::type_index, std::unordered_map<KernelKey, KernelFactory>> m_kernels{};
+
+        template <typename CfgType, CfgType cfg>
+        static std::type_index
+        register_cfg_key() {
+            std::lock_guard lock{cfg_mtx<CfgType>};
+            cfg_mapping<CfgType>.emplace(cfg, typeid(std::integral_constant<CfgType, cfg>));
+            return typeid(std::integral_constant<CfgType, cfg>);
+        }
+
+        template <typename CfgType>
+        static std::optional<std::type_index>
+        get_cfg_key(CfgType cfg) {
+            std::lock_guard                lock{cfg_mtx<CfgType>};
+            std::optional<std::type_index> res{};
+            if (auto match = cfg_mapping<CfgType>.find(cfg); match != cfg_mapping<CfgType>.end()) {
+                res.emplace(match->second);
+            }
+            return res;
+        }
+
+        template <typename Layer, std::size_t hwy_target, auto cfg>
+            requires std::is_base_of_v<ILayer, Layer>
+        auto
+        register_kernel() {
+            using layer_t = std::decay_t<Layer>;
+            std::lock_guard lock{m_kernels_mtx};
+            auto            cfg_key = register_cfg_key<decltype(cfg), cfg>();
+            m_kernels[typeid(layer_t)][KernelKey{hwy_target, cfg_key}] =
+                [](const std::shared_ptr<ILayer>& layer) -> std::shared_ptr<KernelBase> {
+                auto typed = std::dynamic_pointer_cast<layer_t>(layer);
+                return std::make_shared<typename Kernel<hwy_target, Layer, cfg>::type>(typed);
+            };
+            return KernelKey{hwy_target, cfg_key};
+        }
+
+        template <typename Layer, typename CfgType>
+            requires std::is_base_of_v<ILayer, Layer>
+        std::optional<std::shared_ptr<typename Layer::IKernel>>
+        make_kernel(const std::shared_ptr<Layer>& layer, const std::size_t hwy_target, const CfgType cfg) {
+            using layer_t  = std::decay_t<Layer>;
+            using kernel_t = layer_t::IKernel;
+            std::lock_guard lock{m_kernels_mtx};
+            return get_cfg_key<CfgType>(cfg).transform([&](const std::type_index cfg_key) {
+                return std::dynamic_pointer_cast<kernel_t>(
+                    m_kernels.at(typeid(Layer)).at(KernelKey{hwy_target, cfg_key})(layer));
+            });
+        }
+
+        template <typename Layer>
+            requires std::is_base_of_v<ILayer, Layer>
+        auto
+        make_all_kernels(const std::shared_ptr<Layer>& layer) {
+            using layer_t  = std::decay_t<Layer>;
+            using kernel_t = layer_t::IKernel;
+
+            std::lock_guard                        lock{m_kernels_mtx};
+            std::vector<std::shared_ptr<kernel_t>> res{};
+
+            if (m_kernels.contains(typeid(Layer))) {
+                for (const auto& factory : m_kernels.at(typeid(Layer)) | std::views::values) {
+                    res.emplace_back(std::dynamic_pointer_cast<kernel_t>(factory(layer)));
+                }
+            }
+
+            return res;
+        }
+
+        template <typename Layer>
+            requires std::is_base_of_v<ILayer, Layer>
+        auto
+        get_best_kernel(const std::shared_ptr<Layer>& layer) {
+            auto candidates = make_all_kernels(layer);
+
+            hwy::AutoTune<int, 12> tune{};
+            std::vector            indices(candidates.size(), 0);
+            std::ranges::iota(indices, 0);
+            tune.SetCandidates(std::move(indices));
+
+            while (!tune.Best()) {
+                auto kernel_id = tune.NextConfig();
+                tune.NotifyCost(layer->benchmark(*candidates.at(kernel_id)));
+            }
+            return candidates.at(*tune.Best());
+        }
     };
-
-    template <typename Layer>
-    std::shared_ptr<Layer>
-    make_layer(const typename Layer::Params params) {
-        return std::make_shared<Layer>(params);
-    }
-
-#define CHEPP_BEFORE_LAYER()                                                                                           \
-    template <typename...>                                                                                             \
-    struct State;
-
-// bridge between global and highway namespace
-#define CHEPP_AFTER_LAYER()                                                                                            \
-    template <typename Layer, typename... Config>                                                                      \
-    std::unique_ptr<typename Layer::IState> make_state(std::shared_ptr<Layer> layer, Config...) {                      \
-        return std::make_unique<State<Layer, Config...>>(layer);                                                       \
-    }                                                                                                                  \
-    template <typename Layer, typename... Config>                                                                      \
-    std::unique_ptr<typename Layer::IState> make_state(std::shared_ptr<Layer> layer, std::tuple<Config...>) {          \
-        return std::make_unique<State<Layer, Config...>>(layer);                                                       \
-    }
-} // namespace chepp::nnue::layers
+} // namespace chepp::nnue
 
 #endif
