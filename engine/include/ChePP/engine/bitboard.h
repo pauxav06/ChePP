@@ -519,7 +519,7 @@ namespace Movegen {
                     attacks};
             }
 
-            [[nodiscard]] constexpr HWY_INLINE Bitboard
+            [[nodiscard]] HWY_INLINE Bitboard
             attack(Square sq, Bitboard occupancy) const {
                 return m_attacks[m_offsets[sq] + m_indexers[sq].index(occupancy)];
             }
@@ -535,7 +535,7 @@ namespace Movegen {
             const shift_type m_shift;
             const magic_type m_magic;
 
-            constexpr ShiftIndexer(const mask_type mask, const std::vector<mask_type>& blockers)
+            ShiftIndexer(const mask_type mask, const std::vector<mask_type>& blockers)
                 : m_mask(mask), m_shift(64 - mask.popcount()), m_magic(find_magic(mask, blockers)) {
             }
 
@@ -585,10 +585,10 @@ namespace Movegen {
 
             const mask_type m_mask;
 
-            explicit constexpr PEXTIndexer(const mask_type mask, const std::vector<mask_type>&) : m_mask(mask) {
+            explicit PEXTIndexer(const mask_type mask, const std::vector<mask_type>&) : m_mask(mask) {
             }
 
-            [[nodiscard]] constexpr HWY_INLINE index_type
+            [[nodiscard]] HWY_INLINE index_type
             index(mask_type blockers) const {
                 return static_cast<index_type>(pext(blockers.value(), m_mask.value()));
             }
