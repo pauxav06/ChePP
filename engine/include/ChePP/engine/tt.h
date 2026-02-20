@@ -8,13 +8,16 @@
 #include "types.h"
 #include "zobrist.h"
 
-#include <bits/shared_ptr_base.h>
+#include <bit>
 #include <optional>
 #include <vector>
 
-inline uint64_t floor_power_of_two(const uint64_t x) {
+#include <hwy/cache_control.h>
+
+inline uint64_t
+floor_power_of_two(const uint64_t x) {
     if (x == 0) return 0;
-    return 1ULL << (63 - __builtin_clzll(x));
+    return 1ULL << (63 - std::countl_zero(x));
 }
 
 template <typename F, typename EntryT>
@@ -32,10 +35,16 @@ struct TT {
     struct Entry {
 
         Entry() noexcept = default;
-        Entry(const Zobrist::Hash hash, const int depth, const int score, const Bound bound, const int generation,
-              const Move move, int static_eval)
+        Entry(const Zobrist::Hash hash,
+              const int           depth,
+              const int           score,
+              const Bound         bound,
+              const int           generation,
+              const Move          move,
+              int                 static_eval)
             : hash(hash), depth(depth), score(static_cast<int16_t>(score)), move(move), bound(bound),
-              static_eval(static_eval), generation(generation) {}
+              static_eval(static_eval), generation(generation) {
+        }
 
         Zobrist::Hash hash{};
         uint16_t      depth{};
@@ -47,7 +56,8 @@ struct TT {
         uint8_t       repetitions{0};
     };
 
-    void init(const size_t mb) {
+    void
+    init(const size_t mb) {
         m_generation = 0;
         m_size       = floor_power_of_two(mb * 1024 * 1024 / sizeof(Entry));
         m_table.resize(m_size);
@@ -55,17 +65,20 @@ struct TT {
         std::cout << "Init tt with " << m_size << " entries" << std::endl;
     }
 
-    void reset() {
+    void
+    reset() {
         m_generation = 0;
         std::ranges::fill(m_table, Entry());
     }
 
-    void prefetch(const Zobrist::Hash hash) const noexcept {
+    void
+    prefetch(const Zobrist::Hash hash) const noexcept {
         const size_t idx = index(hash);
-        __builtin_prefetch(&m_table[idx], 0, 3);
+        hwy::Prefetch(&m_table[idx]);
     }
 
-    [[nodiscard]] std::optional<Entry> probe(const Zobrist::Hash hash) const {
+    [[nodiscard]] std::optional<Entry>
+    probe(const Zobrist::Hash hash) const {
 
         const Entry& cur = m_table[index(hash)];
         if (cur.hash != hash) {
@@ -74,8 +87,8 @@ struct TT {
         return cur;
     }
 
-    void store(const Zobrist::Hash hash, const int depth, const int score, Bound bound, const Move move,
-               int static_eval) {
+    void
+    store(const Zobrist::Hash hash, const int depth, const int score, Bound bound, const Move move, int static_eval) {
         const auto candidate = Entry(hash, depth, score, bound, m_generation, move, static_eval);
         auto&      old       = m_table[index(hash)];
 
@@ -87,22 +100,30 @@ struct TT {
         }
     }
 
-    void new_generation() { m_generation++; }
+    void
+    new_generation() {
+        m_generation++;
+    }
 
-    static int store_score(const int score, const int ply) {
+    static int
+    store_score(const int score, const int ply) {
         if (score >= MATE_IN_MAX_PLY) return score + ply;
         if (score <= MATED_IN_MAX_PLY) return score - ply;
         return score;
     };
 
-    static int read_score(const int score, const int ply) {
+    static int
+    read_score(const int score, const int ply) {
         if (score >= MATE_IN_MAX_PLY) return score - ply;
         if (score <= MATED_IN_MAX_PLY) return score + ply;
         return score;
     };
 
   private:
-    [[nodiscard]] size_t index(const Zobrist::Hash hash) const { return hash & (m_size - 1); }
+    [[nodiscard]] size_t
+    index(const Zobrist::Hash hash) const {
+        return hash & (m_size - 1);
+    }
 
     int                m_generation{0};
     std::size_t        m_size{0};
