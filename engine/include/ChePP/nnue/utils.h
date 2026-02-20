@@ -58,7 +58,7 @@ namespace chepp::nnue::utils {
     }
 
     template <int Begin, int End, int Step = 1, typename Func>
-    HWY_INLINE constexpr void
+    HWY_INLINE void
     constexpr_for(Func&& f) {
         if constexpr (Begin < End) {
             f(std::integral_constant<int, Begin>{});
