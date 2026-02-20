@@ -195,7 +195,7 @@ namespace chepp::nnue {
                 static constexpr std::size_t none = std::numeric_limits<std::size_t>::max();
                 Alloc(std::size_t size)
                     : m_mem({MAX_PLY * 2 + Square::count(), size}), m_free(MAX_PLY * 2 + Square::count()) {
-                    std::ranges::iota(m_free, 0);
+                    std::iota(m_free.begin(), m_free.end(), 0);
                 }
 
                 struct Handle {

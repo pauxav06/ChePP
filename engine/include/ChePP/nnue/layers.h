@@ -149,7 +149,7 @@ namespace chepp::nnue {
 
             hwy::AutoTune<int, 12> tune{};
             std::vector            indices(candidates.size(), 0);
-            std::ranges::iota(indices, 0);
+            std::iota(indices.begin(), indices.end(), 0);
             tune.SetCandidates(std::move(indices));
 
             while (!tune.Best()) {
