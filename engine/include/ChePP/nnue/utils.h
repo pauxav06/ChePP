@@ -58,12 +58,12 @@ namespace chepp::nnue::utils {
     }
 
     template <int Begin, int End, int Step = 1, typename Func>
+        requires((End - Begin) % Step == 0)
     HWY_INLINE void
     constexpr_for(Func&& f) {
-        if constexpr (Begin < End) {
-            f(std::integral_constant<int, Begin>{});
-            constexpr_for<Begin + Step, End, Step>(std::forward<Func>(f));
-        }
+        [&]<std::size_t... IS>(std::integer_sequence<std::size_t, IS...>) {
+            (f(std::integral_constant<std::size_t, Begin + IS * Step>{}), ...);
+        }(std::make_integer_sequence<std::size_t, (End - Begin) / Step>{});
     }
 
 #define CAT(a, b) CAT_IMPL(a, b)
