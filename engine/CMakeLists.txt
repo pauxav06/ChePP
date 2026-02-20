@@ -26,7 +26,7 @@ if(MSVC)
             /RTC-
     )
     if(NOT CMAKE_BUILD_TYPE STREQUAL "Debug")
-        add_compile_options(/O2)
+        add_compile_options(/O)
     else()
         add_compile_options(/O)
     endif()
