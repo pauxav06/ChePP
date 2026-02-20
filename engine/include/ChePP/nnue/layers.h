@@ -133,7 +133,7 @@ namespace chepp::nnue {
             std::vector<std::shared_ptr<kernel_t>> res{};
 
             if (m_kernels.contains(typeid(Layer))) {
-                for (const auto& factory : m_kernels.at(typeid(Layer)) | std::views::values) {
+                for (const auto& [_, factory] : m_kernels.at(typeid(Layer))) {
                     res.emplace_back(std::dynamic_pointer_cast<kernel_t>(factory(layer)));
                 }
             }
