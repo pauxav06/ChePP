@@ -254,8 +254,8 @@ main(int argc, char** argv) {
                       << " bytes.\n";
             header_file.close();
             cpp_file.close();
-            std::remove(out_h.c_str());
-            std::remove(out_cpp.c_str());
+            std::filesystem::remove(out_h);
+            std::filesystem::remove(out_cpp);
             return 1;
         }
 
@@ -263,8 +263,8 @@ main(int argc, char** argv) {
         std::cerr << "Error: " << e.what() << "\n";
         header_file.close();
         cpp_file.close();
-        std::remove(out_h.c_str());
-        std::remove(out_cpp.c_str());
+        std::filesystem::remove(out_h);
+        std::filesystem::remove(out_cpp);
         return 1;
     }
 
