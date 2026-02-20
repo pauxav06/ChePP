@@ -328,6 +328,7 @@ namespace chepp::nnue {
             EnumArray<std::vector<Alloc<int16_t>::Handle>, Color> m_accum_stack{};
             EnumArray<std::vector<Alloc<int32_t>::Handle>, Color> m_psqt_stack{};
             EnumArray<CacheEntry, Color, Square>                  m_cache{};
+            EnumArray<std::vector<std::size_t>, Color, Square>    m_pos{};
             hwy::AlignedVector<uint8_t>                           m_act0_out{};
             hwy::AlignedVector<int32_t>                           m_l1_out{};
             hwy::AlignedVector<uint8_t>                           m_act1_out{};
