@@ -53,7 +53,7 @@ namespace chepp::nnue::utils {
         dist_t dist(min, max);
 
         for (auto& x : c) {
-            x = static_cast<T>(std::clamp(static_cast<res_t>(min), static_cast<res_t>(max), dist(rng)));
+            x = static_cast<T>(std::clamp(dist(rng), static_cast<res_t>(min), static_cast<res_t>(max)));
         }
     }
 
