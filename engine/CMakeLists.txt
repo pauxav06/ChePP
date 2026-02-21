@@ -7,6 +7,7 @@ FetchContent_Declare(
 )
 set(HWY_ENABLE_CONTRIB OFF)
 set(HWY_ENABLE_LTO ON)
+set(HWY_ENABLE_TESTS OFF)
 
 FetchContent_MakeAvailable(highway)
 
