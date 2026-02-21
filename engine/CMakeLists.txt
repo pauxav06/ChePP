@@ -7,7 +7,7 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(highway)
 
-set(HWY_ENABLE_CONTRIB ON)
+set(HWY_ENABLE_CONTRIB OFF)
 set(HWY_ENABLE_LTO ON)
 add_compile_definitions(HWY_AUTOTUNE_STDSORT)
 
