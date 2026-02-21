@@ -5,10 +5,11 @@ FetchContent_Declare(
         GIT_REPOSITORY https://github.com/google/highway.git
         GIT_TAG master
 )
-FetchContent_MakeAvailable(highway)
-
 set(HWY_ENABLE_CONTRIB OFF)
 set(HWY_ENABLE_LTO ON)
+
+FetchContent_MakeAvailable(highway)
+
 add_compile_definitions(HWY_AUTOTUNE_STDSORT)
 
 FetchContent_Declare(
