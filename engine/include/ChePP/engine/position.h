@@ -15,7 +15,9 @@
 #include <memory>
 #include <ostream>
 #include <ranges>
+#if CHEPP_USE_TB
 #include <src/tbprobe.h>
+#endif
 #include <sstream>
 #include <unordered_map>
 #include <utility>
@@ -606,6 +608,7 @@ Position::do_move(const Move move) {
 
 inline unsigned
 Position::wdl_probe() const {
+#if CHEPP_USE_TB
     size_t ep_sq = ep_square() == NO_SQUARE ? 0 : ep_square().index() + 1;
     return tb_probe_wdl(occupancy(WHITE).value(),
                         occupancy(BLACK).value(),
@@ -619,10 +622,14 @@ Position::wdl_probe() const {
                         castling_rights().mask(),
                         ep_sq,
                         side_to_move() == WHITE);
+#else
+    throw std::runtime_error("TB are not active");
+#endif
 }
 
 inline unsigned
 Position::dtz_probe() const {
+#if CHEPP_USE_TB
     size_t ep_sq = ep_square() == NO_SQUARE ? 0 : ep_square().index() + 1;
     return tb_probe_root(occupancy(WHITE).value(),
                          occupancy(BLACK).value(),
@@ -637,6 +644,9 @@ Position::dtz_probe() const {
                          ep_sq,
                          side_to_move() == WHITE,
                          nullptr);
+#else
+    throw std::runtime_error("TB are not active");
+#endif
 }
 
 inline int

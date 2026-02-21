@@ -18,6 +18,12 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fathom)
 
+configure_file(
+        include/ChePP/engine/tbconfig.h
+        ${fathom_SOURCE_DIR}/src/tbconfig.h
+        COPYONLY
+)
+
 if(MSVC)
     add_compile_options(
             /W4
@@ -76,6 +82,7 @@ add_custom_target(embed_network ALL
 )
 
 set(ENGINE_SOURCES
+        src/tb.cpp
         ${fathom_SOURCE_DIR}/src/tbprobe.c
         ${NETWORK_SOURCE}
         src/nnue.cpp
@@ -94,6 +101,7 @@ target_include_directories(ChePP_engine PUBLIC
         ${highway_SOURCE_DIR}
 )
 
+target_compile_definitions(ChePP_engine PRIVATE CHEPP_USE_TB=1)
 target_compile_definitions(ChePP_engine PRIVATE TB_NO_THREADS=1)
 
 add_executable(ChePP src/main.cpp)
