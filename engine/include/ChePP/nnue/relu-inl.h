@@ -138,8 +138,8 @@ namespace chepp::nnue::layers {
                     using Vhalf           = hn::VFromD<Dhalf>;
                     constexpr size_t half = N / 2;
                     DECLARE_REG_BANK(half, Vhalf)
-                    constexpr_for<0, N>([&](const size_t i) {
-                        GET_REG(i) = hn::OrderedDemote2To(Dhalf(), *in_regs[2 * i], *in_regs[2 * i + 1]);
+                    constexpr_for<0, half>([&](const size_t i) {
+                        *regs[i] = hn::OrderedDemote2To(Dhalf(), *in_regs[2 * i], *in_regs[2 * i + 1]);
                     });
                     return ordered_demote_tree<half>(regs);
                 }
