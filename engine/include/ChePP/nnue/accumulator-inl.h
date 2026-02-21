@@ -138,7 +138,7 @@ namespace chepp::nnue::layers {
 
                 output_view_t out{out_ptr, m_output_extents};
 
-                DECLARE_REG_BANK(unroll, Vec)
+                DECLARE_REG_BANK(weight_view_t::static_extent(2), Vec)
                 for (std::size_t c{0}; c < out.extent(0); ++c) {
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
                         *regs[u] = hn::Load(D(), &m_biases[c, u, 0]);
@@ -168,7 +168,7 @@ namespace chepp::nnue::layers {
                 input_view_t  input{input_ptr, m_output_extents};
                 output_view_t out{out_ptr, m_output_extents};
 
-                DECLARE_REG_BANK(unroll, Vec)
+                DECLARE_REG_BANK(weight_view_t::static_extent(2), Vec)
                 for (std::size_t c{0}; c < out.extent(0); ++c) {
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
                         *regs[u] = hn::Load(D(), &input[c, u, 0]);

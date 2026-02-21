@@ -163,24 +163,24 @@ namespace chepp::nnue::layers {
                 std::mdspan input{in_ptr, m_input_view_extents};
                 std::mdspan output{out_ptr, m_output_view_extents};
 
-                DECLARE_REG_BANK(32, Vout);
+                DECLARE_REG_BANK(weights_view_t::static_extent(2), Vout);
                 for (extent_type b = 0; b < m_weights.extent(0); ++b) {
                     for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
-                        GET_REG(u) = hn::Zero(Dout());
+                        *regs[u] = hn::Zero(Dout());
                     }
-                    GET_REG(0) = hn::Load(Dout(), &m_biases[b, 0]);
+                    *regs[0] = hn::Load(Dout(), &m_biases[b, 0]);
                     for (extent_type c = 0; c < m_weights.extent(1); ++c) {
                         for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
                             packed_type packed{0};
                             std::memcpy(&packed, &input[c, u, 0], sizeof(packed_type)); // cast is UB
-                            auto in = hn::Set(Dpacked(), packed);
-                            GET_REG(u) =
-                                dot(hn::BitCast(Din(), in), hn::Load(Dw(), &m_weights[b, c, u, 0]), GET_REG(u));
+                            auto in  = hn::Set(Dpacked(), packed);
+                            *regs[u] = dot(hn::BitCast(Din(), in), hn::Load(Dw(), &m_weights[b, c, u, 0]), *regs[u]);
                         }
                     }
-                    utils::constexpr_for<0, std::countr_zero(m_weights.extent(2))>([&](auto i) {
+                    utils::constexpr_for<0, std::countr_zero(weights_view_t::static_extent(2))>([&](auto i) {
                         constexpr auto off = 1uz << i;
-                        constexpr_for<0, m_weights.extent(2), 2 * off>([&](auto j) { GET_REG(j) += GET_REG(j + off); });
+                        constexpr_for<0, weights_view_t::static_extent(2), 2 * off>(
+                            [&](auto j) { GET_REG(j) += GET_REG(j + off); });
                     });
                     hn::Store(GET_REG(0), Dout(), &output[b, 0]);
                 }
