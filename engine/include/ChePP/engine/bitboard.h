@@ -366,7 +366,7 @@ struct std::hash<Bitboard> {
     }
 };
 
-constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
+const EnumArray<Bitboard, Square, Square> Bitboard::LINES{
     EnumArray<Bitboard, Square, Square>::make([](const Square sq1, const Square sq2) {
         if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
         if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
@@ -377,7 +377,7 @@ constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
         return empty();
     })};
 
-constexpr EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
+const EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
     EnumArray<Bitboard, Square, Square>::make([](const Square to, const Square from) {
         return orthogonal_rays(from).is_set(to)
                    ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)
@@ -390,13 +390,13 @@ using bb = Bitboard;
 
 namespace Movegen {
     namespace detail {
-        inline constexpr EnumArray PAWN_PSEUDO_ATTACKS{
+        inline const EnumArray PAWN_PSEUDO_ATTACKS{
             EnumArray<Bitboard, Color, Square>::make([](const Color c, const Square sq) {
                 const Bitboard bb{sq};
                 return c == WHITE ? bb::shift<NORTH_WEST>(bb) | bb::shift<NORTH_EAST>(bb)
                                   : bb::shift<SOUTH_WEST>(bb) | bb::shift<SOUTH_EAST>(bb);
             })};
-        inline constexpr EnumArray PIECE_PSEUDO_ATTACKS{
+        inline const EnumArray PIECE_PSEUDO_ATTACKS{
             EnumArray<Bitboard, PieceType, Square>::make([](const PieceType pt, const Square sq) {
                 const Bitboard bb{sq};
                 if (pt == KNIGHT) {
