@@ -1159,7 +1159,7 @@ struct CastlingRights {
     MaskT m_mask;
 };
 
-constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = [] {
+inline constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = [] {
     EnumArray<CastlingRights, Square> t{};
     t.fill_pred([](const Square sq) {
         return sq == E1   ? CastlingRights{WHITE_KINGSIDE, WHITE_QUEENSIDE}
