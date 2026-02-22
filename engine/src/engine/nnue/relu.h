@@ -1,7 +1,7 @@
 #ifndef CHEPP_RELU_H_
 #define CHEPP_RELU_H_
 
-#include "layers.h"
+#include "layer_base.h"
 #include "utils.h"
 
 #include <hwy/base.h>
@@ -21,6 +21,11 @@ namespace chepp::nnue::layers {
 
         static constexpr input_type min{static_cast<input_type>(0)};
         static constexpr input_type max{std::numeric_limits<std::make_signed_t<output_type>>::max()};
+
+        [[nodiscard]] std::string name() const override {
+            return format_error("Clipped Relu: ", type_name_v<input_type>, " -> ", type_name_v<output_type>,
+                                ", quantize: ", quantize);
+        }
 
         [[nodiscard]] std::size_t static constexpr size() {
             return IS;
@@ -45,14 +50,9 @@ namespace chepp::nnue::layers {
             hwy::AlignedVector<input_type> inputs(size() + kernel.input_padding());
             fill_random(inputs);
             hwy::AlignedVector<output_type> outputs(size() + kernel.output_padding());
-            /**
-            return utils::benchmark([&] {
-                kernel.forward(inputs.data(), outputs.data());
-                return outputs.back();
-            }, 0.01);
-            **/
-            hwy::FuncInput func_input[1]{1};
-            hwy::Result    result[1]{};
+
+            hwy::FuncInput func_input[]{1};
+            hwy::Result    result[std::size(func_input)]{};
             hwy::Params    params{};
             params.verbose           = false;
             params.target_rel_mad    = 1;

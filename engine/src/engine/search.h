@@ -1,9 +1,10 @@
 #ifndef SEARCHER_H
 #define SEARCHER_H
 
+#include "core.h"
 #include "history.h"
 #include "move_ordering.h"
-#include "nnue.h"
+#include "network.h"
 #include "tm.h"
 #include "tt.h"
 
@@ -69,8 +70,8 @@ struct SearchThread {
 
     using PvLines = std::vector<PvLine>;
 
-    explicit SearchThread(const Parameters& parameters, const int id, TimeManager* tm, TT* tt, const Positions& pos)
-        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos) {
+    explicit SearchThread(const Parameters& parameters, const int id, TimeManager* tm, TT* tt, const Positions& pos, const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels)
+        : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos, kernels) {
         init_cache();
     }
     // control
@@ -464,7 +465,7 @@ SearchThread::Negamax(int depth, int alpha, int beta, bool cutnode) {
                 m_cache.lmr.at(is_quiet).at(std::min(depth, MAX_PLY - 1)).at(std::min(move_count, MAX_MOVES - 1));
 
             if (is_quiet) {
-                if (!in_check && !is_pv && depth <= 7 && explored_quiets.size() > m_cache.lmp.at(improving).at(depth)) {
+                if (!in_check && !is_pv && depth <= 7 && (int)explored_quiets.size() > m_cache.lmp.at(improving).at(depth)) {
                     skip_quiets = true;
                     continue;
                 }
@@ -708,7 +709,7 @@ SearchThread::QSearch(int alpha, int beta) {
 
     assert(best_eval > -INF && best_eval < INF);
     if (best_move != Move::none() && best_move != Move::null()) {
-        TT::Bound bound = (best_eval >= beta) ? TT::LOWER : TT::UPPER;
+        //TT::Bound bound = (best_eval >= beta) ? TT::LOWER : TT::UPPER;
         // m_tt->store(make_replacement_policy(), ss().position->hash(), 0, TT::store_score(best_eval, ply()), bound,
         // best_move, stand_pat);
     }
@@ -729,7 +730,8 @@ struct SearchThreadHandler {
         const TimeManager::Params&         tm_params,
         const TimeManager::UCIConstraints& tm_constraints,
         TT*                                tt,
-        const Positions&                   pos) {
+        const Positions&                   pos,
+        const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels) {
         threads.clear();
         threads.reserve(numThreads);
         workers.clear();
@@ -740,7 +742,7 @@ struct SearchThreadHandler {
         m_tm = TimeManager{tm_params, tm_init, tm_constraints};
         m_tt = tt;
         for (size_t i = 0; i < numThreads; i++) {
-            threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos));
+            threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, kernels));
         }
     }
 

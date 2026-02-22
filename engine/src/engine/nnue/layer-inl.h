@@ -1,4 +1,4 @@
-#include "layers.h"
+#include "layer_base.h"
 
 #if defined(CHEPP_LAYER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_LAYER_INL_H_

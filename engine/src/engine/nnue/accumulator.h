@@ -2,7 +2,7 @@
 #define UNTITLED3_AFFINE_SPARSE_H
 
 #include "hwy/targets.h"
-#include "layers.h"
+#include "layer_base.h"
 #include "utils.h"
 
 #include <hwy/aligned_allocator.h>
@@ -18,6 +18,10 @@ namespace chepp::nnue::layers {
             : m_weights(std::from_range, weights), m_biases(std::from_range, biases) {
             HWY_ASSERT(m_weights.size() == input_size() * output_size());
             HWY_ASSERT(m_biases.size() == output_size());
+        }
+
+        [[nodiscard]] std::string name() const override {
+            return format_error("Accumulator: ", type_name_v<index_type>,  " -> ", type_name_v<value_type>);
         }
 
         [[nodiscard]] HWY_INLINE extent_type static constexpr input_size() {
@@ -59,8 +63,9 @@ namespace chepp::nnue::layers {
             hwy::AlignedVector<index_type> inputs(input_size() / 100);
             std::iota(inputs.begin(), inputs.end(), 0);
             hwy::AlignedVector<value_type> outputs(output_size() + kernel.padding());
-            hwy::FuncInput                 func_input[1]{1};
-            hwy::Result                    result[1]{};
+
+            hwy::FuncInput                 func_input[]{1};
+            hwy::Result                    result[std::size(func_input)]{};
             hwy::Params                    params{};
             params.verbose           = false;
             params.target_rel_mad    = 1;

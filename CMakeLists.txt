@@ -8,8 +8,19 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 include(FetchContent)
 
-FetchContent_Declare(json URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz)
+FetchContent_Declare(
+        json
+        URL https://github.com/nlohmann/json/releases/download/v3.12.0/json.tar.xz
+)
 FetchContent_MakeAvailable(json)
+
+FetchContent_Declare(
+        argparse
+        GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+        GIT_TAG v3.1
+)
+
+FetchContent_MakeAvailable(argparse)
 
 add_subdirectory(engine)
 add_subdirectory(nnue_training)

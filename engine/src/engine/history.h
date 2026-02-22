@@ -1,7 +1,7 @@
 #ifndef HISTORY_H
 #define HISTORY_H
 
-#include "position.h"
+#include "core.h"
 
 #include <cassert>
 #include <functional>

@@ -39,6 +39,10 @@ namespace chepp::nnue::layers {
                   m_biases(std::data(m_layer->biases()), biases_extents_t{}) {
             }
 
+            virtual std::string name() const override {
+                return "Default";
+            }
+
             void
             forward(const index_type* HWY_RESTRICT idx,
                     const std::size_t              nb_idx,
@@ -124,6 +128,10 @@ namespace chepp::nnue::layers {
 
                 materialize(w_t0, std::data(m_weights_storage));
                 materialize(b_t0, std::data(m_biases_storage));
+            }
+
+            virtual std::string name() const override {
+                return format_error("Simd : target = ", hwy::TargetName(HWY_TARGET), ",unroll = ", unroll);
             }
 
             [[nodiscard]] std::size_t

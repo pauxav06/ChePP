@@ -1,9 +1,9 @@
 #ifndef POSITION_H_INCLUDED
 #define POSITION_H_INCLUDED
 
+#include "zobrist.h"
 #include "bitboard.h"
 #include "types.h"
-#include "zobrist.h"
 
 #include <bit>
 #include <chrono>
@@ -15,6 +15,7 @@
 #include <memory>
 #include <ostream>
 #include <ranges>
+
 #if CHEPP_USE_TB
 #include <src/tbprobe.h>
 #endif

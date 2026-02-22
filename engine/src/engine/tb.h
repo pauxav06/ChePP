@@ -25,6 +25,7 @@ init_tb(const std::string_view path) {
     std::cerr << "Tablebase init failed: " << path << "\n";
     return false;
 #else
+    (void)path;
     throw std::runtime_error("Tablebases are not enabled!");
 #endif
 }

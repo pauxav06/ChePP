@@ -2,7 +2,7 @@
 #define CHEPP_AFFINE_H
 
 #include "hwy/targets.h"
-#include "layers.h"
+#include "layer_base.h"
 #include "utils.h"
 
 #include <hwy/aligned_allocator.h>
@@ -19,6 +19,10 @@ namespace chepp::nnue::layers {
             : m_weights(std::from_range, weights), m_biases(std::from_range, biases) {
             HWY_ASSERT(m_weights.size() == input_size() * output_size());
             HWY_ASSERT(m_biases.size() == output_size());
+        }
+
+        [[nodiscard]] std::string name() const override {
+            return format_error("Affine: ", type_name_v<input_type>, " -> ", type_name_v<output_type>);
         }
 
         [[nodiscard]] HWY_INLINE extent_type static constexpr input_size() {
@@ -58,8 +62,8 @@ namespace chepp::nnue::layers {
             fill_random(inputs, 0);
             hwy::AlignedVector<output_type> outputs(output_size() + kernel.output_padding());
 
-            hwy::FuncInput func_input[1]{1};
-            hwy::Result    result[1]{};
+            hwy::FuncInput func_input[]{1};
+            hwy::Result    result[std::size(func_input)] {};
             hwy::Params    params{};
             params.verbose           = false;
             params.target_rel_mad    = 1;

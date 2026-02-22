@@ -5,8 +5,7 @@
 #ifndef TT_H
 #define TT_H
 
-#include "types.h"
-#include "zobrist.h"
+#include "core.h"
 
 #include <bit>
 #include <optional>

@@ -20,7 +20,7 @@ set (TEST_SOURCES
         #repetitions_test.cpp
         #zobrist_tests.cpp
         #types_test.cpp
-        #affine_test.cpp
+        affine_test.cpp
         #accum_test.cpp
         #relu_test.cpp
         #network_test.cpp
