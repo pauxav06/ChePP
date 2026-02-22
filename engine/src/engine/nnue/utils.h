@@ -1,14 +1,41 @@
 #ifndef CHEPP_NNUE_UTILS_H_
 #define CHEPP_NNUE_UTILS_H_
 
+#include <chrono>
+#include <functional>
 #include <memory>
 #include <random>
 #include <span>
+#include <thread>
 #include <type_traits>
+#include "core.h"
 
 #include <hwy/aligned_allocator.h>
 
 namespace chepp::nnue::utils {
+
+    template<typename T>
+    struct type_name
+    {
+        static constexpr std::string_view value = "unknown";
+    };
+
+    template<> struct type_name<std::int8_t>   { static constexpr std::string_view value = "int8_t"; };
+    template<> struct type_name<std::int16_t>  { static constexpr std::string_view value = "int16_t"; };
+    template<> struct type_name<std::int32_t>  { static constexpr std::string_view value = "int32_t"; };
+    template<> struct type_name<std::int64_t>  { static constexpr std::string_view value = "int64_t"; };
+
+    template<> struct type_name<std::uint8_t>  { static constexpr std::string_view value = "uint8_t"; };
+    template<> struct type_name<std::uint16_t> { static constexpr std::string_view value = "uint16_t"; };
+    template<> struct type_name<std::uint32_t> { static constexpr std::string_view value = "uint32_t"; };
+    template<> struct type_name<std::uint64_t> { static constexpr std::string_view value = "uint64_t"; };
+
+    template<> struct type_name<float>         { static constexpr std::string_view value = "float"; };
+    template<> struct type_name<double>        { static constexpr std::string_view value = "double"; };
+    template<> struct type_name<long double>   { static constexpr std::string_view value = "long double"; };
+
+    template<typename T>
+    inline constexpr std::string_view type_name_v = type_name<T>::value;
 
     template <typename T>
         requires std::is_integral_v<T>
@@ -66,6 +93,37 @@ namespace chepp::nnue::utils {
         }(std::make_integer_sequence<std::size_t, (End - Begin) / Step>{});
     }
 
+    struct BenchmarkResult {
+        size_t iterations;
+        std::size_t ns_per_iteration;
+
+        std::size_t cost() const {
+            return ns_per_iteration;
+        }
+    };
+
+    template <typename TP, typename REP>
+    inline BenchmarkResult benchmark(std::function<std::size_t()> func, std::chrono::duration<TP, REP> dur) {
+        size_t iterations = 0;
+        using namespace std::chrono_literals;
+        std::jthread worker([&](std::stop_token st){
+            std::size_t sum = 0;
+            while (!st.stop_requested()) {
+                sum += func();
+                ++iterations;
+            }
+            hwy::PreventElision(sum);
+        });
+
+        std::this_thread::sleep_for(dur);
+
+        worker.request_stop();
+
+        std::size_t time_per_iter = std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count() / iterations;
+        return BenchmarkResult{iterations, time_per_iter};
+    }
+
+
 #define CAT(a, b) CAT_IMPL(a, b)
 #define CAT_IMPL(a, b) a##b
 
@@ -103,6 +161,10 @@ namespace chepp::nnue::utils {
 #define REPEAT_32(M, ...) REPEAT_31(M, __VA_ARGS__) M(31, __VA_ARGS__)
 
 #define REPEAT(N, M, ...) CAT(REPEAT_, N)(M, __VA_ARGS__)
+
+#define CALL_IMPL(N, V, ...) V
+#define CALL_N(N, F) REPEAT(N, CALL_IMPL, F)
+
 
 #define IF_ELSE(cond, val, other) _IF_ELSE(cond, val, other)
 #define _IF_ELSE(cond, val, other) IF_##cond(val, other)

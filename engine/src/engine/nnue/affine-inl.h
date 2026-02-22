@@ -56,6 +56,10 @@ namespace chepp::nnue::layers {
                   m_biases(layer->biases().data(), biases_extents_t{}) {
             }
 
+            virtual std::string name() const override {
+                return "Default";
+            }
+
             void
             forward(const input_type* HWY_RESTRICT input, output_type* HWY_RESTRICT output) const override {
                 for (extent_type row = 0; row < m_weights.extent(0); ++row) {
@@ -147,6 +151,11 @@ namespace chepp::nnue::layers {
 
                 materialize(w_t2, m_weights_storage.data());
                 materialize(b_t0, m_biases_storage.data());
+            }
+
+            virtual std::string name() const override {
+                return format_error("Simd (column major): target = ", hwy::TargetName(HWY_TARGET), ", unroll = ", unroll,
+                                    ",operation = ", (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
             [[nodiscard]] std::size_t
@@ -277,6 +286,11 @@ namespace chepp::nnue::layers {
 
                 materialize(w_t2, m_weights_storage.data());
                 materialize(b_t0, m_biases_storage.data());
+            }
+
+            virtual std::string name() const override {
+                return format_error("Simd (row major): target = ", hwy::TargetName(HWY_TARGET), ", unroll = ", unroll,
+                                    ",operation = ", (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
             [[nodiscard]] std::size_t

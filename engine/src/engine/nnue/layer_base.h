@@ -30,12 +30,23 @@ namespace chepp::nnue {
 
         using extent_type = size_t;
 
+        struct OutputToken;
+
         template <size_t, typename, auto>
         struct Kernel;
 
         struct KernelBase {
             using sfinae_flag     = void;
             virtual ~KernelBase() = default;
+            [[nodiscard]] virtual std::string
+            name() const = 0;
+        };
+
+        struct OutputToken {
+            std::shared_ptr<KernelBase> kernel;
+            std::type_index type;
+            std::size_t size;
+            std::size_t padding;
         };
 
         struct default_config_t {
@@ -50,6 +61,8 @@ namespace chepp::nnue {
             virtual ~ILayer() = default;
             [[nodiscard]] virtual double
             benchmark(const KernelBase&) const = 0;
+            [[nodiscard]] virtual std::string
+            name() const = 0;
         };
 
         struct KernelKey {
@@ -81,11 +94,16 @@ struct std::hash<chepp::nnue::layers::KernelKey> {
 namespace chepp::nnue {
     using namespace layers;
     struct KernelRegistry {
-        template <typename CfgType>
-        inline static std::unordered_map<CfgType, std::type_index> cfg_mapping{};
+        inline static std::mutex& cfg_mtx() {
+            static std::mutex res;
+            return res;
+        }
 
         template <typename CfgType>
-        inline static std::mutex cfg_mtx;
+        inline static std::unordered_map<CfgType, std::type_index>& cfg_mapping() {
+            static std::unordered_map<CfgType, std::type_index> res{};
+            return res;
+        }
 
         std::mutex m_kernels_mtx;
 
@@ -95,17 +113,17 @@ namespace chepp::nnue {
         template <typename CfgType, CfgType cfg>
         static std::type_index
         register_cfg_key() {
-            std::lock_guard lock{cfg_mtx<CfgType>};
-            cfg_mapping<CfgType>.emplace(cfg, typeid(std::integral_constant<CfgType, cfg>));
+            std::lock_guard lock{cfg_mtx()};
+            cfg_mapping<CfgType>().emplace(cfg, typeid(std::integral_constant<CfgType, cfg>));
             return typeid(std::integral_constant<CfgType, cfg>);
         }
 
         template <typename CfgType>
         static std::optional<std::type_index>
         get_cfg_key(CfgType cfg) {
-            std::lock_guard                lock{cfg_mtx<CfgType>};
+            std::lock_guard                lock{cfg_mtx()};
             std::optional<std::type_index> res{};
-            if (auto match = cfg_mapping<CfgType>.find(cfg); match != cfg_mapping<CfgType>.end()) {
+            if (auto match = cfg_mapping<CfgType>().find(cfg); match != cfg_mapping<CfgType>().end()) {
                 res.emplace(match->second);
             }
             return res;
@@ -141,7 +159,7 @@ namespace chepp::nnue {
 
         template <typename Layer>
             requires std::is_base_of_v<ILayer, Layer>
-        auto
+        std::vector<std::shared_ptr<typename std::decay_t<Layer>::IKernel>>
         make_all_kernels(const std::shared_ptr<Layer>& layer) {
             using layer_t  = std::decay_t<Layer>;
             using kernel_t = layer_t::IKernel;
@@ -161,7 +179,7 @@ namespace chepp::nnue {
         template <typename Layer>
             requires std::is_base_of_v<ILayer, Layer>
         auto
-        get_best_kernel(const std::shared_ptr<Layer>& layer) {
+        get_best_kernel(const std::shared_ptr<Layer>& layer, const std::stop_token& stop_token) {
             auto candidates = make_all_kernels(layer);
 
             hwy::AutoTune<int, 12> tune{};
@@ -170,6 +188,9 @@ namespace chepp::nnue {
             tune.SetCandidates(std::move(indices));
 
             while (!tune.Best()) {
+                if (stop_token.stop_requested()) {
+                    return std::shared_ptr<typename Layer::IKernel>{};
+                }
                 auto kernel_id = tune.NextConfig();
                 tune.NotifyCost(layer->benchmark(*candidates.at(kernel_id)));
             }

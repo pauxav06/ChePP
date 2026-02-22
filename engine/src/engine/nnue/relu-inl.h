@@ -31,6 +31,10 @@ namespace chepp::nnue::layers {
             explicit Kernel(std::shared_ptr<const Layer> layer) : m_layer(layer) {
             }
 
+            virtual std::string name() const override {
+                return format_error("Default");
+            }
+
             void
             forward(const input_type* HWY_RESTRICT input_ptr, output_type* HWY_RESTRICT output_ptr) const override {
                 std::mdspan input{input_ptr, input_extents_t{}};
@@ -91,6 +95,10 @@ namespace chepp::nnue::layers {
             HWY_STATIC_CONSTEXPR output_extents_t m_output_extents{m_output_chunks, unroll, m_output_lanes};
 
             explicit Kernel(std::shared_ptr<const Layer> layer) : m_layer(layer) {
+            }
+
+            virtual std::string name() const override {
+                return format_error("Simd: target = ", hwy::TargetName(HWY_TARGET), ", unroll = ", unroll);
             }
 
             [[nodiscard]] std::size_t

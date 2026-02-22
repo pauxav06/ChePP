@@ -5,9 +5,9 @@
 #ifndef CHEPP_SEARCH_STACK_H
 #define CHEPP_SEARCH_STACK_H
 
+#include "core.h"
 #include "history.h"
-#include "nnue.h"
-#include "position.h"
+#include "network.h"
 
 #include <cassert>
 #include <cstddef>
@@ -40,8 +40,8 @@ class SearchStack {
         RefutationHistory* refutation_history{};
     };
 
-    explicit SearchStack(const Positions& positions)
-        : m_positions(positions), m_network(chepp::nnue::Arch::make_network()),
+    explicit SearchStack(const Positions& positions, const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels)
+        : m_positions(positions), m_network(kernels),
           m_nodes(std::make_unique<Node[]>(MAX_PLY)), m_history(std::make_unique<History>()),
           m_capture_history(std::make_unique<CaptureHistory>()),
           m_continuation_history(std::make_unique<ContinuationHistory>()),

@@ -1,9 +1,9 @@
 #ifndef MOVE_ORDERING_H
 #define MOVE_ORDERING_H
 
+#include "core.h"
 #include "history.h"
 #include "search_stack.h"
-#include "types.h"
 
 struct MoveSelector {
 

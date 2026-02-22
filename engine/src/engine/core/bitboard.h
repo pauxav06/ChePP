@@ -6,12 +6,12 @@
 #include <array>
 #include <cassert>
 #include <cstdlib>
-#include <hwy/base.h>
 #include <mutex>
 #include <random>
 #include <ranges>
 #include <string>
 #include <unordered_map>
+#include <hedley.h>
 
 #define CHEPP_PEXT 0
 
@@ -24,6 +24,8 @@ pext(const uint64_t val, const uint64_t mask) {
 #if CHEPP_PEXT == 1
     return _pext_u64(val, mask);
 #endif
+    (void)val;
+    (void)mask;
     throw std::runtime_error("unsupported pext");
 }
 
@@ -519,7 +521,7 @@ namespace Movegen {
                     attacks};
             }
 
-            [[nodiscard]] HWY_INLINE Bitboard
+            [[nodiscard]] HEDLEY_ALWAYS_INLINE Bitboard
             attack(Square sq, Bitboard occupancy) const {
                 return m_attacks[m_offsets[sq] + m_indexers[sq].index(occupancy)];
             }
@@ -539,7 +541,7 @@ namespace Movegen {
                 : m_mask(mask), m_shift(64 - mask.popcount()), m_magic(find_magic(mask, blockers)) {
             }
 
-            [[nodiscard]] constexpr HWY_INLINE index_type
+            [[nodiscard]] constexpr HEDLEY_ALWAYS_INLINE index_type
             index(const mask_type blockers) const {
                 return static_cast<index_type>(((blockers & m_mask).value() * m_magic) >> m_shift);
             }
@@ -588,7 +590,7 @@ namespace Movegen {
             explicit PEXTIndexer(const mask_type mask, const std::vector<mask_type>&) : m_mask(mask) {
             }
 
-            [[nodiscard]] HWY_INLINE index_type
+            [[nodiscard]] HEDLEY_ALWAYS_INLINE index_type
             index(mask_type blockers) const {
                 return static_cast<index_type>(pext(blockers.value(), m_mask.value()));
             }

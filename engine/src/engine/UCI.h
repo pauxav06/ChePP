@@ -4,13 +4,14 @@
 
 #ifndef CHEPP_UCI_H
 #define CHEPP_UCI_H
-#include "position.h"
+#include "core.h"
 #include "search.h"
 #include "tb.h"
 #include "tm.h"
 
 #include <algorithm>
 #include <functional>
+#include <future>
 #include <iostream>
 #include <memory>
 #include <sstream>
@@ -321,6 +322,9 @@ class UCIEngine {
     SearchThreadHandler    m_thread_handler{};
     EngineParameterHandler m_param_handler{};
     TT                     m_tt{}; // lifetime for the whole life of the engine
+    std::atomic_flag       m_tuning{};
+    std::jthread           m_tune_thread{};
+    std::atomic<std::shared_ptr<chepp::nnue::Arch::Kernels>> m_kernels{chepp::nnue::Arch::make_default_kernels()};
 
   public:
     explicit UCIEngine(const bool enable_tuning = false) {
@@ -470,7 +474,7 @@ class UCIEngine {
             }
         }
 
-        m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos);
+        m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_kernels);
         m_worker = std::jthread([&]() {
             m_thread_handler.start();
             m_state = Waiting;
@@ -481,12 +485,35 @@ class UCIEngine {
 
     void
     eval() const {
+        using namespace chepp::nnue;
         std::cout << m_pos.last() << std::endl;
-        auto network = chepp::nnue::Arch::make_network();
+        auto network = Arch::make_network(m_kernels);
         network.init(m_pos.last());
-
         std::cout << "Evaluation for " << m_pos.last().side_to_move() << " (cp): " << std::endl;
         network.dbg_uci(m_pos.last().side_to_move());
+    }
+
+    void tune_nnue() {
+        using namespace chepp::nnue;
+        if (m_tuning.test_and_set()) {
+            std::cerr << "error: tuning is not complete" << std::endl;
+            return;
+        }
+        m_tune_thread = std::jthread([&] (const std::stop_token& stop_token) {
+            std::cout << "info string start tuning" << std::endl;
+            auto res =  Arch::make_tuned_kernels(stop_token);
+            if (!stop_token.stop_requested()) {
+                m_kernels.store(res);
+                std::cout << "info string end tuning" << std::endl;
+            } else {
+                std::cout << "info string tuning aborted" << std::endl;
+            }
+            m_tuning.clear();
+        });
+    }
+
+    void nnue_cfg() {
+        //std::cout << "info string " << chepp::nnue::Arch::print_cfg();
     }
 
     static void
@@ -560,6 +587,10 @@ class UCIEngine {
             bench();
         } else if (line == "print") {
             std::cout << m_pos.last() << std::endl;
+        } else if (line == "tune") {
+            tune_nnue();
+        } else if (line == "cfg") {
+            nnue_cfg();
         } else if (line == "stop") {
             stop();
         } else if (line == "quit") {

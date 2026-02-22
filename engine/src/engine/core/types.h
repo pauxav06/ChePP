@@ -1194,35 +1194,6 @@ constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUE
 
 constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
-struct Result : EnumBase<Result, uint8_t, 3> {
-    using base = EnumBase;
-    using base::EnumBase;
-
-    explicit constexpr Result(const Color c) : EnumBase(c.value()) {
-    }
-};
-
-template <>
-struct EnumTraits<Result> {
-    static constexpr std::array<std::string_view, Result::total()> repr{"1-0", "0-1", "1/2-1/2", "*"};
-    [[nodiscard]] static constexpr std::string
-    to_string(const Result r) noexcept {
-        return std::string{repr.at(r.index())};
-    }
-
-    [[nodiscard]] static constexpr std::expected<Result, std::string>
-    from_string(const std::string_view s) noexcept {
-        const auto it = std::ranges::find(repr, s);
-        if (it == repr.end()) return std::unexpected{""};
-        return Result{std::distance(repr.begin(), it)};
-    }
-};
-
-constexpr Result WIN_WHITE{0};
-constexpr Result WIN_BLACK{1};
-constexpr Result DRAW{2};
-constexpr Result NO_RESULT{3};
-
 namespace bit {
     template <std::unsigned_integral T>
     constexpr int
