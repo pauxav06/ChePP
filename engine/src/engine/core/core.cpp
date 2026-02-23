@@ -1,4 +1,6 @@
 #include "bitboard.h"
+#include "movegen.h"
+
 #include <bit>
 #include <cstdint>
 
@@ -29,5 +31,5 @@ tb_lsb32(uint32_t x) {
 
 extern "C" uint64_t
 tb_king_attacks(int x) {
-    return Movegen::attacks<KING>(Square{x}).value();
+    return chepp::movegen::attacks<chepp::KING>(chepp::Square{x}).value();
 }

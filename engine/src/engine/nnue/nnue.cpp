@@ -33,9 +33,7 @@ namespace chepp::nnue {
     template <typename T, auto cfg>
     void
     register_kernel(KernelRegistry& registery) {
-#define VISITOR(TARGET, NAMESPACE)                                                                                     \
-    chepp::nnue::NAMESPACE::register_kernel<T, cfg>(registery);                                                        \
-    std::cout << hwy::TargetName(TARGET) << " " << TARGET << std::endl;
+#define VISITOR(TARGET, NAMESPACE) chepp::nnue::NAMESPACE::register_kernel<T, cfg>(registery);
         HWY_VISIT_TARGETS(VISITOR)
 #undef VISITOR
     }

@@ -1,6 +1,7 @@
 #ifndef CHEPP_NNUE_UTILS_H_
 #define CHEPP_NNUE_UTILS_H_
 
+#include "core.h"
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -8,121 +9,8 @@
 #include <span>
 #include <thread>
 #include <type_traits>
-#include "core.h"
 
 #include <hwy/aligned_allocator.h>
-
-namespace chepp::nnue::utils {
-
-    template<typename T>
-    struct type_name
-    {
-        static constexpr std::string_view value = "unknown";
-    };
-
-    template<> struct type_name<std::int8_t>   { static constexpr std::string_view value = "int8_t"; };
-    template<> struct type_name<std::int16_t>  { static constexpr std::string_view value = "int16_t"; };
-    template<> struct type_name<std::int32_t>  { static constexpr std::string_view value = "int32_t"; };
-    template<> struct type_name<std::int64_t>  { static constexpr std::string_view value = "int64_t"; };
-
-    template<> struct type_name<std::uint8_t>  { static constexpr std::string_view value = "uint8_t"; };
-    template<> struct type_name<std::uint16_t> { static constexpr std::string_view value = "uint16_t"; };
-    template<> struct type_name<std::uint32_t> { static constexpr std::string_view value = "uint32_t"; };
-    template<> struct type_name<std::uint64_t> { static constexpr std::string_view value = "uint64_t"; };
-
-    template<> struct type_name<float>         { static constexpr std::string_view value = "float"; };
-    template<> struct type_name<double>        { static constexpr std::string_view value = "double"; };
-    template<> struct type_name<long double>   { static constexpr std::string_view value = "long double"; };
-
-    template<typename T>
-    inline constexpr std::string_view type_name_v = type_name<T>::value;
-
-    template <typename T>
-        requires std::is_integral_v<T>
-    constexpr T
-    pad_up(const T n, const T m) noexcept {
-        return ((n + m - 1) / m) * m;
-    }
-
-    template <typename T>
-        requires std::is_integral_v<T>
-    constexpr T
-    pad_down(const T x, const T n) noexcept {
-        if (n == 0) return x;
-        return (x >= 0) ? (x / n) * n : ((x - n + 1) / n) * n;
-    }
-
-    template <typename T>
-        requires std::is_integral_v<T>
-    constexpr bool
-    is_power_of_two(const T x) {
-        return x != 0 && (x & (x - 1)) == 0;
-    }
-
-    using extent_type = std::size_t;
-
-    template <typename Container>
-    void
-    fill_random(Container&                     c,
-                typename Container::value_type min  = std::numeric_limits<typename Container::value_type>::min(),
-                typename Container::value_type max  = std::numeric_limits<typename Container::value_type>::max(),
-                unsigned                       seed = 1234) {
-        using T = Container::value_type;
-        std::mt19937 rng(seed);
-
-        using dist_t = std::conditional_t<std::is_integral_v<T>,
-                                          std::conditional_t<std::is_signed_v<T>,
-                                                             std::uniform_int_distribution<std::intmax_t>,
-                                                             std::uniform_int_distribution<std::uintmax_t>>,
-                                          std::uniform_real_distribution<long double>>;
-        using res_t  = typename dist_t::result_type;
-
-        dist_t dist(min, max);
-
-        for (auto& x : c) {
-            x = static_cast<T>(std::clamp(dist(rng), static_cast<res_t>(min), static_cast<res_t>(max)));
-        }
-    }
-
-    template <int Begin, int End, int Step = 1, typename Func>
-        requires((End - Begin) % Step == 0)
-    HWY_INLINE void
-    constexpr_for(Func&& f) {
-        [&]<std::size_t... IS>(std::integer_sequence<std::size_t, IS...>) {
-            (f(std::integral_constant<std::size_t, Begin + IS * Step>{}), ...);
-        }(std::make_integer_sequence<std::size_t, (End - Begin) / Step>{});
-    }
-
-    struct BenchmarkResult {
-        size_t iterations;
-        std::size_t ns_per_iteration;
-
-        std::size_t cost() const {
-            return ns_per_iteration;
-        }
-    };
-
-    template <typename TP, typename REP>
-    inline BenchmarkResult benchmark(std::function<std::size_t()> func, std::chrono::duration<TP, REP> dur) {
-        size_t iterations = 0;
-        using namespace std::chrono_literals;
-        std::jthread worker([&](std::stop_token st){
-            std::size_t sum = 0;
-            while (!st.stop_requested()) {
-                sum += func();
-                ++iterations;
-            }
-            hwy::PreventElision(sum);
-        });
-
-        std::this_thread::sleep_for(dur);
-
-        worker.request_stop();
-
-        std::size_t time_per_iter = std::chrono::duration_cast<std::chrono::nanoseconds>(dur).count() / iterations;
-        return BenchmarkResult{iterations, time_per_iter};
-    }
-
 
 #define CAT(a, b) CAT_IMPL(a, b)
 #define CAT_IMPL(a, b) a##b
@@ -165,7 +53,6 @@ namespace chepp::nnue::utils {
 #define CALL_IMPL(N, V, ...) V
 #define CALL_N(N, F) REPEAT(N, CALL_IMPL, F)
 
-
 #define IF_ELSE(cond, val, other) _IF_ELSE(cond, val, other)
 #define _IF_ELSE(cond, val, other) IF_##cond(val, other)
 
@@ -189,7 +76,5 @@ namespace chepp::nnue::utils {
     std::span<V*, N>   regs{regs_.data(), N};
 
 #define GET_REG(N) *regs[N]
-
-} // namespace chepp::nnue::utils
 
 #endif

@@ -11,23 +11,25 @@
 #include <filesystem>
 #include <iostream>
 
-inline bool
-init_tb(const std::string_view path) {
+namespace chepp {
+    inline bool
+    init_tb(const std::string_view path) {
 #if CHEPP_USE_TB
-    if (!std::filesystem::exists(path)) {
-        std::cerr << "Tablebase path does not exist: " << path << "\n";
-        return false;
-    }
+        if (!std::filesystem::exists(path)) {
+            std::cerr << "Tablebase path does not exist: " << path << "\n";
+            return false;
+        }
 
-    if (tb_init(path.begin())) {
-        return true;
-    }
-    std::cerr << "Tablebase init failed: " << path << "\n";
-    return false;
+        if (tb_init(path.begin())) {
+            return true;
+        }
+        std::cerr << "Tablebase init failed: " << path << "\n";
+        return false;
 #else
-    (void)path;
-    throw std::runtime_error("Tablebases are not enabled!");
+        (void)path;
+        throw std::runtime_error("Tablebases are not enabled!");
 #endif
-}
+    }
+} // namespace chepp
 
 #endif // TB_H
