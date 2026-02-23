@@ -17,12 +17,12 @@ enable_testing()
 
 set (TEST_SOURCES
         perft_tests.cpp
-        #repetitions_test.cpp
-        #zobrist_tests.cpp
-        #types_test.cpp
+        repetitions_test.cpp
+        zobrist_tests.cpp
+        types_test.cpp
         affine_test.cpp
-        #accum_test.cpp
-        #relu_test.cpp
+        accum_test.cpp
+        relu_test.cpp
         #network_test.cpp
 )
 
@@ -36,6 +36,8 @@ target_include_directories(ChePP_tests PRIVATE
 target_link_libraries(ChePP_tests PRIVATE
         hwy_test
         GTest::gtest_main
+        ChePP_core
+        ChePP_nnue
         ChePP_engine
 )
 

@@ -2,7 +2,7 @@
 // Created by paul on 7/29/25.
 //
 
-#include <../include/ChePP/core/position.h>
+#include <core.h>
 #include <gtest/gtest.h>
 
 namespace chepp {

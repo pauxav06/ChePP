@@ -2,7 +2,7 @@
 // Created by paul on 7/30/25.
 //
 
-#include <ChePP/engine/position.h>
+#include <core.h>
 #include <gtest/gtest.h>
 
 // These tests are now not necessary, as the position.is_ok() function

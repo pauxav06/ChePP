@@ -388,6 +388,38 @@ namespace chepp {
 
         ContainerT data;
 
+        constexpr EnumArray()                     = default;
+        constexpr EnumArray(const EnumArray&)     = default;
+        constexpr EnumArray(EnumArray&&) noexcept = default;
+        constexpr EnumArray&
+        operator=(const EnumArray&) = default;
+        constexpr EnumArray&
+        operator=(EnumArray&&) noexcept = default;
+
+        constexpr EnumArray(std::initializer_list<T> init) {
+            assert(init.size() == count && "Initializer list must match EnumArray size");
+            std::copy(init.begin(), init.end(), data.begin());
+        }
+
+        template <typename F>
+            requires std::is_invocable_r_v<T, F, Enum>
+        constexpr explicit EnumArray(std::in_place_t, F&& f) {
+            for (std::size_t i = 0; i < count; ++i) {
+                Enum e(static_cast<typename Enum::ValueT>(i));
+                std::construct_at(&data[i], std::forward<F>(f)(e));
+            }
+        }
+
+        static constexpr indexT
+        flat_index(const Enum e) noexcept {
+            return e.index();
+        }
+
+        static constexpr indexT
+        flat_size() noexcept {
+            return count;
+        }
+
         constexpr ValueT&
         operator[](const Enum e) noexcept {
             return data[e.index()];
@@ -479,11 +511,59 @@ namespace chepp {
                                    FirstEnum> &&
                  FirstEnum::count() > 0)
     struct EnumArray<T, FirstEnum, RestEnums...> {
-        static constexpr std::size_t count = FirstEnum::count();
-        using SubArrayT                    = EnumArray<T, RestEnums...>;
-        using ContainerT                   = std::array<SubArrayT, count>;
+        static constexpr std::size_t count                       = FirstEnum::count();
+        using SubArrayT                                          = EnumArray<T, RestEnums...>;
+        using ContainerT                                         = std::array<SubArrayT, count>;
+        static constexpr std::size_t                   dims      = 1 + sizeof...(RestEnums);
+        static constexpr std::array<std::size_t, dims> dim_sizes = {static_cast<std::size_t>(FirstEnum::count()),
+                                                                    static_cast<std::size_t>(RestEnums::count())...};
+
+        static constexpr std::array<std::size_t, dims> strides = [] {
+            std::array<std::size_t, dims> s{};
+            std::size_t                   acc = 1;
+            for (std::size_t i = dims; i-- > 0;) {
+                s[i] = acc;
+                acc *= dim_sizes[i];
+            }
+            return s;
+        }();
 
         ContainerT data;
+
+        constexpr EnumArray()                     = default;
+        constexpr EnumArray(const EnumArray&)     = default;
+        constexpr EnumArray(EnumArray&&) noexcept = default;
+        constexpr EnumArray&
+        operator=(const EnumArray&) = default;
+        constexpr EnumArray&
+        operator=(EnumArray&&) noexcept = default;
+
+        constexpr EnumArray(std::initializer_list<SubArrayT> init) {
+            assert(init.size() == count && "Initializer list must match EnumArray size");
+            std::copy(init.begin(), init.end(), data.begin());
+        }
+
+        template <typename F>
+        constexpr explicit EnumArray(std::in_place_t, F&& f) {
+            for (std::size_t i = 0; i < count; ++i) {
+                FirstEnum e(static_cast<typename FirstEnum::ValueT>(i));
+                std::construct_at(
+                    &data[i], std::in_place, [&, e](auto... restEnums) { return std::forward<F>(f)(e, restEnums...); });
+            }
+        }
+
+        static constexpr std::size_t
+        flat_index(FirstEnum f, RestEnums... r) noexcept {
+            std::array<std::size_t, dims> indices = {f.index(), r.index()...};
+            std::size_t                   idx     = 0;
+            for (std::size_t i = 0; i < dims; ++i) idx += indices[i] * strides[i];
+            return idx;
+        }
+
+        static constexpr std::size_t
+        flat_size() noexcept {
+            return strides[0] * count;
+        }
 
         constexpr SubArrayT&
         operator[](const FirstEnum e) noexcept {
