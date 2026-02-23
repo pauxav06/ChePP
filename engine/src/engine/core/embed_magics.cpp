@@ -1,5 +1,6 @@
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 
 #include "bitboard.h"
 #include <argparse/argparse.hpp>
@@ -23,14 +24,14 @@ main(int argc, char** argv) {
     if (!header_file || !cpp_file) throw std::runtime_error("Failed to open output files");
 
     try {
-        auto b = movegen::detail::Magics<BISHOP>::make();
+        auto b = std::make_unique<movegen::detail::Magics<BISHOP>>(movegen::detail::Magics<BISHOP>::make());
 
         header_file << "#pragma once\n";
-        header_file << b.write_declaration("BISHOP") << "\n";
-        cpp_file << b.write_cpp(out_h.string(), "BISHOP") << "\n";
-        auto r = movegen::detail::Magics<ROOK>::make();
-        header_file << r.write_declaration("ROOK") << "\n";
-        cpp_file << r.write_cpp(out_h.string(), "ROOK") << "\n";
+        header_file << b->write_declaration("BISHOP") << "\n";
+        cpp_file << b->write_cpp(out_h.string(), "BISHOP") << "\n";
+        auto r = std::make_unique<movegen::detail::Magics<ROOK>>(movegen::detail::Magics<ROOK>::make());
+        header_file << r->write_declaration("ROOK") << "\n";
+        cpp_file << r->write_cpp(out_h.string(), "ROOK") << "\n";
 
         header_file.close();
         cpp_file.close();

@@ -31,7 +31,7 @@ set(MAGICS_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/magics.h)
 set(MAGICS_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/magics.cpp)
 
 add_executable(magic_embedder embed_magics.cpp)
-target_link_libraries(magic_embedder PRIVATE nlohmann_json::nlohmann_json argparse)
+target_link_libraries(magic_embedder PRIVATE argparse)
 target_include_directories(magic_embedder PRIVATE ${hedley_SOURCE_DIR})
 
 add_custom_command(
