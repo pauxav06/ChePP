@@ -112,5 +112,6 @@ namespace chepp::nnue::layers {
         HWY_AFTER_TEST();
     } // namespace
 } // namespace chepp::nnue::layers
+HWY_TEST_MAIN();
 // HWY_TEST_MAIN();
 #endif // HWY_ONCE
