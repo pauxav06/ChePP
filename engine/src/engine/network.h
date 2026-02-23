@@ -197,7 +197,7 @@ namespace chepp::nnue {
                 : m_kernels(kernels), m_memory(std::make_shared<Memory>(*m_kernels)) {
             }
 
-            auto
+            [[nodiscard]] auto
             bucket() const {
                 return m_buckets.back();
             }
@@ -312,7 +312,7 @@ namespace chepp::nnue {
         };
 
         inline static Network
-        make_network(std::shared_ptr<Kernels> kernels) {
+        make_network(const std::shared_ptr<Kernels>& kernels) {
             return Network(kernels);
         }
 

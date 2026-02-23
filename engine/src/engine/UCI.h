@@ -601,6 +601,8 @@ namespace chepp {
             } else if (line == "quit") {
                 stop();
                 m_state = Terminated;
+            } else if (line == "perft") {
+                perft_divide(m_pos.last(), 7);
             }
         }
 

@@ -44,7 +44,7 @@ namespace chepp::zobrist {
 
     template <std::size_t seed, typename... TS>
     struct RandomHahsTable {
-        static constexpr EnumArray<Hash, TS...> table{
+        inline static constexpr EnumArray<Hash, TS...> table{
             std::in_place, [values = generate<EnumArray<Hash, TS...>::flat_size(), seed>()](auto... idx) {
                 return values.at(EnumArray<Hash, TS...>::flat_index(idx...));
             }};
