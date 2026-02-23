@@ -1,7 +1,5 @@
 #include "UCI.h"
-
-#include <vector>
-
+using namespace chepp;
 int
 main() {
     UCIEngine          engine{false};

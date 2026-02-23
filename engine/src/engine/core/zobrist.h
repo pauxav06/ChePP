@@ -19,7 +19,7 @@ namespace prng {
     }
 } // namespace prng
 
-namespace Zobrist {
+namespace chepp::zobrist {
     using Hash = uint64_t;
 
     inline auto PSQ_TABLE =
@@ -68,6 +68,6 @@ namespace Zobrist {
         return SIDE_TABLE;
     }
 
-} // namespace Zobrist
+} // namespace chepp::zobrist
 
 #endif // ZOBRIST_H
