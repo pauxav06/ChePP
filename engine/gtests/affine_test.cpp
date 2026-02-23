@@ -127,16 +127,11 @@ HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
 namespace chepp::nnue::layers {
-    void
-    run() {
-        HWY_STATIC_DISPATCH(runAllTests)();
-    }
     namespace {
         HWY_BEFORE_TEST(AffineTest);
         HWY_EXPORT_AND_TEST_P(AffineTest, runAllTests);
         HWY_AFTER_TEST();
     } // namespace
 } // namespace chepp::nnue::layers
-HWY_TEST_MAIN();
 // HWY_TEST_MAIN();
 #endif // HWY_ONCE
