@@ -486,10 +486,9 @@ namespace chepp::movegen {
             EnumArray<index_type, Square> m_offsets{};
             std::array<mask_type, size>   m_attacks{};
 
-            static MagicsBase
-            make() {
-                MagicsBase result{};
-                size_t     offset = 0;
+            void
+            init() {
+                size_t offset = 0;
 
                 for (Square sq : Square::all()) {
                     const auto mask         = relevancy_mask<pc>(sq);
@@ -505,16 +504,14 @@ namespace chepp::movegen {
                         blockers_vec.push_back(bb.value());
                     }
 
-                    result.m_indexers.at(sq) = Indexer::make(mask.value(), blockers_vec);
-                    result.m_offsets.at(sq)  = static_cast<index_type>(offset);
-
+                    m_indexers.at(sq) = Indexer::make(mask.value(), blockers_vec);
+                    m_offsets.at(sq)  = static_cast<index_type>(offset);
                     for (auto& i : blockers_vec) {
-                        result.m_attacks[offset + result.m_indexers.at(sq).index(i)] = ray<pc>(sq, Bitboard{i}).value();
+                        m_attacks[offset + m_indexers.at(sq).index(i)] = ray<pc>(sq, Bitboard{i}).value();
                     }
 
                     offset += combinations;
                 }
-                return result;
             }
 
             static auto

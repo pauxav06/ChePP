@@ -19,22 +19,21 @@ main(int argc, char** argv) {
     fs::path out_cpp = program.get<std::string>("--cpp");
 
     std::ofstream header_file(out_h, std::ofstream::binary | std::ofstream::trunc);
+    header_file << "#pragma once\n";
     std::ofstream cpp_file(out_cpp, std::ofstream::binary | std::ofstream::trunc);
 
     if (!header_file || !cpp_file) throw std::runtime_error("Failed to open output files");
 
     try {
-        auto b = std::make_unique<movegen::detail::Magics<BISHOP>>(movegen::detail::Magics<BISHOP>::make());
-
-        header_file << "#pragma once\n";
+        auto b = std::make_unique<movegen::detail::Magics<BISHOP>>();
+        b->init();
         header_file << b->write_declaration("BISHOP") << "\n";
         cpp_file << b->write_cpp(out_h.string(), "BISHOP") << "\n";
-        auto r = std::make_unique<movegen::detail::Magics<ROOK>>(movegen::detail::Magics<ROOK>::make());
+
+        auto r = std::make_unique<movegen::detail::Magics<ROOK>>();
+        r->init();
         header_file << r->write_declaration("ROOK") << "\n";
         cpp_file << r->write_cpp(out_h.string(), "ROOK") << "\n";
-
-        header_file.close();
-        cpp_file.close();
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
         header_file.close();
