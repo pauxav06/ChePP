@@ -386,7 +386,7 @@ namespace chepp {
         using indexT     = std::size_t;
         using ContainerT = std::array<ValueT, count>;
 
-        ContainerT data;
+        ContainerT data{};
 
         constexpr EnumArray()                     = default;
         constexpr EnumArray(const EnumArray&)     = default;
@@ -406,7 +406,7 @@ namespace chepp {
         constexpr explicit EnumArray(std::in_place_t, F&& f) {
             for (std::size_t i = 0; i < count; ++i) {
                 Enum e(static_cast<typename Enum::ValueT>(i));
-                std::construct_at(&data[i], std::forward<F>(f)(e));
+                std::construct_at(&data[i], f(e));
             }
         }
 
@@ -673,15 +673,15 @@ namespace chepp {
         }
     };
 
-    constexpr File FILE_A{0};
-    constexpr File FILE_B{1};
-    constexpr File FILE_C{2};
-    constexpr File FILE_D{3};
-    constexpr File FILE_E{4};
-    constexpr File FILE_F{5};
-    constexpr File FILE_G{6};
-    constexpr File FILE_H{7};
-    constexpr File NO_FILE{8};
+    inline constexpr File FILE_A{0};
+    inline constexpr File FILE_B{1};
+    inline constexpr File FILE_C{2};
+    inline constexpr File FILE_D{3};
+    inline constexpr File FILE_E{4};
+    inline constexpr File FILE_F{5};
+    inline constexpr File FILE_G{6};
+    inline constexpr File FILE_H{7};
+    inline constexpr File NO_FILE{8};
 
     struct Rank : EnumBase<Rank, uint8_t, 8, true, true> {
         using base = EnumBase;
@@ -709,15 +709,15 @@ namespace chepp {
         }
     };
 
-    constexpr Rank RANK_1{0};
-    constexpr Rank RANK_2{1};
-    constexpr Rank RANK_3{2};
-    constexpr Rank RANK_4{3};
-    constexpr Rank RANK_5{4};
-    constexpr Rank RANK_6{5};
-    constexpr Rank RANK_7{6};
-    constexpr Rank RANK_8{7};
-    constexpr Rank NO_RANK{8};
+    inline constexpr Rank RANK_1{0};
+    inline constexpr Rank RANK_2{1};
+    inline constexpr Rank RANK_3{2};
+    inline constexpr Rank RANK_4{3};
+    inline constexpr Rank RANK_5{4};
+    inline constexpr Rank RANK_6{5};
+    inline constexpr Rank RANK_7{6};
+    inline constexpr Rank RANK_8{7};
+    inline constexpr Rank NO_RANK{8};
 
     using Coordinates = std::pair<File, Rank>;
 
@@ -781,79 +781,78 @@ namespace chepp {
         }
     };
 
-    constexpr Square A1{FILE_A, RANK_1};
-    constexpr Square A2{FILE_A, RANK_2};
-    constexpr Square A3{FILE_A, RANK_3};
-    constexpr Square A4{FILE_A, RANK_4};
-    constexpr Square A5{FILE_A, RANK_5};
-    constexpr Square A6{FILE_A, RANK_6};
-    constexpr Square A7{FILE_A, RANK_7};
-    constexpr Square A8{FILE_A, RANK_8};
+    inline constexpr Square A1{FILE_A, RANK_1};
+    inline constexpr Square A2{FILE_A, RANK_2};
+    inline constexpr Square A3{FILE_A, RANK_3};
+    inline constexpr Square A4{FILE_A, RANK_4};
+    inline constexpr Square A5{FILE_A, RANK_5};
+    inline constexpr Square A6{FILE_A, RANK_6};
+    inline constexpr Square A7{FILE_A, RANK_7};
+    inline constexpr Square A8{FILE_A, RANK_8};
 
-    constexpr Square B1{FILE_B, RANK_1};
-    constexpr Square B2{FILE_B, RANK_2};
-    constexpr Square B3{FILE_B, RANK_3};
-    constexpr Square B4{FILE_B, RANK_4};
-    constexpr Square B5{FILE_B, RANK_5};
-    constexpr Square B6{FILE_B, RANK_6};
-    constexpr Square B7{FILE_B, RANK_7};
-    constexpr Square B8{FILE_B, RANK_8};
+    inline constexpr Square B1{FILE_B, RANK_1};
+    inline constexpr Square B2{FILE_B, RANK_2};
+    inline constexpr Square B3{FILE_B, RANK_3};
+    inline constexpr Square B4{FILE_B, RANK_4};
+    inline constexpr Square B5{FILE_B, RANK_5};
+    inline constexpr Square B6{FILE_B, RANK_6};
+    inline constexpr Square B7{FILE_B, RANK_7};
+    inline constexpr Square B8{FILE_B, RANK_8};
 
-    constexpr Square C1{FILE_C, RANK_1};
-    constexpr Square C2{FILE_C, RANK_2};
-    constexpr Square C3{FILE_C, RANK_3};
-    constexpr Square C4{FILE_C, RANK_4};
-    constexpr Square C5{FILE_C, RANK_5};
-    constexpr Square C6{FILE_C, RANK_6};
-    constexpr Square C7{FILE_C, RANK_7};
-    constexpr Square C8{FILE_C, RANK_8};
+    inline constexpr Square C1{FILE_C, RANK_1};
+    inline constexpr Square C2{FILE_C, RANK_2};
+    inline constexpr Square C3{FILE_C, RANK_3};
+    inline constexpr Square C4{FILE_C, RANK_4};
+    inline constexpr Square C5{FILE_C, RANK_5};
+    inline constexpr Square C6{FILE_C, RANK_6};
+    inline constexpr Square C7{FILE_C, RANK_7};
+    inline constexpr Square C8{FILE_C, RANK_8};
 
-    constexpr Square D1{FILE_D, RANK_1};
-    constexpr Square D2{FILE_D, RANK_2};
-    constexpr Square D3{FILE_D, RANK_3};
-    constexpr Square D4{FILE_D, RANK_4};
-    constexpr Square D5{FILE_D, RANK_5};
-    constexpr Square D6{FILE_D, RANK_6};
-    constexpr Square D7{FILE_D, RANK_7};
-    constexpr Square D8{FILE_D, RANK_8};
+    inline constexpr Square D1{FILE_D, RANK_1};
+    inline constexpr Square D2{FILE_D, RANK_2};
+    inline constexpr Square D3{FILE_D, RANK_3};
+    inline constexpr Square D4{FILE_D, RANK_4};
+    inline constexpr Square D5{FILE_D, RANK_5};
+    inline constexpr Square D6{FILE_D, RANK_6};
+    inline constexpr Square D7{FILE_D, RANK_7};
+    inline constexpr Square D8{FILE_D, RANK_8};
 
-    constexpr Square E1{FILE_E, RANK_1};
-    constexpr Square E2{FILE_E, RANK_2};
-    constexpr Square E3{FILE_E, RANK_3};
-    constexpr Square E4{FILE_E, RANK_4};
-    constexpr Square E5{FILE_E, RANK_5};
-    constexpr Square E6{FILE_E, RANK_6};
-    constexpr Square E7{FILE_E, RANK_7};
-    constexpr Square E8{FILE_E, RANK_8};
+    inline constexpr Square E1{FILE_E, RANK_1};
+    inline constexpr Square E2{FILE_E, RANK_2};
+    inline constexpr Square E3{FILE_E, RANK_3};
+    inline constexpr Square E4{FILE_E, RANK_4};
+    inline constexpr Square E5{FILE_E, RANK_5};
+    inline constexpr Square E6{FILE_E, RANK_6};
+    inline constexpr Square E7{FILE_E, RANK_7};
+    inline constexpr Square E8{FILE_E, RANK_8};
 
-    constexpr Square F1{FILE_F, RANK_1};
-    constexpr Square F2{FILE_F, RANK_2};
-    constexpr Square F3{FILE_F, RANK_3};
-    constexpr Square F4{FILE_F, RANK_4};
-    constexpr Square F5{FILE_F, RANK_5};
-    constexpr Square F6{FILE_F, RANK_6};
-    constexpr Square F7{FILE_F, RANK_7};
-    constexpr Square F8{FILE_F, RANK_8};
+    inline constexpr Square F1{FILE_F, RANK_1};
+    inline constexpr Square F2{FILE_F, RANK_2};
+    inline constexpr Square F3{FILE_F, RANK_3};
+    inline constexpr Square F4{FILE_F, RANK_4};
+    inline constexpr Square F5{FILE_F, RANK_5};
+    inline constexpr Square F6{FILE_F, RANK_6};
+    inline constexpr Square F7{FILE_F, RANK_7};
+    inline constexpr Square F8{FILE_F, RANK_8};
 
-    constexpr Square G1{FILE_G, RANK_1};
-    constexpr Square G2{FILE_G, RANK_2};
-    constexpr Square G3{FILE_G, RANK_3};
-    constexpr Square G4{FILE_G, RANK_4};
-    constexpr Square G5{FILE_G, RANK_5};
-    constexpr Square G6{FILE_G, RANK_6};
-    constexpr Square G7{FILE_G, RANK_7};
-    constexpr Square G8{FILE_G, RANK_8};
+    inline constexpr Square G1{FILE_G, RANK_1};
+    inline constexpr Square G2{FILE_G, RANK_2};
+    inline constexpr Square G3{FILE_G, RANK_3};
+    inline constexpr Square G4{FILE_G, RANK_4};
+    inline constexpr Square G5{FILE_G, RANK_5};
+    inline constexpr Square G6{FILE_G, RANK_6};
+    inline constexpr Square G7{FILE_G, RANK_7};
+    inline constexpr Square G8{FILE_G, RANK_8};
 
-    constexpr Square H1{FILE_H, RANK_1};
-    constexpr Square H2{FILE_H, RANK_2};
-    constexpr Square H3{FILE_H, RANK_3};
-    constexpr Square H4{FILE_H, RANK_4};
-    constexpr Square H5{FILE_H, RANK_5};
-    constexpr Square H6{FILE_H, RANK_6};
-    constexpr Square H7{FILE_H, RANK_7};
-    constexpr Square H8{FILE_H, RANK_8};
-
-    constexpr Square NO_SQUARE{64};
+    inline constexpr Square H1{FILE_H, RANK_1};
+    inline constexpr Square H2{FILE_H, RANK_2};
+    inline constexpr Square H3{FILE_H, RANK_3};
+    inline constexpr Square H4{FILE_H, RANK_4};
+    inline constexpr Square H5{FILE_H, RANK_5};
+    inline constexpr Square H6{FILE_H, RANK_6};
+    inline constexpr Square H7{FILE_H, RANK_7};
+    inline constexpr Square H8{FILE_H, RANK_8};
+    inline constexpr Square NO_SQUARE{64};
 
     struct PieceType : EnumBase<PieceType, uint8_t, 6, true, true> {
         using base = EnumBase;
@@ -886,15 +885,15 @@ namespace chepp {
         }
     };
 
-    constexpr PieceType PAWN{0};
-    constexpr PieceType KNIGHT{1};
-    constexpr PieceType BISHOP{2};
-    constexpr PieceType ROOK{3};
-    constexpr PieceType QUEEN{4};
-    constexpr PieceType KING{5};
-    constexpr PieceType NO_PIECE_TYPE{6};
+    inline constexpr PieceType PAWN{0};
+    inline constexpr PieceType KNIGHT{1};
+    inline constexpr PieceType BISHOP{2};
+    inline constexpr PieceType ROOK{3};
+    inline constexpr PieceType QUEEN{4};
+    inline constexpr PieceType KING{5};
+    inline constexpr PieceType NO_PIECE_TYPE{6};
 
-    inline EnumArray<PieceType::PieceValueT, PieceType> piece_type_value{100, 300, 325, 500, 900, 20000};
+    inline constexpr EnumArray<PieceType::PieceValueT, PieceType> piece_type_value{100, 300, 325, 500, 900, 20000};
 
     [[nodiscard]] constexpr PieceType::PieceValueT
     PieceType::piece_value() const {
@@ -942,9 +941,9 @@ namespace chepp {
         }
     };
 
-    constexpr Color WHITE{0};
-    constexpr Color BLACK{1};
-    constexpr Color NO_COLOR{2};
+    inline constexpr Color WHITE{0};
+    inline constexpr Color BLACK{1};
+    inline constexpr Color NO_COLOR{2};
 
     struct Piece : EnumBase<Piece, uint8_t, 12, true, true> {
         using base = EnumBase;
@@ -989,19 +988,19 @@ namespace chepp {
         }
     };
 
-    constexpr Piece W_PAWN{WHITE, PAWN};
-    constexpr Piece W_KNIGHT{WHITE, KNIGHT};
-    constexpr Piece W_BISHOP{WHITE, BISHOP};
-    constexpr Piece W_ROOK{WHITE, ROOK};
-    constexpr Piece W_QUEEN{WHITE, QUEEN};
-    constexpr Piece W_KING{WHITE, KING};
-    constexpr Piece B_PAWN{BLACK, PAWN};
-    constexpr Piece B_KNIGHT{BLACK, KNIGHT};
-    constexpr Piece B_BISHOP{BLACK, BISHOP};
-    constexpr Piece B_ROOK{BLACK, ROOK};
-    constexpr Piece B_QUEEN{BLACK, QUEEN};
-    constexpr Piece B_KING{BLACK, KING};
-    constexpr Piece NO_PIECE{12};
+    inline constexpr Piece W_PAWN{WHITE, PAWN};
+    inline constexpr Piece W_KNIGHT{WHITE, KNIGHT};
+    inline constexpr Piece W_BISHOP{WHITE, BISHOP};
+    inline constexpr Piece W_ROOK{WHITE, ROOK};
+    inline constexpr Piece W_QUEEN{WHITE, QUEEN};
+    inline constexpr Piece W_KING{WHITE, KING};
+    inline constexpr Piece B_PAWN{BLACK, PAWN};
+    inline constexpr Piece B_KNIGHT{BLACK, KNIGHT};
+    inline constexpr Piece B_BISHOP{BLACK, BISHOP};
+    inline constexpr Piece B_ROOK{BLACK, ROOK};
+    inline constexpr Piece B_QUEEN{BLACK, QUEEN};
+    inline constexpr Piece B_KING{BLACK, KING};
+    inline constexpr Piece NO_PIECE{12};
 
     // add a to a square value to get a shift in the associated direction
     // shift a bitboard by the value to get a shift in the associated direction
@@ -1018,11 +1017,11 @@ namespace chepp {
         NO_DIRECTION = 0
     };
 
+    inline constexpr std::array dir_table{
+        SOUTH_WEST, SOUTH, SOUTH_EAST, WEST, NO_DIRECTION, EAST, NORTH_WEST, NORTH, NORTH_EAST};
     constexpr Direction
     direction_from(const Square a, const Square b) {
         assert(a && b);
-        constexpr std::array dir_table{
-            SOUTH_WEST, SOUTH, SOUTH_EAST, WEST, NO_DIRECTION, EAST, NORTH_WEST, NORTH, NORTH_EAST};
 
         const int dr = b.rank().value() - a.rank().value();
         const int df = b.file().value() - a.file().value();
@@ -1086,21 +1085,24 @@ namespace chepp {
             return 1 << m_val;
         }
 
+        static const EnumArray<std::pair<Square, Square>, CastlingType> king_moves;
         [[nodiscard]] constexpr std::pair<Square, Square>
         king_move() const {
             assert(!is_none());
-            constexpr EnumArray<std::pair<Square, Square>, CastlingType> king_moves{
-                std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
             return king_moves.at(*this);
         }
+        static const EnumArray<std::pair<Square, Square>, CastlingType> rook_moves;
         [[nodiscard]] constexpr std::pair<Square, Square>
         rook_move() const {
             assert(!is_none());
-            constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
-                std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
             return rook_moves.at(*this);
         }
     };
+
+    constexpr EnumArray<std::pair<Square, Square>, CastlingType> CastlingType::king_moves{
+        std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
+    constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
+        std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
 
     template <>
     struct EnumTraits<CastlingType> {
@@ -1123,11 +1125,11 @@ namespace chepp {
         }
     };
 
-    constexpr CastlingType WHITE_KINGSIDE{WHITE, KINGSIDE};
-    constexpr CastlingType BLACK_KINGSIDE{BLACK, KINGSIDE};
-    constexpr CastlingType WHITE_QUEENSIDE{WHITE, QUEENSIDE};
-    constexpr CastlingType BLACK_QUEENSIDE{BLACK, QUEENSIDE};
-    constexpr CastlingType NO_CASTLING_TYPE{4};
+    inline constexpr CastlingType WHITE_KINGSIDE{WHITE, KINGSIDE};
+    inline constexpr CastlingType BLACK_KINGSIDE{BLACK, KINGSIDE};
+    inline constexpr CastlingType WHITE_QUEENSIDE{WHITE, QUEENSIDE};
+    inline constexpr CastlingType BLACK_QUEENSIDE{BLACK, QUEENSIDE};
+    inline constexpr CastlingType NO_CASTLING_TYPE{4};
 
     struct Move;
 
@@ -1252,26 +1254,26 @@ namespace chepp {
                               : CastlingRights{};
         }};
 
-    constexpr CastlingRights CASTLING_NONE{0};
+    inline constexpr CastlingRights CASTLING_NONE{0};
 
-    constexpr CastlingRights CASTLING_K{WHITE_KINGSIDE};
-    constexpr CastlingRights CASTLING_Q{WHITE_QUEENSIDE};
-    constexpr CastlingRights CASTLING_k{BLACK_KINGSIDE};
-    constexpr CastlingRights CASTLING_q{BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_K{WHITE_KINGSIDE};
+    inline constexpr CastlingRights CASTLING_Q{WHITE_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_k{BLACK_KINGSIDE};
+    inline constexpr CastlingRights CASTLING_q{BLACK_QUEENSIDE};
 
-    constexpr CastlingRights CASTLING_KQ{WHITE_KINGSIDE, WHITE_QUEENSIDE};
-    constexpr CastlingRights CASTLING_Kk{WHITE_KINGSIDE, BLACK_KINGSIDE};
-    constexpr CastlingRights CASTLING_Kq{WHITE_KINGSIDE, BLACK_QUEENSIDE};
-    constexpr CastlingRights CASTLING_Qk{WHITE_QUEENSIDE, BLACK_KINGSIDE};
-    constexpr CastlingRights CASTLING_Qq{WHITE_QUEENSIDE, BLACK_QUEENSIDE};
-    constexpr CastlingRights CASTLING_kq{BLACK_KINGSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_KQ{WHITE_KINGSIDE, WHITE_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_Kk{WHITE_KINGSIDE, BLACK_KINGSIDE};
+    inline constexpr CastlingRights CASTLING_Kq{WHITE_KINGSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_Qk{WHITE_QUEENSIDE, BLACK_KINGSIDE};
+    inline constexpr CastlingRights CASTLING_Qq{WHITE_QUEENSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_kq{BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
-    constexpr CastlingRights CASTLING_KQk{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE};
-    constexpr CastlingRights CASTLING_KQq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_QUEENSIDE};
-    constexpr CastlingRights CASTLING_Kkq{WHITE_KINGSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
-    constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_KQk{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE};
+    inline constexpr CastlingRights CASTLING_KQq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_Kkq{WHITE_KINGSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
-    constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
+    inline constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
     namespace bit {
         template <std::unsigned_integral T>
@@ -1581,10 +1583,10 @@ namespace chepp {
     }
 
     struct Fen {
-        EnumArray<Piece, Square> pieces;
-        Color                    color;
-        CastlingRights           crs;
-        Square                   ep_square;
+        EnumArray<Piece, Square> pieces{};
+        Color                    color{};
+        CastlingRights           crs{};
+        Square                   ep_square{};
         uint16_t                 halfmove{}, fullmove{};
 
         [[nodiscard]] static std::expected<Fen, std::string>
@@ -1705,13 +1707,13 @@ namespace chepp {
         }
     };
 
-    constexpr int MAX_PLY = 255;
+    inline constexpr int MAX_PLY = 255;
 
-    constexpr int MATE_SCORE    = 32000;
-    constexpr int INF_SCORE     = 32001;
-    constexpr int INVALID_SCORE = 32002;
+    inline constexpr int MATE_SCORE    = 32000;
+    inline constexpr int INF_SCORE     = 32001;
+    inline constexpr int INVALID_SCORE = 32002;
 
-    constexpr int MAX_MOVES = 256;
+    inline constexpr int MAX_MOVES = 256;
 
     enum Score : int {
         WIN_TB           = 10000,
