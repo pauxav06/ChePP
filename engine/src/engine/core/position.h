@@ -166,8 +166,8 @@ namespace chepp {
         is_tactical(Move move) const;
         [[nodiscard]] bool
         is_valid(Move move) const;
-        [[nodiscard]] std::expected<std::monostate, std::string>
-        is_ok_verbose() const;
+        [[nodiscard]] static std::expected<std::monostate, std::string>
+        is_ok_verbose();
         template <bool verbose = false>
         [[nodiscard]] bool
         is_ok() const;
@@ -337,7 +337,7 @@ namespace chepp {
         static_assert(pt == BISHOP || pt == ROOK);
         auto enemies = occupancy(~c, pt, QUEEN) & movegen::pseudo_attack<pt>(ksq(c), ~c);
         for (const Square sq : enemies) {
-            const auto line       = bb::from_to_excl(sq, ksq(c));
+            const auto line       = movegen::from_to_excl(sq, ksq(c));
             const auto on_line    = line & occupancy();
             const auto n_blockers = on_line.popcount();
             if (n_blockers == 0) {
@@ -458,7 +458,7 @@ namespace chepp {
             Bitboard long_range = checkers(c) & occupancy(~c, ROOK, BISHOP, QUEEN);
             while (long_range) {
                 if (const auto sq = Square{long_range.pop_lsb()};
-                    bb::are_aligned(sq, move.from_sq(), move.to_sq()) && move.to_sq() != sq) {
+                    movegen::are_aligned(sq, move.from_sq(), move.to_sq()) && move.to_sq() != sq) {
                     return false;
                 }
             }
@@ -471,7 +471,7 @@ namespace chepp {
             // if the piece is a blocker
             if (Bitboard(move.from_sq()) & blockers(c)) {
                 // and if it is not moving along the line it is pinned to
-                if (!(Bitboard(move.to_sq()) & bb::line(move.from_sq(), ksq(c)))) {
+                if (!(Bitboard(move.to_sq()) & movegen::line(move.from_sq(), ksq(c)))) {
                     // we are breaking the pin, move is illegal
                     return false;
                 }
@@ -480,7 +480,7 @@ namespace chepp {
             // en passant can create discovered checks so we check for any long range attack
             // we know they have not moved. therefore we only need to update global occupancy to cast rays
             // we check if rays intersect with any long range and if they do that means a there is a check
-            if (const Bitboard ep_occupancy = (occupancy() & ~from_bb | to_bb) & ~bb::shift<down>(to_bb);
+            if (const Bitboard ep_occupancy = (occupancy() & ~from_bb | to_bb) & ~movegen::shift<down>(to_bb);
                 occupancy(~c, BISHOP, QUEEN) & movegen::attacks(BISHOP, ksq(c), ep_occupancy) ||
                 occupancy(~c, ROOK, QUEEN) & movegen::attacks(ROOK, ksq(c), ep_occupancy))
                 return false;
@@ -804,8 +804,8 @@ namespace chepp {
 
         // straight
         {
-            Bitboard single_push = bb::shift<up>(pawns & ~bb_promotion_rank) & available;
-            Bitboard double_push = bb::shift<up>(single_push & bb_third_rank) & available & check_mask;
+            Bitboard single_push = movegen::shift<up>(pawns & ~bb_promotion_rank) & available;
+            Bitboard double_push = movegen::shift<up>(single_push & bb_third_rank) & available & check_mask;
             single_push &= check_mask;
 
             add_moves_from_bb<NORMAL>(list, single_push, up);
@@ -813,9 +813,9 @@ namespace chepp {
         }
         // promotion
         if (const Bitboard promotions = pawns & bb_promotion_rank) {
-            Bitboard push       = bb::shift<up>(promotions) & available & check_mask;
-            Bitboard take_right = bb::shift<up_right>(promotions) & enemy & check_mask;
-            Bitboard take_left  = bb::shift<up_left>(promotions) & enemy & check_mask;
+            Bitboard push       = movegen::shift<up>(promotions) & available & check_mask;
+            Bitboard take_right = movegen::shift<up_right>(promotions) & enemy & check_mask;
+            Bitboard take_left  = movegen::shift<up_left>(promotions) & enemy & check_mask;
 
             add_promotions(list, push, up);
             add_promotions(list, take_right, up_right);
@@ -832,10 +832,10 @@ namespace chepp {
                         list.push_back(Move::make<NORMAL>(to - delta, to));
                 }
             };
-            const Bitboard ep_capture_mask   = (check_mask & bb::shift<down>(ep_bb)) ? ep_bb : bb::empty();
+            const Bitboard ep_capture_mask   = (check_mask & movegen::shift<down>(ep_bb)) ? ep_bb : bb::empty();
             const Bitboard possible_captures = (enemy | ep_bb) & (check_mask | ep_capture_mask);
-            handle_capture(bb::shift<up_right>(pawns & ~bb_promotion_rank) & possible_captures, up_right);
-            handle_capture(bb::shift<up_left>(pawns & ~bb_promotion_rank) & possible_captures, up_left);
+            handle_capture(movegen::shift<up_right>(pawns & ~bb_promotion_rank) & possible_captures, up_right);
+            handle_capture(movegen::shift<up_left>(pawns & ~bb_promotion_rank) & possible_captures, up_left);
         }
     }
 
@@ -871,7 +871,7 @@ namespace chepp {
                 auto [k_from, k_to] = type.king_move();
                 auto [r_from, r_to] = type.rook_move();
                 assert(pos.piece_at(k_from) == Piece(c, KING));
-                bool            safe = (bb::from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
+                bool            safe = (movegen ::from_to_excl(k_from, r_from) & pos.occupancy()) == bb::empty();
                 const Direction dir  = direction_from(k_from, k_to);
                 assert(dir != NO_DIRECTION);
                 for (auto sq = k_from + dir; sq != k_to && safe; sq = sq + dir) {
@@ -956,7 +956,7 @@ namespace chepp {
     }
 
     inline std::expected<std::monostate, std::string>
-    Position::is_ok_verbose() const {
+    Position::is_ok_verbose() {
         /**
         auto err = [](std::string msg) -> std::expected<std::monostate, std::string> {
             return std::unexpected(std::move(msg));
