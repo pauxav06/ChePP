@@ -15,32 +15,49 @@ endif()
 
 enable_testing()
 
-set (TEST_SOURCES
-        perft_tests.cpp
-        repetitions_test.cpp
-        zobrist_tests.cpp
-        types_test.cpp
-        affine_test.cpp
-        accum_test.cpp
-        relu_test.cpp
-        #network_test.cpp
+set (CORE_SOURCES
+    perft_tests.cpp
+    repetitions_test.cpp
+    zobrist_tests.cpp
+    types_test.cpp
 )
 
-add_executable(ChePP_tests ${TEST_SOURCES})
+set(HWY_TEST_STANDALONE OFF)
+if(HWY_TEST_STANDALONE)
+    set(HWY_GTEST_LIBS "")
+else()
+    if(HWY_SYSTEM_GTEST)
+        if (CMAKE_VERSION VERSION_LESS 3.20)
+            set(HWY_GTEST_LIBS GTest::GTest GTest::Main)
+        else()
+            set(HWY_GTEST_LIBS GTest::gtest GTest::gtest_main)
+        endif()
+    else()
+        set(HWY_GTEST_LIBS gtest gtest_main)
+    endif()
+endif()
 
-target_include_directories(ChePP_tests PRIVATE
-        ${CMAKE_SOURCE_DIR}/engine/include
-        ${CMAKE_SOURCE_DIR}/engine/gtests
-)
+set (NNUE_SOURCES relu_test.cpp)
 
-target_link_libraries(ChePP_tests PRIVATE
-        hwy_test
+
+add_executable(ChePP_core_tests ${CORE_SOURCES})
+add_executable(ChePP_nnue_tests ${NNUE_SOURCES})
+
+target_compile_options(ChePP_nnue_tests PRIVATE -DHWY_IS_TEST=1)
+if(HWY_TEST_STANDALONE)
+    target_compile_options(ChePP_nnue_tests PRIVATE -DHWY_TEST_STANDALONE=1)
+endif()
+
+target_link_libraries(ChePP_core_tests PRIVATE
+        GTest::gtest
         GTest::gtest_main
         ChePP_core
-        ChePP_nnue
-        ChePP_engine
 )
 
+
+target_link_libraries(ChePP_nnue_tests PRIVATE hwy hwy_test ${HWY_TEST_LIBS} GTest::gtest GTest::gtest_main ChePP_nnue ChePP_core)
+target_include_directories(ChePP_nnue_tests PRIVATE .)
+
 include(GoogleTest)
-gtest_discover_tests(ChePP_tests PROPERTIES TEST_DISCOVERY_TIMEOUT 600)
-#gtest_discover_tests(ChePP_tests)
+gtest_discover_tests(ChePP_core_tests)
+gtest_discover_tests(ChePP_nnue_tests)

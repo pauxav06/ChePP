@@ -5,10 +5,9 @@
 #define HWY_TARGET_INCLUDE "relu_test.cpp"
 #include "hwy/foreach_target.h"
 
-#include "hwy/highway.h"
-#include "hwy/tests/hwy_gtest.h"
-#include "hwy/tests/test_util-inl.h"
 #include "relu-inl.h"
+#include <hwy/highway.h>
+#include <hwy/tests/test_util-inl.h>
 
 HWY_BEFORE_NAMESPACE();
 
@@ -109,6 +108,5 @@ namespace chepp::nnue::layers {
         HWY_AFTER_TEST();
     } // namespace
 } // namespace chepp::nnue::layers
-HWY_TEST_MAIN();
 // HWY_TEST_MAIN();
 #endif // HWY_ONCE
