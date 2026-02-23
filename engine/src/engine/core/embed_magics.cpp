@@ -1,51 +1,89 @@
+#include <cstring>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <memory>
+#include <vector>
 
 #include "bitboard.h"
 #include <argparse/argparse.hpp>
+#include <nlohmann/json.hpp>
 
 using namespace chepp;
 namespace fs = std::filesystem;
+using json   = nlohmann::json;
 
 int
 main(int argc, char** argv) {
-    argparse::ArgumentParser program("bin2cpp");
-    program.add_argument("--header").required().help("Output header name");
-    program.add_argument("--cpp").required().help("Output cpp name");
+    argparse::ArgumentParser program("embed_bitboards");
+    program.add_argument("--bin-dir").required().help("Directory to output binary files");
+    program.add_argument("--json").required().help("Path to JSON output file");
     program.parse_args(argc, argv);
 
-    fs::path out_h   = program.get<std::string>("--header");
-    fs::path out_cpp = program.get<std::string>("--cpp");
+    fs::path bin_dir   = program.get<std::string>("--bin-dir");
+    fs::path json_path = program.get<std::string>("--json");
 
-    std::ofstream header_file(out_h, std::ofstream::binary | std::ofstream::trunc);
-    header_file << "#pragma once\n";
-    std::ofstream cpp_file(out_cpp, std::ofstream::binary | std::ofstream::trunc);
+    fs::create_directories(bin_dir);
 
-    if (!header_file || !cpp_file) throw std::runtime_error("Failed to open output files");
+    json manifest{};
 
     try {
-        auto b = std::make_unique<movegen::detail::Magics<BISHOP>>();
-        b->init();
-        header_file << b->write_declaration("BISHOP") << "\n";
-        cpp_file << b->write_cpp(out_h.string(), "BISHOP") << "\n";
 
-        auto r = std::make_unique<movegen::detail::Magics<ROOK>>();
-        r->init();
-        header_file << r->write_declaration("ROOK") << "\n";
-        cpp_file << r->write_cpp(out_h.string(), "ROOK") << "\n";
+        {
+            fs::path bishop_file = bin_dir / "bishop.bin";
+            auto     b           = std::make_unique<movegen::detail::Magics<BISHOP>>();
+            b->init();
+            std::ofstream     out(bishop_file, std::ios::binary | std::ios::trunc);
+            std::vector<char> data(sizeof(*b));
+            std::memcpy(data.data(), b.get(), sizeof(*b));
+            out.write(data.data(), data.size());
+            manifest["bishop"] = bishop_file.string();
+        }
+
+        {
+            fs::path rook_file = bin_dir / "rook.bin";
+            auto     r         = std::make_unique<movegen::detail::Magics<ROOK>>();
+            r->init();
+            std::ofstream     out(rook_file, std::ios::binary | std::ios::trunc);
+            std::vector<char> data(sizeof(*r));
+            std::memcpy(data.data(), r.get(), sizeof(*r));
+            out.write(data.data(), data.size());
+            manifest["rook"] = rook_file.string();
+        }
+
+        auto     l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_lines);
+        fs::path lines_file = bin_dir / "lines.bin";
+        {
+            std::ofstream     out(lines_file, std::ios::binary | std::ios::trunc);
+            std::vector<char> data(sizeof(*l));
+            std::memcpy(data.data(), l.get(), sizeof(*l));
+            out.write(data.data(), data.size());
+        }
+        manifest["lines"] = lines_file.string();
+
+        auto     f = std::make_unique<movegen::detail::from_to_type>(std::in_place, movegen::detail::compute_from_to);
+        fs::path from_to_file = bin_dir / "from_to.bin";
+        {
+            std::ofstream     out(from_to_file, std::ios::binary | std::ios::trunc);
+            std::vector<char> data(sizeof(*f));
+            std::memcpy(data.data(), f.get(), sizeof(*f));
+            out.write(data.data(), data.size());
+        }
+        manifest["from_to"] = from_to_file.string();
+
+        {
+            std::ofstream json_out(json_path);
+            json_out << manifest.dump(4);
+        }
+
+        std::cout << "All files written successfully to " << bin_dir << "\n";
+        std::cout << "Manifest JSON: " << json_path << "\n";
+
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";
-        header_file.close();
-        cpp_file.close();
-        std::filesystem::remove(out_h);
-        std::filesystem::remove(out_cpp);
+        fs::remove_all(bin_dir);
         return 1;
     }
-
-    std::cout << "Files generated successfully:\n"
-              << "  Header: " << out_h << "\n"
-              << "  CPP: " << out_cpp << "\n";
 
     return 0;
 }

@@ -27,26 +27,38 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(hedley)
 
-set(MAGICS_HEADER ${CMAKE_CURRENT_SOURCE_DIR}/magics.h)
-set(MAGICS_SOURCE ${CMAKE_CURRENT_SOURCE_DIR}/magics.cpp)
+set(TEMP_DIR ${CMAKE_CURRENT_SOURCE_DIR}/tmp)
+set(JSON_NAME ${TEMP_DIR}/manifest.json)
 
-add_executable(magic_embedder embed_magics.cpp)
-target_link_libraries(magic_embedder PRIVATE argparse)
-target_include_directories(magic_embedder PRIVATE ${hedley_SOURCE_DIR})
+add_executable(embed_bytes embed_magics.cpp)
+target_link_libraries(embed_bytes PRIVATE argparse nlohmann_json::nlohmann_json)
+target_include_directories(embed_bytes PRIVATE ${hedley_SOURCE_DIR})
 
 add_custom_command(
-        OUTPUT ${MAGICS_HEADER} ${MAGICS_SOURCE}
-        COMMAND $<TARGET_FILE:magic_embedder>
-        --header ${MAGICS_HEADER}
-        --cpp ${MAGICS_SOURCE}
-        DEPENDS embed_magics.cpp magic_embedder
-        COMMENT "Generating embedded magics"
+        OUTPUT ${JSON_NAME}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${TEMP_DIR}
+        COMMAND $<TARGET_FILE:embed_bytes> --bin-dir ${TEMP_DIR} --json ${JSON_NAME}
+        DEPENDS embed_bytes
+        COMMENT "Embedding bitboards..."
 )
 
-add_custom_target(embed_magics ALL DEPENDS ${MAGICS_HEADER} ${MAGICS_SOURCE})
+set(GENERATED_DIR ${CMAKE_CURRENT_SOURCE_DIR}/generated)
+set(EMBED_DONE ${GENERATED_DIR}/.done)
 
-add_library(ChePP_core STATIC core.cpp ${fathom_SOURCE_DIR}/src/tbprobe.c ${MAGICS_SOURCE})
-add_dependencies(ChePP_core embed_magics)
+add_custom_command(
+        OUTPUT ${EMBED_DONE}
+        COMMAND ${CMAKE_COMMAND} -E make_directory ${GENERATED_DIR}
+        COMMAND $<TARGET_FILE:bin2cpp> ${JSON_NAME} ${GENERATED_DIR}
+        COMMAND ${CMAKE_COMMAND} -E touch ${EMBED_DONE}
+        DEPENDS bin2cpp ${JSON_NAME}
+        COMMENT "Generating bitboard headers..."
+)
+
+add_custom_target(embed ALL DEPENDS ${EMBED_DONE})
+
+add_library(ChePP_core STATIC core.cpp ${fathom_SOURCE_DIR}/src/tbprobe.c)
+target_include_directories(ChePP_core PRIVATE ${GENERATED_DIR})
+add_dependencies(ChePP_core embed)
 
 target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1)
 

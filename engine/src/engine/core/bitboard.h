@@ -7,12 +7,12 @@
 #include <array>
 #include <cassert>
 #include <cstdlib>
+#include <functional>
 #include <hedley.h>
 #include <mutex>
 #include <random>
 #include <ranges>
 #include <string>
-#include <unordered_map>
 
 #define CHEPP_PEXT 0
 
@@ -74,7 +74,6 @@ namespace chepp {
             return m_;
         }
 
-        // bitwise ops
         [[nodiscard]] constexpr Bitboard
         operator~() const noexcept {
             return Bitboard{~m_};
@@ -117,7 +116,6 @@ namespace chepp {
             return Bitboard{m_ >> s};
         }
 
-        // tests
         [[nodiscard]] constexpr bool
         operator==(const Bitboard o) const noexcept {
             return m_ == o.m_;
@@ -130,7 +128,6 @@ namespace chepp {
             return m_ != 0;
         }
 
-        // single bit ops
         [[nodiscard]] constexpr bool
         is_set(const int bit) const noexcept {
             return (m_ >> bit) & 1ULL;
@@ -285,102 +282,9 @@ namespace chepp {
             return os;
         }
 
-        static const EnumArray<Bitboard, Square, Square> LINES;
-        static constexpr Bitboard
-        line(const Square sq1, const Square sq2) {
-            return LINES[sq1][sq2];
-        }
-        static constexpr bool
-        are_aligned(const Square sq1, const Square sq2, const Square sq3) {
-            return line(sq1, sq2) == line(sq2, sq3);
-        }
-        static const EnumArray<Bitboard, Square, Square> FROM_TO;
-        static constexpr Bitboard
-        from_to_incl(const Square sq1, const Square sq2) {
-            return FROM_TO[sq1][sq2];
-        }
-        static constexpr Bitboard
-        from_to_excl(const Square sq1, const Square sq2) {
-            return from_to_incl(sq1, sq2).unset(sq1).unset(sq2);
-        }
-
-        template <Direction dir>
-            requires(dir != NO_DIRECTION)
-        static constexpr Bitboard
-        direction_mask() {
-            if constexpr (dir == EAST || dir == NORTH_EAST || dir == SOUTH_EAST) {
-                return ~Bitboard(FILE_H);
-            } else if constexpr (dir == WEST || dir == NORTH_WEST || dir == SOUTH_WEST) {
-                return ~Bitboard(FILE_A);
-            } else {
-                return full();
-            }
-        }
-
-        template <Direction... Dirs>
-        static constexpr Bitboard
-        shift(Bitboard b) {
-            if constexpr (sizeof...(Dirs) == 0) {
-                return b;
-            } else if constexpr (sizeof...(Dirs) == 1) {
-                constexpr Direction dir  = std::get<0>(std::tuple{Dirs...});
-                constexpr Bitboard  mask = direction_mask<dir>();
-                return dir > 0 ? (b & mask) << dir : (b & mask) >> -dir;
-            }
-            ((b = shift<Dirs>(b)), ...);
-            return b;
-        }
-
-        template <Direction... Dirs>
-        static constexpr Bitboard
-        ray(const Square sq, const Bitboard blockers = empty()) {
-            if constexpr (sizeof...(Dirs) == 1) {
-                constexpr Direction Dir     = std::get<0>(std::tuple{Dirs...});
-                Bitboard            attacks = empty();
-                Bitboard            bb      = shift<Dir>(Bitboard(sq));
-                while (bb) {
-                    attacks |= bb;
-                    if ((bb & blockers) != empty()) break;
-                    bb = shift<Dir>(bb);
-                }
-                return attacks;
-            }
-            return (ray<Dirs>(sq, blockers) | ...);
-        }
-
-        static constexpr Bitboard
-        orthogonal_rays(const Square sq, const Bitboard blockers = empty()) {
-            return ray<NORTH, EAST, SOUTH, WEST>(sq, blockers);
-        }
-
-        static constexpr Bitboard
-        diagonal_rays(const Square sq, const Bitboard blockers = empty()) {
-            return ray<NORTH_EAST, SOUTH_EAST, NORTH_WEST, SOUTH_WEST>(sq, blockers);
-        }
-
       private:
         U64 m_{0};
     };
-
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
-        std::in_place, [](const Square sq1, const Square sq2) {
-            if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
-            if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
-            if (sq1.file().value() - sq1.rank().value() == sq2.file().value() - sq2.rank().value() ||
-                sq1.file().value() + sq1.rank().value() == sq2.file().value() + sq2.rank().value()) {
-                return (diagonal_rays(sq1) & diagonal_rays(sq2)).set(sq1).set(sq2);
-            }
-            return empty();
-        }};
-
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
-        std::in_place, [](const Square to, const Square from) {
-            return orthogonal_rays(from).is_set(to)
-                       ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)
-                   : diagonal_rays(from).is_set(to)
-                       ? (diagonal_rays(from, Bitboard(to)) & diagonal_rays(to, Bitboard(from))).set(from).set(to)
-                       : empty();
-        }};
 
     using bb = Bitboard;
 } // namespace chepp
@@ -395,62 +299,76 @@ struct std::hash<chepp::Bitboard> {
 
 namespace chepp::movegen {
     namespace detail {
-        inline constexpr EnumArray<Bitboard, Color, Square> PAWN_PSEUDO_ATTACKS{
-            std::in_place, [](const Color c, const Square sq) {
-                const Bitboard bb{sq};
-                return c == WHITE ? bb::shift<NORTH_WEST>(bb) | bb::shift<NORTH_EAST>(bb)
-                                  : bb::shift<SOUTH_WEST>(bb) | bb::shift<SOUTH_EAST>(bb);
-            }};
-        inline constexpr EnumArray<Bitboard, PieceType, Square> PIECE_PSEUDO_ATTACKS{
-            std::in_place, [](const PieceType pt, const Square sq) {
-                const Bitboard bb{sq};
-                if (pt == KNIGHT) {
-                    return bb::shift<NORTH, NORTH, EAST>(bb) | bb::shift<NORTH, NORTH, WEST>(bb) |
-                           bb::shift<SOUTH, SOUTH, EAST>(bb) | bb::shift<SOUTH, SOUTH, WEST>(bb) |
-                           bb::shift<EAST, EAST, NORTH>(bb) | bb::shift<EAST, EAST, SOUTH>(bb) |
-                           bb::shift<WEST, WEST, NORTH>(bb) | bb::shift<WEST, WEST, SOUTH>(bb);
-                } else if (pt == BISHOP) {
-                    return bb::diagonal_rays(sq);
-                } else if (pt == ROOK) {
-                    return bb::orthogonal_rays(sq);
-                } else if (pt == QUEEN) {
-                    return bb::diagonal_rays(sq) | bb::orthogonal_rays(sq);
-                } else if (pt == KING) {
-                    return bb::shift<NORTH>(bb) | bb::shift<SOUTH>(bb) | bb::shift<EAST>(bb) | bb::shift<WEST>(bb) |
-                           bb::shift<NORTH, EAST>(bb) | bb::shift<NORTH, WEST>(bb) | bb::shift<SOUTH, EAST>(bb) |
-                           bb::shift<SOUTH, WEST>(bb);
+        template <Direction dir>
+            requires(dir != NO_DIRECTION)
+        static constexpr Bitboard
+        direction_mask() {
+            if constexpr (dir == EAST || dir == NORTH_EAST || dir == SOUTH_EAST) {
+                return ~Bitboard(FILE_H);
+            } else if constexpr (dir == WEST || dir == NORTH_WEST || dir == SOUTH_WEST) {
+                return ~Bitboard(FILE_A);
+            } else {
+                return bb::full();
+            }
+        }
+    } // namespace detail
+
+    template <Direction... Dirs>
+    static constexpr Bitboard
+    shift(Bitboard b) {
+        if constexpr (sizeof...(Dirs) == 0) {
+            return b;
+        } else if constexpr (sizeof...(Dirs) == 1) {
+            constexpr Direction dir  = std::get<0>(std::tuple{Dirs...});
+            constexpr Bitboard  mask = detail::direction_mask<dir>();
+            return dir > 0 ? (b & mask) << dir : (b & mask) >> -dir;
+        }
+        ((b = shift<Dirs>(b)), ...);
+        return b;
+    }
+
+    namespace detail {
+        template <Direction... Dirs>
+        static constexpr Bitboard
+        ray(const Square sq, const Bitboard blockers = bb::empty()) {
+            if constexpr (sizeof...(Dirs) == 1) {
+                constexpr Direction Dir     = std::get<0>(std::tuple{Dirs...});
+                Bitboard            attacks = bb::empty();
+                Bitboard            bb      = shift<Dir>(Bitboard(sq));
+                while (bb) {
+                    attacks |= bb;
+                    if ((bb & blockers) != bb::empty()) break;
+                    bb = shift<Dir>(bb);
                 }
-                return bb::empty();
-            }};
+                return attacks;
+            }
+            return (ray<Dirs>(sq, blockers) | ...);
+        }
+
+        constexpr Bitboard
+        orthogonal_rays(const Square sq, const Bitboard blockers = Bitboard::empty()) {
+            return ray<NORTH, EAST, SOUTH, WEST>(sq, blockers);
+        }
+
+        constexpr Bitboard
+        diagonal_rays(const Square sq, const Bitboard blockers = Bitboard::empty()) {
+            return ray<NORTH_EAST, SOUTH_EAST, NORTH_WEST, SOUTH_WEST>(sq, blockers);
+        }
 
         template <PieceType pc>
         constexpr Bitboard
         ray(const Square sq, const Bitboard blockers = bb::empty()) {
             static_assert(pc == BISHOP || pc == ROOK || pc == QUEEN);
             if constexpr (pc == BISHOP)
-                return bb::diagonal_rays(sq, blockers);
+                return diagonal_rays(sq, blockers);
             else if constexpr (pc == ROOK)
-                return bb::orthogonal_rays(sq, blockers);
+                return orthogonal_rays(sq, blockers);
             else if constexpr (pc == QUEEN)
                 return ray<BISHOP>(sq, blockers) | ray<ROOK>(sq, blockers);
             else
                 return bb::empty();
         }
 
-    } // namespace detail
-
-    template <PieceType pc>
-    constexpr Bitboard
-    pseudo_attack(const Square sq, const Color c) {
-        static_assert(pc != NO_PIECE_TYPE, "Invalid piece type");
-        if constexpr (pc == PAWN)
-            return detail::PAWN_PSEUDO_ATTACKS[c][sq];
-        else if constexpr (pc == KNIGHT || pc == BISHOP || pc == ROOK || pc == QUEEN || pc == KING)
-            return detail::PIECE_PSEUDO_ATTACKS[pc][sq];
-        return bb::empty();
-    }
-
-    namespace detail {
         template <PieceType pc>
         constexpr Bitboard
         relevancy_mask(const Square sq) {
@@ -462,6 +380,56 @@ namespace chepp::movegen {
             }
             return ray<pc>(sq) & mask;
         }
+
+        using lines_type = EnumArray<Bitboard, Square, Square>;
+        constexpr Bitboard
+        compute_lines(const Square sq1, const Square sq2) {
+            if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
+            if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
+            if (sq1.file().value() - sq1.rank().value() == sq2.file().value() - sq2.rank().value() ||
+                sq1.file().value() + sq1.rank().value() == sq2.file().value() + sq2.rank().value()) {
+                return (diagonal_rays(sq1) & diagonal_rays(sq2)).set(sq1).set(sq2);
+            }
+            return bb::empty();
+        }
+
+        using from_to_type = EnumArray<Bitboard, Square, Square>;
+        static constexpr Bitboard
+        compute_from_to(const Square from, const Square to) {
+            return orthogonal_rays(from).is_set(to)
+                       ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)
+                   : diagonal_rays(from).is_set(to)
+                       ? (diagonal_rays(from, Bitboard(to)) & diagonal_rays(to, Bitboard(from))).set(from).set(to)
+                       : bb::empty();
+        }
+
+        inline constexpr EnumArray<Bitboard, Color, Square> PAWN_PSEUDO_ATTACKS{
+            std::in_place, [](const Color c, const Square sq) {
+                const Bitboard bb{sq};
+                return c == WHITE ? shift<NORTH_WEST>(bb) | shift<NORTH_EAST>(bb)
+                                  : shift<SOUTH_WEST>(bb) | shift<SOUTH_EAST>(bb);
+            }};
+        inline constexpr EnumArray<Bitboard, PieceType, Square> PIECE_PSEUDO_ATTACKS{
+            std::in_place, [](const PieceType pt, const Square sq) {
+                const Bitboard bb{sq};
+                if (pt == KNIGHT) {
+                    return shift<NORTH, NORTH, EAST>(bb) | shift<NORTH, NORTH, WEST>(bb) |
+                           shift<SOUTH, SOUTH, EAST>(bb) | shift<SOUTH, SOUTH, WEST>(bb) |
+                           shift<EAST, EAST, NORTH>(bb) | shift<EAST, EAST, SOUTH>(bb) | shift<WEST, WEST, NORTH>(bb) |
+                           shift<WEST, WEST, SOUTH>(bb);
+                } else if (pt == BISHOP) {
+                    return diagonal_rays(sq);
+                } else if (pt == ROOK) {
+                    return orthogonal_rays(sq);
+                } else if (pt == QUEEN) {
+                    return diagonal_rays(sq) | orthogonal_rays(sq);
+                } else if (pt == KING) {
+                    return shift<NORTH>(bb) | shift<SOUTH>(bb) | shift<EAST>(bb) | shift<WEST>(bb) |
+                           shift<NORTH, EAST>(bb) | shift<NORTH, WEST>(bb) | shift<SOUTH, EAST>(bb) |
+                           shift<SOUTH, WEST>(bb);
+                }
+                return bb::empty();
+            }};
 
         template <PieceType pc>
         constexpr std::size_t
@@ -514,70 +482,6 @@ namespace chepp::movegen {
                 }
             }
 
-            static auto
-            write_declaration(const std::string& name) {
-                std::ostringstream res;
-                res << "#include <array>\n"
-                    << "#include <cstdint>\n"
-                    << "#include \"bitboard.h\"\n";
-                res << "namespace chepp::movegen::detail {\n";
-                res << "extern const Magics<" << name << "> G_MAGIC_" << name << ";\n";
-                res << "}\n";
-
-                return res.str();
-            }
-
-            auto
-            write_cpp(const std::string& header_path, const std::string& name) const {
-                std::ostringstream cpp;
-                cpp << "#include \"" << header_path << "\"\n";
-                cpp << "namespace chepp::movegen::detail {\n";
-                cpp << "constexpr Magics<" << name << "> G_MAGIC_" << name << "{";
-                cpp << "EnumArray<" << Indexer::type() << ", Square>{";
-
-                for (const auto sq : Square::all()) {
-                    const auto& indexer = m_indexers.at(sq);
-                    cpp << indexer.write() << utils::type_suffix_v<index_type>;
-                    if (sq != H8) {
-                        cpp << ", ";
-                    }
-                    if (sq.value() % 16 == 0) {
-                        cpp << "\n";
-                    }
-                }
-                cpp << "},\n";
-
-                cpp << "EnumArray<" << chepp::utils::type_name_v<index_type> << ", Square>{";
-                for (std::size_t i = 0; i < m_offsets.size(); ++i) {
-                    cpp << m_offsets.at(Square{i}) << utils::type_suffix_v<index_type>;
-                    if (i != m_offsets.size() - 1) {
-                        cpp << ", ";
-                    }
-                    if (i % 16 == 0) {
-                        cpp << "\n";
-                    }
-                }
-                cpp << "},\n";
-
-                cpp << "std::array<" << chepp::utils::type_name_v<typename Bitboard::U64> << ", " << m_attacks.size()
-                    << ">{";
-                for (std::size_t i = 0; i < m_attacks.size(); ++i) {
-                    cpp << m_attacks.at(i) << utils::type_suffix_v<mask_type>;
-                    if (i != m_attacks.size() - 1) {
-                        cpp << ", ";
-                    }
-                    if (i % 16 == 0) {
-                        cpp << "\n";
-                    }
-                }
-                cpp << "}\n";
-                cpp << "};\n";
-
-                cpp << "}\n";
-
-                return cpp.str();
-            }
-
             [[nodiscard]] HEDLEY_ALWAYS_INLINE Bitboard
             attack(Square sq, Bitboard occupancy) const {
                 return Bitboard{m_attacks[m_offsets[sq] + m_indexers[sq].index(occupancy.value())]};
@@ -602,14 +506,6 @@ namespace chepp::movegen {
             [[nodiscard]] constexpr HEDLEY_ALWAYS_INLINE index_type
             index(const mask_type blockers) const {
                 return static_cast<index_type>(((blockers & m_mask) * m_magic) >> m_shift);
-            }
-
-            [[nodiscard]] std::string
-            write() const {
-                std::ostringstream os;
-                os << "ShiftIndexer{" << m_mask << utils::type_suffix_v<mask_type> << ", " << m_shift
-                   << utils::type_suffix_v<shift_type> << ", " << m_magic << utils::type_suffix_v<magic_type> << "}";
-                return os.str();
             }
 
             [[nodiscard]] static std::string
@@ -658,17 +554,16 @@ namespace chepp::movegen {
 
             mask_type m_mask;
 
-            [[nodiscard]] std::string
-            write() const {
-                std::ostringstream os;
-                os << "PEXTIndexer{" << m_mask << utils::type_suffix_v<mask_type> << "}";
-                return os.str();
+            static void
+            parse(std::istream& is, PEXTIndexer& res) {
+                utils::read<mask_type>(is, res.m_mask);
             }
 
-            [[nodiscard]] static std::string
-            type() {
-                return "PEXTIndexer";
+            static void
+            serialize(std::ostream& os, const PEXTIndexer& val) {
+                utils::write<mask_type>(os, val.m_mask);
             }
+
             static constexpr PEXTIndexer
             make(const mask_type mask, const std::vector<mask_type>&) {
                 return PEXTIndexer(mask);

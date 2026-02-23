@@ -7,7 +7,10 @@
 #include <string_view>
 #include <type_traits>
 
+#include <functional>
 #include <hedley.h>
+
+using namespace std::placeholders;
 
 namespace chepp::utils {
     template <typename T>
@@ -174,6 +177,28 @@ namespace chepp::utils {
             (f(std::integral_constant<std::size_t, Begin + IS * Step>{}), ...);
         }(std::make_integer_sequence<std::size_t, (End - Begin) / Step>{});
     }
+
+    template <typename T>
+    auto
+    write(std::ostream& os, const T& val) {
+        if (std::endian::native != std::endian::little) {
+            auto rev = std::byteswap(val);
+            os.write((char*)&rev, sizeof(T));
+        } else {
+            os.write((char*)&val, sizeof(T));
+        }
+    };
+
+    template <typename T>
+    auto
+    read(std::istream& is, T& res) {
+        if (std::endian::native != std::endian::little) {
+            is.read((char*)&res, sizeof(T));
+            res = std::byteswap(res);
+        } else {
+            is.read((char*)&res, sizeof(T));
+        }
+    };
 
 } // namespace chepp::utils
 
