@@ -362,8 +362,8 @@ namespace chepp {
         U64 m_{0};
     };
 
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
-        EnumArray<Bitboard, Square, Square>::make([](const Square sq1, const Square sq2) {
+    inline const EnumArray<Bitboard, Square, Square> Bitboard::LINES{
+        std::in_place, [](const Square sq1, const Square sq2) {
             if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
             if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
             if (sq1.file().value() - sq1.rank().value() == sq2.file().value() - sq2.rank().value() ||
@@ -371,16 +371,16 @@ namespace chepp {
                 return (diagonal_rays(sq1) & diagonal_rays(sq2)).set(sq1).set(sq2);
             }
             return empty();
-        })};
+        }};
 
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
-        EnumArray<Bitboard, Square, Square>::make([](const Square to, const Square from) {
+    inline const EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
+        std::in_place, [](const Square to, const Square from) {
             return orthogonal_rays(from).is_set(to)
                        ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)
                    : diagonal_rays(from).is_set(to)
                        ? (diagonal_rays(from, Bitboard(to)) & diagonal_rays(to, Bitboard(from))).set(from).set(to)
                        : empty();
-        })};
+        }};
 
     using bb = Bitboard;
 } // namespace chepp
@@ -395,14 +395,14 @@ struct std::hash<chepp::Bitboard> {
 
 namespace chepp::movegen {
     namespace detail {
-        inline constinit EnumArray PAWN_PSEUDO_ATTACKS{
-            EnumArray<Bitboard, Color, Square>::make([](const Color c, const Square sq) {
+        inline constexpr EnumArray<Bitboard, Color, Square> PAWN_PSEUDO_ATTACKS{
+            std::in_place, [](const Color c, const Square sq) {
                 const Bitboard bb{sq};
                 return c == WHITE ? bb::shift<NORTH_WEST>(bb) | bb::shift<NORTH_EAST>(bb)
                                   : bb::shift<SOUTH_WEST>(bb) | bb::shift<SOUTH_EAST>(bb);
-            })};
-        inline constinit EnumArray PIECE_PSEUDO_ATTACKS{
-            EnumArray<Bitboard, PieceType, Square>::make([](const PieceType pt, const Square sq) {
+            }};
+        inline constexpr EnumArray<Bitboard, PieceType, Square> PIECE_PSEUDO_ATTACKS{
+            std::in_place, [](const PieceType pt, const Square sq) {
                 const Bitboard bb{sq};
                 if (pt == KNIGHT) {
                     return bb::shift<NORTH, NORTH, EAST>(bb) | bb::shift<NORTH, NORTH, WEST>(bb) |
@@ -421,7 +421,7 @@ namespace chepp::movegen {
                            bb::shift<SOUTH, WEST>(bb);
                 }
                 return bb::empty();
-            })};
+            }};
 
         template <PieceType pc>
         constexpr Bitboard
