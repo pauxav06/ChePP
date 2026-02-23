@@ -518,7 +518,7 @@ namespace chepp {
         static constexpr std::array<std::size_t, dims> dim_sizes = {static_cast<std::size_t>(FirstEnum::count()),
                                                                     static_cast<std::size_t>(RestEnums::count())...};
 
-        static constexpr std::array<std::size_t, dims> strides = [] {
+        inline static constexpr std::array<std::size_t, dims> strides = [] {
             std::array<std::size_t, dims> s{};
             std::size_t                   acc = 1;
             for (std::size_t i = dims; i-- > 0;) {
@@ -1241,9 +1241,8 @@ namespace chepp {
         MaskT m_mask;
     };
 
-    inline constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table = [] {
-        EnumArray<CastlingRights, Square> t{};
-        t.fill_pred([](const Square sq) {
+    inline constexpr EnumArray<CastlingRights, Square> CastlingRights::lost_table{
+        std::in_place, [](const Square sq) {
             return sq == E1   ? CastlingRights{WHITE_KINGSIDE, WHITE_QUEENSIDE}
                    : sq == H1 ? CastlingRights{WHITE_KINGSIDE}
                    : sq == A1 ? CastlingRights{WHITE_QUEENSIDE}
@@ -1251,9 +1250,7 @@ namespace chepp {
                    : sq == H8 ? CastlingRights{BLACK_KINGSIDE}
                    : sq == A8 ? CastlingRights{BLACK_QUEENSIDE}
                               : CastlingRights{};
-        });
-        return t;
-    }();
+        }};
 
     constexpr CastlingRights CASTLING_NONE{0};
 
