@@ -362,7 +362,7 @@ namespace chepp {
         U64 m_{0};
     };
 
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
+    constexpr EnumArray<Bitboard, Square, Square> Bitboard::LINES{
         std::in_place, [](const Square sq1, const Square sq2) {
             if (sq1.file() == sq2.file()) return Bitboard{sq1.file()};
             if (sq1.rank() == sq2.rank()) return Bitboard{sq1.rank()};
@@ -373,7 +373,7 @@ namespace chepp {
             return empty();
         }};
 
-    inline constexpr EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
+    constexpr EnumArray<Bitboard, Square, Square> Bitboard::FROM_TO{
         std::in_place, [](const Square to, const Square from) {
             return orthogonal_rays(from).is_set(to)
                        ? (orthogonal_rays(from, Bitboard(to)) & orthogonal_rays(to, Bitboard(from))).set(from).set(to)

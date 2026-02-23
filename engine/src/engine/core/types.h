@@ -1101,7 +1101,7 @@ namespace chepp {
 
     constexpr EnumArray<std::pair<Square, Square>, CastlingType> CastlingType::king_moves{
         std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
-    constexpr EnumArray<std::pair<Square, Square>, CastlingType> rook_moves{
+    constexpr EnumArray<std::pair<Square, Square>, CastlingType> CastlingType::rook_moves{
         std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
 
     template <>

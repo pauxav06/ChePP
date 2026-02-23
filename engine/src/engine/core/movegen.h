@@ -6,30 +6,14 @@
 #include "magics.h"
 
 namespace chepp::movegen {
-    namespace detail {
-        template <PieceType pc>
-        const Magics<pc>&
-        magics();
-
-        template <>
-        inline const Magics<BISHOP>&
-        magics<BISHOP>() {
-            return G_MAGIC_BISHOP;
-        }
-
-        template <>
-        inline const Magics<ROOK>&
-        magics<ROOK>() {
-            return G_MAGIC_ROOK;
-        }
-    } // namespace detail
-
     template <PieceType pc>
     constexpr Bitboard
     attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE) {
         static_assert(pc, "Invalid piece type");
-        if constexpr (pc == ROOK || pc == BISHOP) {
-            return detail::magics<pc>().attack(sq, occupancy);
+        if constexpr (pc == BISHOP) {
+            return detail::G_MAGIC_BISHOP.attack(sq, occupancy);
+        } else if constexpr (pc == ROOK) {
+            return detail::G_MAGIC_ROOK.attack(sq, occupancy);
         } else if constexpr (pc == QUEEN) {
             return attacks<BISHOP>(sq, occupancy) | attacks<ROOK>(sq, occupancy);
         } else if constexpr (pc == PAWN || pc == KNIGHT || pc == KING) {
