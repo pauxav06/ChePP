@@ -324,9 +324,10 @@ namespace chepp::movegen {
             constexpr Direction dir  = std::get<0>(std::tuple{Dirs...});
             constexpr Bitboard  mask = detail::direction_mask<dir>();
             return dir > 0 ? (b & mask) << dir : (b & mask) >> -dir;
+        } else {
+            ((b = shift<Dirs>(b)), ...);
+            return b;
         }
-        ((b = shift<Dirs>(b)), ...);
-        return b;
     }
 
     namespace detail {
@@ -461,14 +462,14 @@ namespace chepp::movegen {
                 size_t offset = 0;
 
                 for (Square sq : Square::all()) {
-                    const auto mask         = relevancy_mask<pc>(sq);
-                    const std::size_t  combinations{1uz << mask.popcount()};
+                    const auto        mask = relevancy_mask<pc>(sq);
+                    const std::size_t combinations{1uz << mask.popcount()};
 
                     std::vector<mask_type> blockers_vec;
                     blockers_vec.reserve(combinations);
                     for (std::size_t comb{0uz}; comb < combinations; ++comb) {
-                        Bitboard bb{0};
-                        std::size_t      idx{0};
+                        Bitboard    bb{0};
+                        std::size_t idx{0};
                         for (const Square s : mask) {
                             if (comb & (1uz << idx++)) {
                                 bb.set(s);
