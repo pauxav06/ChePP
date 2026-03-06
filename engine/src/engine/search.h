@@ -5,6 +5,7 @@
 #include "history.h"
 #include "move_ordering.h"
 #include "network.h"
+#include "search_stack.h"
 #include "tm.h"
 #include "tt.h"
 
@@ -17,8 +18,6 @@
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-#include "search_stack.h"
 
 namespace chepp {
     inline std::function<int(bool, int, int)> default_lmr = [](const bool quiet, const int d, const int m) {
@@ -71,13 +70,13 @@ namespace chepp {
 
         using PvLines = std::vector<PvLine>;
 
-        explicit SearchThread(const Parameters&                                  parameters,
-                              const int                                          id,
-                              TimeManager*                                       tm,
-                              TT*                                                tt,
-                              const Positions&                                   pos,
-                              const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels)
-            : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos, kernels) {
+        explicit SearchThread(const Parameters&                           parameters,
+                              const int                                   id,
+                              TimeManager*                                tm,
+                              TT*                                         tt,
+                              const Positions&                            pos,
+                              const std::shared_ptr<nnue::Arch::Network>& network)
+            : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos, network) {
             init_cache();
         }
         // control
@@ -227,17 +226,17 @@ namespace chepp {
                         auto t_now = std::chrono::high_resolution_clock::now();
                         auto time_since_start =
                             std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
-                        time_since_start       = std::max(time_since_start, std::chrono::milliseconds(1));
-                        int         nps        = m_statistics.nodes / time_since_start.count();
-                        auto        pv         = get_pv(ss().position(), root_best_move);
-                        std::string uci_output = std::format("info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
-                                                             score,
-                                                             depth,
-                                                             m_statistics.nodes,
-                                                             nps,
-                                                             m_statistics.tb_hits,
-                                                             format_pv_line(pv));
-                        std::cout << uci_output << std::endl;
+                        time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
+                        int  nps         = m_statistics.nodes / time_since_start.count();
+                        auto pv          = get_pv(ss().position(), root_best_move);
+                        std::print(std::cout,
+                                   "info score {} depth {} nodes {} nps {} tb_hits {} pv {}\n",
+                                   score,
+                                   depth,
+                                   m_statistics.nodes,
+                                   nps,
+                                   m_statistics.tb_hits,
+                                   format_pv_line(pv));
 
                         TimeManager::UpdateInfo update_info;
                         update_info.eval = eval;
@@ -455,7 +454,6 @@ namespace chepp {
         ArrayStack<ExploredMove, MoveList::capacity()> explored_tacticals;
 
         for (const auto [m, s] : selector) {
-            // if (is_root) std::cout << m << " " << s << std::endl;
             if (m == ss().excluded) continue;
 
             bool  is_quiet  = ss().position->is_quiet(m);
@@ -739,13 +737,13 @@ namespace chepp {
         TT*         m_tt;
 
         void
-        set(const size_t                                       numThreads,
-            const SearchThread::Parameters&                    params,
-            const TimeManager::Params&                         tm_params,
-            const TimeManager::UCIConstraints&                 tm_constraints,
-            TT*                                                tt,
-            const Positions&                                   pos,
-            const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels) {
+        set(const size_t                                numThreads,
+            const SearchThread::Parameters&             params,
+            const TimeManager::Params&                  tm_params,
+            const TimeManager::UCIConstraints&          tm_constraints,
+            TT*                                         tt,
+            const Positions&                            pos,
+            const std::shared_ptr<nnue::Arch::Network>& network) {
             threads.clear();
             threads.reserve(numThreads);
             workers.clear();
@@ -756,7 +754,7 @@ namespace chepp {
             m_tm = TimeManager{tm_params, tm_init, tm_constraints};
             m_tt = tt;
             for (size_t i = 0; i < numThreads; i++) {
-                threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, kernels));
+                threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, network));
             }
         }
 
@@ -775,7 +773,7 @@ namespace chepp {
                 if (w.joinable()) w.join();
 
             if (const auto move = get_best_move(); move != Move::none()) {
-                std::cout << "bestmove " << move << std::endl;
+                std::print(std::cout, "bestmove {}\n", move);
             }
 
             threads.clear();

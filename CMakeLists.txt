@@ -22,5 +22,21 @@ FetchContent_Declare(
 
 FetchContent_MakeAvailable(argparse)
 
+FetchContent_Declare(
+        tl_expected
+        GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+        GIT_TAG v1.1.0
+)
+
+FetchContent_MakeAvailable(tl_expected)
+
+FetchContent_Declare(
+        hedley
+        GIT_REPOSITORY https://github.com/nemequ/hedley.git
+        GIT_TAG master
+)
+
+FetchContent_MakeAvailable(hedley)
+
 add_subdirectory(engine)
-add_subdirectory(nnue_training)
+#add_subdirectory(nnue_training)

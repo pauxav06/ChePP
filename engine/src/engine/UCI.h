@@ -6,14 +6,14 @@
 #define CHEPP_UCI_H
 #include "core.h"
 #include "search.h"
-#include "tb.h"
 #include "tm.h"
 
 #include <algorithm>
+#include <format>
 #include <functional>
 #include <future>
-#include <iostream>
 #include <memory>
+#include <print>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -80,7 +80,7 @@ namespace chepp {
 
         [[nodiscard]] std::string
         uci_declare() const override {
-            return "option name " + m_name + " type check default " + (m_init ? "true" : "false");
+            return std::format("optiona name {} type check default {}", m_name, m_init ? "true" : "false");
         }
 
         bool
@@ -115,8 +115,7 @@ namespace chepp {
 
         [[nodiscard]] std::string
         uci_declare() const override {
-            return "option name " + m_name + " type spin default " + std::to_string(m_init) + " min " +
-                   std::to_string(m_min) + " max " + std::to_string(m_max);
+            return std::format("optiona name {} type spin default {} min {} max {}", m_name, m_init, m_min, m_max);
         }
 
         bool
@@ -155,8 +154,11 @@ namespace chepp {
         [[nodiscard]] std::string
         uci_declare() const override {
             std::ostringstream ss;
-            ss << "option name " << m_name << " type combo default " << m_init;
-            for (const auto& c : m_choices) ss << " var " << c;
+            std::print(ss, "option name {} type combo default {}", m_name, m_init);
+            for (const auto& c : m_choices) {
+                std::print(ss, " var {}", c);
+            }
+
             return ss.str();
         }
 
@@ -189,7 +191,7 @@ namespace chepp {
 
         [[nodiscard]] std::string
         uci_declare() const override {
-            return "option name " + m_name + " type string default " + m_init;
+            return std::format("optiona name {} type string default {}", m_name, m_init);
         }
 
         bool
@@ -212,7 +214,7 @@ namespace chepp {
 
         [[nodiscard]] std::string
         uci_declare() const override {
-            return "option name " + m_name + " type button";
+            return std::format("optiona name {} type button", m_name);
         }
 
         bool
@@ -240,13 +242,17 @@ namespace chepp {
 
         void
         print_uci_options(std::ostream& os) const {
-            for (const auto& p : m_params) os << p->uci_declare() << "\n";
+            for (const auto& p : m_params) {
+                std::print(os, "{}\n", p->uci_declare());
+            }
         }
 
         bool
         set(const std::string& name, const std::string& value) {
             auto it = m_params_map.find(name);
-            if (it == m_params_map.end()) return false;
+            if (it == m_params_map.end()) {
+                return false;
+            }
             return it->second->parse(value);
         }
 
@@ -316,23 +322,21 @@ namespace chepp {
             SearchThread::Parameters tunables;
         };
 
-        Parameters                                               m_params{};
-        State                                                    m_state{Waiting};
-        Positions                                                m_pos{};
-        std::jthread                                             m_worker;
-        SearchThreadHandler                                      m_thread_handler{};
-        EngineParameterHandler                                   m_param_handler{};
-        TT                                                       m_tt{}; // lifetime for the whole life of the engine
-        std::atomic_flag                                         m_tuning{};
-        std::jthread                                             m_tune_thread{};
-        std::atomic<std::shared_ptr<chepp::nnue::Arch::Kernels>> m_kernels{chepp::nnue::Arch::make_default_kernels()};
+        Parameters             m_params{};
+        State                  m_state{Waiting};
+        Positions              m_pos{};
+        std::jthread           m_worker;
+        SearchThreadHandler    m_thread_handler{};
+        EngineParameterHandler m_param_handler{};
+        TT                     m_tt{}; // lifetime for the whole life of the engine
+        nnue::NetworkHandle    m_handle{};
 
       public:
         explicit UCIEngine(const bool enable_tuning = false) {
             m_param_handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this]() {
                 m_tt.reset();
                 m_tt.init(m_params.hash_size);
-                std::cout << format_error("info string Hash Resized to ", m_params.hash_size) << std::endl;
+                std::print(std::cout, "info string Hash Size {}\n", m_params.hash_size);
                 return true;
             });
             m_param_handler.add<EngineParamSpin>(
@@ -340,13 +344,13 @@ namespace chepp {
             m_param_handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this]() {
                 const bool val = init_tb(m_params.tb_path);
                 if (val) {
-                    std::cout << "info string set tb path" << std::endl;
+                    std::print(std::cout, "info string set tb path\n");
                 }
                 return val;
             });
             m_param_handler.add<EngineParamButton>("Clear Hash", [this]() {
                 m_tt.reset();
-                std::cout << "info string Hash cleared" << std::endl;
+                std::print(std::cout, "info string Hash cleared\n");
                 return true;
             });
             if (enable_tuning) // to tune magic values
@@ -363,16 +367,17 @@ namespace chepp {
         void
         uci() const {
             if (m_state != Waiting) return;
-            std::cout << "id name ChePP\n";
-            std::cout << "id author Paul\n";
+            std::print(std::cout,
+                       "id name ChePP\n"
+                       "id author pauxav06\n");
             m_param_handler.print_uci_options(std::cout);
-            std::cout << "uciok" << std::endl;
+            std::print(std::cout, "uciok\n");
         }
 
         void
         isready() const {
             if (m_state != Waiting) return;
-            std::cout << "readyok" << std::endl;
+            std::print(std::cout, "readyok\n");
         }
 
         void
@@ -385,7 +390,7 @@ namespace chepp {
             m_pos.set_fen(start_fen);
         }
 
-        static std::expected<std::vector<Move>, std::string>
+        static tl::expected<std::vector<Move>, std::string>
         parse_moves(std::istringstream& iss, Position& movegen) {
             std::string       token;
             std::vector<Move> moves{};
@@ -395,7 +400,7 @@ namespace chepp {
                                             .ep_square       = movegen.ep_square(),
                                             .castling_rights = movegen.castling_rights()});
                 if (!move || !movegen.is_valid(*move)) {
-                    return std::unexpected(format_error("invalid move ", token));
+                    return tl::unexpected(format_error("invalid move ", token));
                 }
                 moves.push_back(*move);
                 movegen.do_move(*move);
@@ -414,8 +419,6 @@ namespace chepp {
             iss >> token;
             assert(token == "position");
 
-            m_pos.clear();
-
             std::string type;
             iss >> type;
             std::vector<Move> moves;
@@ -433,21 +436,24 @@ namespace chepp {
             auto movegen{Fen::from_string(fen).transform(&Position::from_fen)};
 
             if (!movegen) {
-                std::cerr << "Invalid fen: " << movegen.error() << std::endl;
+                std::print(std::cerr, "Invalid fen {}\n", movegen.error());
                 return;
             }
             if (iss >> token && token == "moves") {
                 auto err = parse_moves(iss, *movegen);
                 if (!err) {
-                    std::cerr << "Invalid move: " << err.error() << std::endl;
+                    std::print(std::cerr, "Invalid move {}\n", err.error());
                     return;
                 }
                 moves = *err;
             }
-            if (auto err = m_pos.set_fen<true>(fen, moves); !err) {
-                std::cerr << "Invalid fen: " << err.error() << std::endl;
+
+            Positions temp{};
+            if (auto err = temp.set_fen<true>(fen, moves); !err) {
+                std::print(std::cerr, "Invalid fen: {}\n", err.error());
                 return;
             }
+            m_pos = temp;
         }
 
         void
@@ -477,7 +483,7 @@ namespace chepp {
             }
 
             m_thread_handler.set(
-                m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_kernels);
+                m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
             m_worker = std::jthread([&]() {
                 m_thread_handler.start();
                 m_state = Waiting;
@@ -489,31 +495,16 @@ namespace chepp {
         void
         eval() const {
             using namespace chepp::nnue;
-            std::cout << m_pos.last() << std::endl;
-            auto network = Arch::make_network(m_kernels);
-            network.init(m_pos.last());
-            std::cout << "Evaluation for " << m_pos.last().side_to_move() << " (cp): " << std::endl;
-            network.dbg_uci(m_pos.last().side_to_move());
+            std::print(std::cout, "{}\n", m_pos.last().to_string());
+            auto network = m_handle.get();
+            network->init(m_pos.last());
+            std::print(std::cout, "Evaluation for {} (cp):\n", m_pos.last().side_to_move());
+            network->dbg_uci(m_pos.last().side_to_move());
         }
 
         void
         tune_nnue() {
-            using namespace chepp::nnue;
-            if (m_tuning.test_and_set()) {
-                std::cerr << "error: tuning is not complete" << std::endl;
-                return;
-            }
-            m_tune_thread = std::jthread([&](const std::stop_token& stop_token) {
-                std::cout << "info string start tuning" << std::endl;
-                auto res = Arch::make_tuned_kernels(stop_token);
-                if (!stop_token.stop_requested()) {
-                    m_kernels.store(res);
-                    std::cout << "info string end tuning" << std::endl;
-                } else {
-                    std::cout << "info string tuning aborted" << std::endl;
-                }
-                m_tuning.clear();
-            });
+            m_handle.tune();
         }
 
         void
@@ -585,13 +576,13 @@ namespace chepp {
                 go(line);
             } else if (line.rfind("setoption", 0) == 0) {
                 if (!m_param_handler.handle_setoption(line))
-                    std::cerr << "info string Unknown option or invalid value\n" << std::endl;
+                    std::print(std::cerr, "info string Unknown option or invalid value\n");
             } else if (line == "evaluate" || line == "eval") {
                 eval();
             } else if (line == "bench") {
                 bench();
             } else if (line == "print") {
-                std::cout << m_pos.last() << std::endl;
+                std::print(std::cout, "{}\n", m_pos.last().to_string());
             } else if (line == "tune") {
                 tune_nnue();
             } else if (line == "cfg") {
@@ -611,6 +602,7 @@ namespace chepp {
             std::string line;
             while (m_state != Terminated && std::getline(in, line)) {
                 handle_command(line);
+                std::flush(std::cout);
             }
             return 0;
         }

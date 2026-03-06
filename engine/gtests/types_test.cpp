@@ -82,9 +82,9 @@ namespace chepp {
         constexpr size_t iter = 10000;
 
         for (size_t i = 0; i < iter; i++) {
-            const std::string                           str    = random_string(dis(gen));
-            const std::expected<TypeParam, std::string> e      = TypeParam::from_string(str);
-            const bool                                  in_map = map.contains(str);
+            const std::string                          str    = random_string(dis(gen));
+            const tl::expected<TypeParam, std::string> e      = TypeParam::from_string(str);
+            const bool                                 in_map = map.contains(str);
             if (e.has_value()) {
                 if (in_map) {
                     EXPECT_TRUE(e.has_value());
