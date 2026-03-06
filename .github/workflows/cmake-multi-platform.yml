@@ -14,19 +14,11 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        c_compiler: [cl, gcc-14, clalg]
-        cpp_compiler: [cl ,g++-14, clang++]
+        compiler_combo:
+          - { c: gcc-14, cpp: g++-14, os: ubuntu-latest }
+          - { c: clang, cpp: clang++, os: ubuntu-latest }
+          - { c: cl, cpp: cl, os: windows-latest }
         build_type: [Release]
-        include:
-          - os: windows-latest
-            c_compiler: cl
-            cpp_compiler: cl
-          - os: ubuntu-latest
-            c_compiler: gcc-14
-            cpp_compiler: g++-14
-          - os: ubuntu-latest
-            c_compiler: clang
-            cpp_compiler: clang++
 
     steps:
       - uses: actions/checkout@v4
@@ -45,11 +37,11 @@ jobs:
 
       - name: Configure CMake
         run: |
-          cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-                -DCMAKE_C_COMPILER=${{ matrix.c_compiler }} \
-                -DCMAKE_CXX_COMPILER=${{ matrix.cpp_compiler }} \
-                -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
-                -S ${{ github.workspace }}
+            cmake -B ${{ steps.strings.outputs.build-output-dir }} \
+            -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }} \
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }} \
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            -S ${{ github.workspace }}
 
       - name: Build
         run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target ChePP
