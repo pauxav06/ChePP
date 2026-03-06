@@ -47,10 +47,11 @@ jobs:
             -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }}
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }}
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
+            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
             -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target ChePP -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target ChePP
 
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
