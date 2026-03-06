@@ -2,6 +2,7 @@
 #define POSITION_H_INCLUDED
 
 #include "bitboard.h"
+#include "movegen.h"
 #include "types.h"
 #include "zobrist.h"
 

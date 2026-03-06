@@ -34,47 +34,30 @@
  * here:
  */
 
+#include <bit>
 #include <stdint.h>
-#ifdef __cplusplus
-extern "C" {
-#endif
-int
-tb_popcnt32(uint32_t x);
-int
-tb_popcnt64(uint64_t x);
-uint32_t
-tb_bswap32(uint32_t x);
-uint64_t
-tb_bswap64(uint64_t x);
-int
-tb_lsb64(uint64_t x);
-uint64_t
-tb_king_attacks(int x);
-#ifdef __cplusplus
-}
-#endif
 
-#define TB_CUSTOM_POP_COUNT(x) tb_popcnt64(x)
+#define TB_CUSTOM_POP_COUNT(x) std::popcount(x)
 
 /*
  * Define TB_CUSTOM_LSB to override the internal lsb
  * implementation. To do this supply a macro or function definition
  * here:
  */
-#define TB_CUSTOM_LSB(x) tb_lsb64(x)
+#define TB_CUSTOM_LSB(x) std::countr_zero(x)
 
 /*
  * Define TB_CUSTOM_BSWAP32 to override the internal bswap32
  * implementation. To do this supply a macro or function definition
  * here:
  */
-#define TB_CUSTOM_BSWAP32(x) tb_bswap32(x)
+#define TB_CUSTOM_BSWAP32(x) std::byteswap(x)
 /*
  * Define TB_CUSTOM_BSWAP64 to override the internal bswap64
  * implementation. To do this supply a macro or function definition
  * here:
  */
-#define TB_CUSTOM_BSWAP64(x) tb_bswap64(x)
+#define TB_CUSTOM_BSWAP64(x) std::byteswap(x)
 
 /*
  * Define TB_NO_STDINT if you do not want to use <stdint.h> or it is not
@@ -135,7 +118,7 @@ tb_king_attacks(int x);
  * Define TB_KING_ATTACKS(square) to return the king attacks bitboard for a
  * king at `square'.
  */
-#define TB_KING_ATTACKS(square) tb_king_attacks(square)
+// #define TB_KING_ATTACKS(square) tb_king_attacks(square)
 
 /*
  * Define TB_KNIGHT_ATTACKS(square) to return the knight attacks bitboard for

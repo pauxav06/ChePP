@@ -5,12 +5,6 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(fathom)
 
-configure_file(
-        tbconfig.h
-        ${fathom_SOURCE_DIR}/src/tbconfig.h
-        COPYONLY
-)
-
 add_executable(dump_bin dump_bin.cpp)
 target_link_libraries(dump_bin PRIVATE warnings optimization target argparse tl::expected)
 target_include_directories(dump_bin PRIVATE ${hedley_SOURCE_DIR})
@@ -33,7 +27,7 @@ function(generate_bin)
     set(${DUMP_BIN} ${BIN} PARENT_SCOPE)
 endfunction()
 
-add_library(ChePP_core STATIC core.cpp ${fathom_SOURCE_DIR}/src/tbprobe.c)
+add_library(ChePP_core STATIC core.cpp)
 
 set(GEN_DIR       ${CMAKE_CURRENT_SOURCE_DIR}/generated)
 set(ASSETS magic_rooks magic_bishops lines from_to)

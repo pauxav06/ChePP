@@ -1,52 +1,11 @@
 #include "bitboard.h"
-#include "movegen.h"
 #include "position.h"
 #include "tbconfig.h"
 #include "types.h"
-#include "utils.h"
-#include "zobrist.h"
-
-#include <bit>
-#include <cstdint>
 #include <filesystem>
 
-int
-tb_popcnt32(uint32_t x) {
-    return std::popcount(x);
-}
-
-int
-tb_popcnt64(uint64_t x) {
-    return std::popcount(x);
-}
-
-uint32_t
-tb_bswap32(uint32_t x) {
-    return std::byteswap(x);
-}
-
-uint64_t
-tb_bswap64(uint64_t x) {
-    return std::byteswap(x);
-}
-
-int
-tb_lsb32(uint32_t x) {
-    return std::countr_zero(x);
-}
-
-int
-tb_lsb64(uint64_t x) {
-    return std::countr_zero(x);
-}
-
-uint64_t
-tb_king_attacks(int x) {
-    (void)chepp::Position{};
-    return chepp::movegen::attacks<chepp::KING>(chepp::Square{x}).value();
-}
-
 #if CHEPP_USE_TB
+#include "tbprobe.c"
 #include "tbprobe.h"
 #endif
 
