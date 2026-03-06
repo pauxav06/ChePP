@@ -30,12 +30,14 @@ main(int argc, char** argv) {
     program.add_argument("--input").required().help("Path to input file");
     program.add_argument("--output_dir").required().help("Path to output directory");
     program.add_argument("--name").required().help("Name");
+    program.add_argument("--q").choices("", "constexpr", "constinit").default_value("");
 
     program.parse_args(argc, argv);
 
     fs::path input_path = program.get<std::string>("--input");
     auto     name       = program.get<std::string>("--name");
     fs::path output_dir = program.get<std::string>("--output_dir");
+    auto     qualifier  = program.get<std::string>("--q");
 
     auto header_path = (output_dir / name) += ".h";
     auto inc_path    = (output_dir / name) += ".inc";
@@ -62,12 +64,12 @@ main(int argc, char** argv) {
         std::print(header, "#include <array>\n");
         std::print(header, "#include <cstdint>\n\n");
         std::print(header, "#if defined(IDE) && IDE == 1\n");
-        std::print(header, "inline constinit const std::array<uint8_t, {}> {}{{}};\n", data.size(), array_name);
+        std::print(header, "inline {} const std::array<uint8_t, {}> {}{{}};\n", qualifier, data.size(), array_name);
         std::print(header, "#else\n");
         std::print(header, "#include \"{}\"\n", inc_path.string());
         std::print(header, "#endif\n");
 
-        std::print(inc, "inline constinit const std::array<uint8_t, {}> {}{{\n", data.size(), array_name);
+        std::print(inc, "inline {} const std::array<uint8_t, {}> {}{{\n", qualifier, data.size(), array_name);
         for (std::size_t i = 0; i < data.size(); ++i) {
             std::print(inc, "0x{:02X}", data[i]);
             if (i != (data.size() - 1)) {

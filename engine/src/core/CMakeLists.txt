@@ -41,7 +41,7 @@ set(ASSETS magic_rooks magic_bishops lines from_to)
 foreach(name IN LISTS ASSETS)
     set(GEN_BIN "")
     generate_bin(NAME ${name} OUT_DIR ${GEN_DIR} BIN GEN_BIN)
-    embed_bin(TARGET ChePP_core NAME ${name} BIN ${GEN_BIN} DIR ${GEN_DIR})
+    embed_bin(TARGET ChePP_core NAME ${name} BIN ${GEN_BIN} DIR ${GEN_DIR} QUALIFIER constexpr)
 endforeach ()
 
 target_include_directories(ChePP_core PUBLIC ${GEN_DIR})

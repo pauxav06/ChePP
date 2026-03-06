@@ -10,10 +10,10 @@
 
 namespace chepp::movegen {
     namespace detail {
-        inline constinit const auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
-        inline constinit const auto G_MAGIC_ROOK   = std::bit_cast<Magics<ROOK>>(GENERATED_MAGIC_ROOKS);
-        inline constinit auto const LINES   = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_LINES);
-        inline constinit auto const FROM_TO = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_FROM_TO);
+        inline constexpr auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
+        inline constexpr auto G_MAGIC_ROOK   = std::bit_cast<Magics<ROOK>>(GENERATED_MAGIC_ROOKS);
+        inline constexpr auto LINES          = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_LINES);
+        inline constexpr auto FROM_TO        = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_FROM_TO);
     } // namespace detail
 
     inline constexpr Bitboard
