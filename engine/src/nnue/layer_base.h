@@ -42,7 +42,7 @@ namespace chepp::nnue {
             name() const noexcept = 0;
         };
 
-        using closure_type = std::function<hwy::FuncOutput(unsigned int)>;
+        using closure_type = std::function<hwy::FuncOutput(hwy::FuncInput)>;
 
         template <typename Operation>
         struct ILayerBase : ILayer {

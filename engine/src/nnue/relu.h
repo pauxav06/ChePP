@@ -55,7 +55,7 @@ namespace chepp::nnue::layers {
                 fill_random(inputs, 0);
                 hwy::AlignedVector<output_t> outputs(size_v + kernel->output_padding());
 
-                return [=](unsigned int) mutable -> hwy::FuncOutput {
+                return [=](hwy::FuncInput) mutable -> hwy::FuncOutput {
                     kernel->forward(std::data(inputs), std::data(outputs));
                     return static_cast<hwy::FuncOutput>(outputs.back());
                 };
