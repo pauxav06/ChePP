@@ -344,8 +344,9 @@ namespace chepp::movegen {
                     bb = shift<Dir>(bb);
                 }
                 return attacks;
+            } else {
+                return (ray<Dirs>(sq, blockers) | ...);
             }
-            return (ray<Dirs>(sq, blockers) | ...);
         }
 
         constexpr Bitboard
