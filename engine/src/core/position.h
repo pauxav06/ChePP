@@ -240,9 +240,9 @@ namespace chepp {
     inline Position::Position(const Fen& fen)
         : m_crs(fen.crs), m_color(fen.color), m_halfmove_clock(fen.halfmove), m_fullmove_clock(fen.fullmove),
           m_ep_square(fen.ep_square) {
-        for (const auto& [idx, piece] : fen.pieces | std::views::enumerate) {
-            if (piece) {
-                set_piece(piece, Square{idx});
+        for (const auto sq : Square::all()) {
+            if (fen.pieces.at(sq)) {
+                set_piece(fen.pieces.at(sq), sq);
             }
         }
         init_zobrist();
@@ -420,14 +420,16 @@ namespace chepp {
     Position::to_string() const {
         std::ostringstream res{};
 
-        std::print(
-            res,
-            "Position\n"
-            "Side to move: {}\n"
-            "Castling rights: {}\n"
-            "EP square: {}\n"
-            "Zobrist hash: {:#X}\n",
-            side_to_move(), castling_rights(), ep_square(), hash());
+        std::print(res,
+                   "Position\n"
+                   "Side to move: {}\n"
+                   "Castling rights: {}\n"
+                   "EP square: {}\n"
+                   "Zobrist hash: {:#X}\n",
+                   side_to_move(),
+                   castling_rights(),
+                   ep_square(),
+                   hash());
 
         for (auto rank = RANK_1; rank <= RANK_8; ++rank) {
             res << (RANK_8 - rank).index() + 1 << " ";
@@ -439,11 +441,10 @@ namespace chepp {
             std::print(res, "\n");
         }
 
-        std::print(
-            res,
-            "  a b c d e f g h \n"
-            "Fen: {}\n",
-            to_fen().to_string());
+        std::print(res,
+                   "  a b c d e f g h \n"
+                   "Fen: {}\n",
+                   to_fen().to_string());
 
         return res.str();
     }
