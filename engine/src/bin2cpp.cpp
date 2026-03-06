@@ -41,7 +41,7 @@ main(int argc, char** argv) {
     auto inc_path    = (output_dir / name) += ".inc";
 
     try {
-        std::ifstream input(input_path);
+        std::ifstream input(input_path, std::ios::binary);
         if (!input) {
             throw std::runtime_error(std::format("Failed to open input file {}", input_path.string()));
         }

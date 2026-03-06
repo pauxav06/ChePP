@@ -4,6 +4,8 @@
 #include "core.h"
 #include "nnue.h"
 
+#include <atomic>
+
 namespace chepp::nnue {
     struct NetworkHandle {
         NetworkHandle() noexcept : m_layers(Arch::make_layers()) {
@@ -40,7 +42,7 @@ namespace chepp::nnue {
         Arch::layer_t                  m_layers{};
         std::shared_ptr<Arch::Network> m_network{};
         mutable std::mutex             m_mtx{};
-        std::atomic_flag               m_running{false};
+        std::atomic_flag               m_running{};
         std::jthread                   m_worker{};
     };
 } // namespace chepp::nnue

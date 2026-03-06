@@ -5,13 +5,11 @@
 #include <cstdint>
 #include <random>
 #include <string_view>
-#include <type_traits>
 #include <tl/expected.hpp>
+#include <type_traits>
 
 #include <functional>
 #include <hedley.h>
-
-using namespace std::placeholders;
 
 namespace chepp::utils {
     template <typename T>
@@ -149,21 +147,21 @@ namespace chepp::utils {
     }
 
     template <std::size_t... Is, typename F>
-    constexpr auto make_array_from_sequence(F&& f, std::index_sequence<Is...>) {
+    constexpr auto
+    make_array_from_sequence(F&& f, std::index_sequence<Is...>) {
         using T = decltype(f(0uz));
-        return std::array<T, sizeof...(Is)>{ f(Is)... };
+        return std::array<T, sizeof...(Is)>{f(Is)...};
     }
 
     template <std::size_t N, typename F>
-    constexpr auto make_array(F&& f) {
+    constexpr auto
+    make_array(F&& f) {
         return make_array_from_sequence(std::forward<F>(f), std::make_index_sequence<N>{});
     }
 } // namespace chepp::utils
 
-
-#if (defined __CDT_PARSER__) || (defined __INTELLISENSE__) || \
-(defined Q_CREATOR_RUN) || (defined __CLANGD__) ||        \
-(defined GROK_ELLIPSIS_BUILD) || (defined __JETBRAINS_IDE__)
+#if (defined __CDT_PARSER__) || (defined __INTELLISENSE__) || (defined Q_CREATOR_RUN) || (defined __CLANGD__) ||       \
+    (defined GROK_ELLIPSIS_BUILD) || (defined __JETBRAINS_IDE__)
 #define IDE 1
 #else
 #define IDE 0
