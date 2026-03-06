@@ -70,7 +70,7 @@ main(int argc, char** argv) {
     auto     target = program.get<std::string>("--target");
 
     try {
-        std::ofstream out(path);
+        std::ofstream out(path, std::ios::binary);
         targets.at(target)(out);
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << "\n";

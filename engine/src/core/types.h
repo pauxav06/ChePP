@@ -8,12 +8,14 @@
 #include <cstdint>
 #include <expected>
 #include <format>
+#include <ostream>
+#include <print>
 #include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <vector>
 #include <tl/expected.hpp>
+#include <vector>
 
 namespace chepp {
     using namespace std::literals;
@@ -123,7 +125,7 @@ namespace chepp {
             return m_data[m_size - 1];
         }
 
-    protected:
+      protected:
         std::array<T, N> m_data{};
         size_type        m_size{0};
     };
@@ -139,17 +141,15 @@ namespace chepp {
     template <typename Derived>
     struct Printable {
         friend std::ostream&
-        operator<<(std::ostream& os, const Derived& e)
-        {
+        operator<<(std::ostream& os, const Derived& e) {
             return os << e.to_string();
         }
     };
 
     template <typename Derived>
     struct Parsable {
-        friend
-        std::istream& operator>>(std::istream& is, Derived& obj)
-        {
+        friend std::istream&
+        operator>>(std::istream& is, Derived& obj) {
             std::string buffer;
 
             if (!(is >> buffer)) {
@@ -186,8 +186,8 @@ namespace chepp {
         static constexpr std::size_t COUNT_V = COUNT;
         static constexpr std::size_t TOTAL_V = COUNT + 1;
 
-        using ValueT  = UnderlyingT;
-        using IndexT  = std::size_t;
+        using ValueT = UnderlyingT;
+        using IndexT = std::size_t;
 
         // we do not use 0 for NONE because packing is easier if useful values occupy lower bits
         static constexpr ValueT NONE_VALUE = static_cast<ValueT>(COUNT);
@@ -369,22 +369,21 @@ namespace chepp {
         }
 
         template <typename F>
-        static constexpr void constepr_for(F&& f) {
-            constepr_for<0, COUNT_V>([&] (auto i) {
-                return std::forward<F>(f)(DerivedT(i));
-            });
+        static constexpr void
+        constepr_for(F&& f) {
+            constepr_for<0, COUNT_V>([&](auto i) { return std::forward<F>(f)(DerivedT(i)); });
         }
 
         // public to simplify memcpy/templating semantics
         ValueT m_val = NONE_VALUE;
     };
-}
+} // namespace chepp
 
 template <typename T>
-requires std::is_base_of_v<chepp::Printable<T>, T>
+    requires std::is_base_of_v<chepp::Printable<T>, T>
 struct std::formatter<T> : std::formatter<std::string> {
-    auto format(T value, std::format_context& ctx) const
-    {
+    auto
+    format(T value, std::format_context& ctx) const {
         return std::ranges::copy(std::move(value).to_string(), ctx.out()).out;
     }
 };
@@ -434,7 +433,7 @@ namespace chepp {
         }
 
         template <typename F>
-        requires std::is_invocable_r_v<T, F, std::integral_constant<Enum, Enum{0}>>
+            requires std::is_invocable_r_v<T, F, std::integral_constant<Enum, Enum{0}>>
         constexpr explicit EnumArray(constexpr_in_place_t, F&& f) {
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 ((std::construct_at(&data[Is], f(std::integral_constant<Enum, Enum{Is}>{}))), ...);
@@ -532,9 +531,9 @@ namespace chepp {
                                    FirstEnum> &&
                  FirstEnum::count() > 0)
     struct EnumArray<T, FirstEnum, RestEnums...> {
-        static constexpr std::size_t count                       = FirstEnum::count();
-        using SubArrayT                                          = EnumArray<T, RestEnums...>;
-        using ContainerT                                         = std::array<SubArrayT, count>;
+        static constexpr std::size_t count = FirstEnum::count();
+        using SubArrayT                    = EnumArray<T, RestEnums...>;
+        using ContainerT                   = std::array<SubArrayT, count>;
 
         ContainerT data;
 
@@ -564,10 +563,12 @@ namespace chepp {
         constexpr explicit EnumArray(constexpr_in_place_t, F&& f) {
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
                 ((std::construct_at(&data[Is],
-                    SubArrayT(constexpr_in_place,
-                              [&](auto... restEnums) { return f(std::integral_constant<FirstEnum, FirstEnum{Is}>{}, restEnums...); }
-                    )
-                )), ...);
+                                    SubArrayT(constexpr_in_place,
+                                              [&](auto... restEnums) {
+                                                  return f(std::integral_constant<FirstEnum, FirstEnum{Is}>{},
+                                                           restEnums...);
+                                              }))),
+                 ...);
             }(std::make_index_sequence<count>{});
         }
 
@@ -1013,7 +1014,6 @@ namespace chepp {
         NO_DIRECTION = 0
     };
 
-
     inline constexpr std::array dir_table{
         SOUTH_WEST, SOUTH, SOUTH_EAST, WEST, NO_DIRECTION, EAST, NORTH_WEST, NORTH, NORTH_EAST};
     constexpr Direction
@@ -1331,8 +1331,8 @@ namespace chepp {
         constexpr explicit Move(const std::uint16_t d) noexcept : m_data(d) {
         }
 
-        constexpr Move(const Square from, const Square to) noexcept :
-        m_data(static_cast<uint16_t>((from.value() << 6) + to.value())) {
+        constexpr Move(const Square from, const Square to) noexcept
+            : m_data(static_cast<uint16_t>((from.value() << 6) + to.value())) {
         }
 
         // to build a move if you already know the type of move
@@ -1362,16 +1362,16 @@ namespace chepp {
             return Move(65);
         }
         static constexpr Move
-        none() noexcept{
+        none() noexcept {
             return Move(0);
         }
 
         constexpr bool
-        operator==(const Move& m) const noexcept{
+        operator==(const Move& m) const noexcept {
             return m_data == m.m_data;
         }
         constexpr bool
-        operator!=(const Move& m) const noexcept{
+        operator!=(const Move& m) const noexcept {
             return m_data != m.m_data;
         }
 
@@ -1380,7 +1380,7 @@ namespace chepp {
         }
 
         [[nodiscard]] constexpr std::uint16_t
-        raw() const noexcept{
+        raw() const noexcept {
             return m_data;
         }
 
