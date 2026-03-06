@@ -23,4 +23,4 @@ add_subdirectory(nnue)
 add_subdirectory(engine)
 
 add_executable(ChePP main.cpp)
-target_link_libraries(ChePP warnings optimization target ChePP_engine)
+target_link_libraries(ChePP warnings optimization target ChePP_core ChePP_nnue ChePP_engine)

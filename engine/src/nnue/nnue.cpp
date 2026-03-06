@@ -1,7 +1,7 @@
 #include "nnue.h"
+#include <hwy/auto_tune.h>
 #include <hwy/base.h>
 #include <hwy/nanobenchmark.h>
-#include <hwy/auto_tune.h>
 
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "nnue.cpp"
@@ -53,6 +53,4 @@ namespace chepp::nnue {
         });
     }
 } // namespace chepp::nnue
-// HWY_TEST_MAIN();
 #endif // HWY_ONCE
-
