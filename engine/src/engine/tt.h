@@ -36,14 +36,14 @@ namespace chepp {
 
             Entry() noexcept = default;
             Entry(const zobrist::Hash hash,
-                  const int           depth,
-                  const int           score,
+                  const uint16_t      depth,
+                  const int16_t       score,
                   const Bound         bound,
-                  const int           generation,
+                  const uint8_t       generation,
                   const Move          move,
-                  int                 static_eval)
-                : hash(hash), depth(depth), score(static_cast<int16_t>(score)), move(move), bound(bound),
-                  static_eval(static_eval), generation(generation) {
+                  const int16_t       static_eval)
+                : hash(hash), depth(depth), score(score), move(move), bound(bound), static_eval(static_eval),
+                  generation(generation) {
             }
 
             zobrist::Hash hash{};
@@ -88,8 +88,12 @@ namespace chepp {
         }
 
         void
-        store(
-            const zobrist::Hash hash, const int depth, const int score, Bound bound, const Move move, int static_eval) {
+        store(const zobrist::Hash hash,
+              const uint16_t      depth,
+              const int16_t       score,
+              Bound               bound,
+              const Move          move,
+              int16_t             static_eval) {
             const auto candidate = Entry(hash, depth, score, bound, m_generation, move, static_eval);
             auto&      old       = m_table[index(hash)];
 
@@ -126,7 +130,7 @@ namespace chepp {
             return hash & (m_size - 1);
         }
 
-        int                m_generation{0};
+        uint8_t            m_generation{0};
         std::size_t        m_size{0};
         std::vector<Entry> m_table{};
     };

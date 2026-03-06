@@ -61,10 +61,9 @@ namespace chepp::nnue::layers {
                 stdx::mdarray<const bias_t, biases_extents_t, std::layout_right, hwy::AlignedVector<bias_t>>;
 
             [[nodiscard]] std::string
-            name() const noexcept final {
+            name() const noexcept override {
                 return std::format("default,target={}", TargetName(HWY_TARGET));
             }
-
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept : base_t(l) {
                 std::ranges::copy(layer().weights(), std::begin(m_weights.container()));
@@ -72,7 +71,7 @@ namespace chepp::nnue::layers {
             }
 
             void
-            forward(const input_t* HWY_RESTRICT input, output_t* HWY_RESTRICT output) const noexcept final {
+            forward(const input_t* HWY_RESTRICT input, output_t* HWY_RESTRICT output) const noexcept override {
                 for (extent_type row = 0; row < m_weights.extent(0); ++row) {
                     output_t acc = 0;
                     for (extent_type col = 0; col < m_weights.extent(1); ++col) {
@@ -160,11 +159,13 @@ namespace chepp::nnue::layers {
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
-            [[nodiscard]] std::size_t input_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            input_padding() const noexcept override {
                 return m_input_padding;
             }
 
-            [[nodiscard]] std::size_t output_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            output_padding() const noexcept override {
                 return m_output_padding;
             }
 
@@ -199,7 +200,7 @@ namespace chepp::nnue::layers {
             }
 
             void
-            forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept final {
+            forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept override {
                 std::mdspan input{in_ptr, m_input_view_extents};
                 std::mdspan output{out_ptr, m_output_view_extents};
 
@@ -293,18 +294,20 @@ namespace chepp::nnue::layers {
             static constexpr output_view_extents_t    m_output_view_extents{m_blocks, unroll};
 
             [[nodiscard]] std::string
-            name() const noexcept final {
+            name() const noexcept override {
                 return std::format("simd-row-major,target={},unroll={},operation={}",
                                    hwy::TargetName(HWY_TARGET),
                                    unroll,
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
-            [[nodiscard]] std::size_t input_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            input_padding() const noexcept override {
                 return m_input_padding;
             }
 
-            [[nodiscard]] std::size_t output_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            output_padding() const noexcept override {
                 return m_output_padding;
             }
 
@@ -338,7 +341,7 @@ namespace chepp::nnue::layers {
             }
 
             void
-            forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept final {
+            forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept override {
                 std::mdspan input{in_ptr, m_input_view_extents};
                 std::mdspan output{out_ptr, m_output_view_extents};
 

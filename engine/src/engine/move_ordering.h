@@ -115,7 +115,9 @@ namespace chepp {
       private:
         MoveScoreT
         score_move(const Move m) const {
-            if (m == m_tt_move) return m_params.tt_bonus;
+            if (m == m_tt_move) {
+                return m_params.tt_bonus;
+            }
 
             const Piece attacker = m_ss.position->piece_at(m.from_sq());
             const Piece victim   = m_ss.position->is_capture(m) ? m_ss.position->captured_by_move(m) : NO_PIECE;
@@ -127,7 +129,8 @@ namespace chepp {
                     const auto max_nodes =
                         std::ranges::max_element(*m_ss.refutation_history, {}, &std::pair<const Move, size_t>::second);
                     if (max_nodes != m_ss.refutation_history->end()) {
-                        score = m_params.root_bonus * m_ss.refutation_history->at(m) / max_nodes->second;
+                        score = static_cast<MoveScoreT>(m_params.root_bonus * m_ss.refutation_history->at(m) /
+                                                        max_nodes->second);
                     }
                     break;
                 }
@@ -166,7 +169,7 @@ namespace chepp {
 
         static int
         mvv_lva(const PieceType attacker, const PieceType victim) {
-            return victim.index() * 10 + (KING.index() - attacker.index());
+            return victim.value() * 10 + (KING.value() - attacker.value());
         }
 
         Stage                    m_stage;

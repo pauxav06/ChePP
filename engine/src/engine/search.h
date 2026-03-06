@@ -227,7 +227,7 @@ namespace chepp {
                         auto time_since_start =
                             std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                         time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
-                        int  nps         = m_statistics.nodes / time_since_start.count();
+                        auto nps         = m_statistics.nodes / time_since_start.count();
                         auto pv          = get_pv(ss().position(), root_best_move);
                         std::print(std::cout,
                                    "info score {} depth {} nodes {} nps {} tb_hits {} pv {}\n",
@@ -412,7 +412,12 @@ namespace chepp {
                     undo_move();
 
                     if (score >= rbeta) {
-                        m_tt->store(ss().position->hash(), depth - 3, score, TT::LOWER, m, ss().static_eval);
+                        m_tt->store(ss().position->hash(),
+                                    static_cast<uint16_t>(depth - 3),
+                                    static_cast<int16_t>(score),
+                                    TT::LOWER,
+                                    m,
+                                    static_cast<int16_t>(ss().static_eval));
                         return score;
                     }
                 }
@@ -628,11 +633,11 @@ namespace chepp {
                                                                 : TT::EXACT;
         if (!ss().excluded)
             m_tt->store(ss().position->hash(),
-                        depth,
-                        TT::store_score(best_score, ply()),
+                        static_cast<uint16_t>(depth),
+                        static_cast<int16_t>(TT::store_score(best_score, ply())),
                         bound,
                         local_best_move,
-                        ss().static_eval);
+                        static_cast<int16_t>(ss().static_eval));
 
         if (alpha != alpha_org && !ss().excluded) {
             ss().best_move = local_best_move;

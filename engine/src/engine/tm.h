@@ -76,22 +76,22 @@ namespace chepp {
 
         // called by iterative deepening
         void
-        adjust_time(const UpdateInfo& info) {
+        adjust_time(const UpdateInfo&) {
             return;
-            if (info.changed) {
+            /*if (info.changed) {
                 m_state.same_move_streak = 0;
                 m_state.n_changes++;
             } else
                 m_state.same_move_streak++;
             m_state.adjusted_time_ms *= std::pow(1.0f - m_params.stability_factor, m_state.same_move_streak);
-            m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
+            m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);*/
         }
 
         void
         new_killer() {
             return;
-            m_state.adjusted_time_ms *= m_params.killer_factor;
-            m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
+            // m_state.adjusted_time_ms *= m_params.killer_factor;
+            // m_state.adjusted_time_ms = clamp_time(m_state.adjusted_time_ms);
         }
 
         void

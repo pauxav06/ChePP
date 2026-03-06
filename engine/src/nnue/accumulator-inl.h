@@ -42,7 +42,7 @@ namespace chepp::nnue::layers {
                 stdx::mdarray<const value_t, biases_extents_t, std::layout_right, hwy::AlignedVector<value_t>>;
 
             [[nodiscard]] std::string
-            name() const noexcept final {
+            name() const noexcept override {
                 return std::format("default,target={}", hwy::TargetName(HWY_TARGET));
             }
 
@@ -54,7 +54,7 @@ namespace chepp::nnue::layers {
             void
             forward(const index_t* HWY_RESTRICT idx,
                     const std::size_t           nb_idx,
-                    value_t* HWY_RESTRICT       out_ptr) const noexcept final {
+                    value_t* HWY_RESTRICT       out_ptr) const noexcept override {
                 std::memcpy(out_ptr, std::data(m_biases), std::size(m_biases) * sizeof(value_t));
                 for (std::size_t i = 0; i < nb_idx; ++i) {
                     for (std::size_t j = 0; j < accum_t::output_size_v; ++j) {
@@ -69,7 +69,7 @@ namespace chepp::nnue::layers {
                                 const std::size_t           nb_added,
                                 const index_t* HWY_RESTRICT removed,
                                 const std::size_t           nb_removed,
-                                value_t* HWY_RESTRICT       out_ptr) const noexcept final {
+                                value_t* HWY_RESTRICT       out_ptr) const noexcept override {
                 std::memcpy(out_ptr, input_ptr, accum_t::output_size_v * sizeof(value_t));
                 for (std::size_t i = 0; i < nb_added; ++i) {
                     for (std::size_t j = 0; j < accum_t::output_size_v; ++j) {
@@ -129,12 +129,12 @@ namespace chepp::nnue::layers {
             using bias_t = stdx::mdarray<const value_t, bias_extents_t, std::layout_right, hwy::AlignedVector<value_t>>;
 
             [[nodiscard]] std::string
-            name() const noexcept final {
+            name() const noexcept override {
                 return std::format("simd,target={},unroll={}", hwy::TargetName(HWY_TARGET), unroll);
             }
 
             [[nodiscard]] std::size_t
-            padding() const noexcept final {
+            padding() const noexcept override {
                 return output_padding;
             }
 
@@ -153,7 +153,7 @@ namespace chepp::nnue::layers {
             void
             forward(const index_t* HWY_RESTRICT idx_ptr,
                     const std::size_t           n_idx,
-                    value_t* HWY_RESTRICT       out_ptr) const noexcept final {
+                    value_t* HWY_RESTRICT       out_ptr) const noexcept override {
                 output_view_t out{out_ptr, m_biases.extents()};
 
                 DECLARE_REG_BANK(unroll, Vec)
@@ -181,7 +181,7 @@ namespace chepp::nnue::layers {
                                 const size_t                n_added,
                                 const index_t* HWY_RESTRICT removed_ptr,
                                 const size_t                n_removed,
-                                value_t* HWY_RESTRICT       out_ptr) const noexcept final {
+                                value_t* HWY_RESTRICT       out_ptr) const noexcept override {
 
                 input_view_t  input{input_ptr, m_biases.extents()};
                 output_view_t out{out_ptr, m_biases.extents()};

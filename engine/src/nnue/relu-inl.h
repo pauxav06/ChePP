@@ -19,25 +19,26 @@ namespace chepp::nnue::layers {
         template <typename InT, std::size_t IS, typename OutT, unsigned Q, default_config_t cfg>
             requires(std::is_same_v<default_config_t, decltype(cfg)>)
         struct Kernel<ClippedRelu<InT, IS, OutT, Q>, cfg> final : ClippedRelu<InT, IS, OutT, Q>::ikernel_t {
-            using relu_t            = ClippedRelu<InT, IS, OutT, Q>;
-            using base_t = relu_t::ikernel_t;
+            using relu_t  = ClippedRelu<InT, IS, OutT, Q>;
+            using base_t  = relu_t::ikernel_t;
             using layer_t = relu_t::layer_t;
 
             using base_t::base_t;
             using base_t::layer;
 
-            using input_t = relu_t::input_t;
+            using input_t  = relu_t::input_t;
             using output_t = relu_t::output_t;
 
             using input_extents_t  = std::extents<std::size_t, relu_t::size_v>;
             using output_extents_t = std::extents<std::size_t, relu_t::size_v>;
 
-            [[nodiscard]] std::string name() const noexcept final {
+            [[nodiscard]] std::string
+            name() const noexcept override {
                 return std::format("default,target={}", hwy::TargetName(HWY_TARGET));
             }
 
             void
-            forward(const input_t* HWY_RESTRICT input_ptr, output_t* HWY_RESTRICT output_ptr) const noexcept final {
+            forward(const input_t* HWY_RESTRICT input_ptr, output_t* HWY_RESTRICT output_ptr) const noexcept override {
                 std::mdspan input{input_ptr, input_extents_t{}};
                 std::mdspan output{output_ptr, output_extents_t{}};
                 for (std::size_t i = 0; i < input.extent(0); ++i) {
@@ -55,14 +56,14 @@ namespace chepp::nnue::layers {
         template <typename InT, std::size_t IS, typename OutT, unsigned Q, ClippedReluSimd cfg>
             requires(std::is_same_v<ClippedReluSimd, decltype(cfg)> && cfg.unroll * (sizeof(InT) / sizeof(OutT)) <= 32)
         struct Kernel<ClippedRelu<InT, IS, OutT, Q>, cfg> final : ClippedRelu<InT, IS, OutT, Q>::ikernel_t {
-            using relu_t            = ClippedRelu<InT, IS, OutT, Q>;
-            using base_t = relu_t::ikernel_t;
+            using relu_t  = ClippedRelu<InT, IS, OutT, Q>;
+            using base_t  = relu_t::ikernel_t;
             using layer_t = relu_t::layer_t;
 
             using base_t::base_t;
             using base_t::layer;
 
-            using input_t = relu_t::input_t;
+            using input_t  = relu_t::input_t;
             using output_t = relu_t::output_t;
 
             static constexpr extent_type factor{sizeof(input_t) / sizeof(output_t)};
@@ -97,15 +98,17 @@ namespace chepp::nnue::layers {
             HWY_STATIC_CONSTEXPR input_extents_t  m_input_extents{m_input_chunks, unroll, factor, m_input_lanes};
             HWY_STATIC_CONSTEXPR output_extents_t m_output_extents{m_output_chunks, unroll, m_output_lanes};
 
-
-            [[nodiscard]] std::string name() const noexcept override {
+            [[nodiscard]] std::string
+            name() const noexcept override {
                 return format_error("Simd: target = ", hwy::TargetName(HWY_TARGET), ", unroll = ", unroll);
             }
 
-            [[nodiscard]] std::size_t input_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            input_padding() const noexcept override {
                 return m_input_padding;
             }
-            [[nodiscard]] std::size_t output_padding() const noexcept final {
+            [[nodiscard]] std::size_t
+            output_padding() const noexcept override {
                 return m_output_padding;
             }
 
@@ -128,7 +131,7 @@ namespace chepp::nnue::layers {
             }
 
             void
-            forward(const input_t* HWY_RESTRICT input_ptr, output_t* HWY_RESTRICT output_ptr) const noexcept final {
+            forward(const input_t* HWY_RESTRICT input_ptr, output_t* HWY_RESTRICT output_ptr) const noexcept override {
                 input_viewt_t  input{input_ptr, m_input_extents};
                 output_viewt_t output{output_ptr, m_output_extents};
 
