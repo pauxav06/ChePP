@@ -1,7 +1,7 @@
 include(FetchContent)
 
 find_package(GTest QUIET)
-if(NOT GTest_FOUND)
+if(NOT GTest_FOUND AND NOT TARGET gtest)
     message(STATUS "GoogleTest not found. Fetching from GitHub...")
 
     FetchContent_Declare(

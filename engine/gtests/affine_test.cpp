@@ -9,7 +9,7 @@
 #include "hwy/tests/hwy_gtest.h"
 #include "hwy/tests/test_util-inl.h"
 
-#include "affine-inl.h"
+#include "../affine.h"
 
 HWY_BEFORE_NAMESPACE();
 
