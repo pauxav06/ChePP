@@ -53,10 +53,10 @@ namespace chepp::nnue::layers {
             [[nodiscard]] closure_type
             make_benchmark_closure(const std::shared_ptr<const ikernel_t>& kernel) const noexcept override {
                 hwy::AlignedVector<index_t> inputs(input_size_v / 100);
-                std::iota(inputs.begin(), inputs.end(), 0);
+                std::iota(inputs.begin(), inputs.end(), static_cast<index_t>(0));
                 hwy::AlignedVector<value_t> outputs(output_size_v + kernel->padding());
 
-                return [=](unsigned int) mutable -> hwy::FuncOutput {
+                return [=](hwy::FuncInput) mutable -> hwy::FuncOutput {
                     kernel->forward(std::data(inputs), std::size(inputs), std::data(outputs));
                     return static_cast<hwy::FuncOutput>(outputs.back());
                 };
