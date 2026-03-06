@@ -62,12 +62,12 @@ main(int argc, char** argv) {
         std::print(header, "#include <array>\n");
         std::print(header, "#include <cstdint>\n\n");
         std::print(header, "#if defined(IDE) && IDE == 1\n");
-        std::print(header, "inline constexpr std::array<uint8_t, {}> {}{{}};\n", data.size(), array_name);
+        std::print(header, "inline constinit const std::array<uint8_t, {}> {}{{}};\n", data.size(), array_name);
         std::print(header, "#else\n");
         std::print(header, "#include \"{}\"\n", inc_path.string());
         std::print(header, "#endif\n");
 
-        std::print(inc, "inline constexpr std::array<uint8_t, {}> {}{{\n", data.size(), array_name);
+        std::print(inc, "inline constinit const std::array<uint8_t, {}> {}{{\n", data.size(), array_name);
         for (std::size_t i = 0; i < data.size(); ++i) {
             std::print(inc, "0x{:02X}", data[i]);
             if (i != (data.size() - 1)) {

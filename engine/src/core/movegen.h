@@ -3,17 +3,17 @@
 
 #include "bitboard.h"
 
-#include "generated/magic_bishops.h"
 #include "generated/from_to.h"
 #include "generated/lines.h"
+#include "generated/magic_bishops.h"
 #include "generated/magic_rooks.h"
 
 namespace chepp::movegen {
     namespace detail {
-        inline constexpr auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
-        inline constexpr auto G_MAGIC_ROOK   = std::bit_cast<Magics<ROOK>>(GENERATED_MAGIC_ROOKS);
-        inline constexpr auto LINES          = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_LINES);
-        inline constexpr auto FROM_TO        = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_FROM_TO);
+        inline constinit const auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
+        inline constinit const auto G_MAGIC_ROOK   = std::bit_cast<Magics<ROOK>>(GENERATED_MAGIC_ROOKS);
+        inline constinit auto const LINES   = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_LINES);
+        inline constinit auto const FROM_TO = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_FROM_TO);
     } // namespace detail
 
     inline constexpr Bitboard
@@ -37,7 +37,7 @@ namespace chepp::movegen {
     }
 
     template <PieceType pc>
-    requires (pc != NO_PIECE_TYPE)
+        requires(pc != NO_PIECE_TYPE)
     inline constexpr Bitboard
     pseudo_attack(const Square sq, const Color c) noexcept {
         if constexpr (pc == PAWN) {
@@ -49,7 +49,7 @@ namespace chepp::movegen {
     }
 
     template <PieceType pc>
-    requires (pc != NO_PIECE_TYPE)
+        requires(pc != NO_PIECE_TYPE)
     inline constexpr Bitboard
     attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE) noexcept {
         if constexpr (pc == BISHOP) {
@@ -65,8 +65,7 @@ namespace chepp::movegen {
     }
 
     inline static constinit EnumArray<Bitboard (*)(Square, Bitboard, Color), PieceType> attack_table{
-        constexpr_in_place, [] <PieceType pt> (std::integral_constant<PieceType, pt>) { return &attacks<pt>; }
-    };
+        constexpr_in_place, []<PieceType pt>(std::integral_constant<PieceType, pt>) { return &attacks<pt>; }};
 
     inline constexpr Bitboard
     attacks(const PieceType pt, const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE) {
