@@ -37,8 +37,7 @@ else()
     endif()
 endif()
 
-set (NNUE_SOURCES relu_test.cpp)
-
+set (NNUE_SOURCES accum_test.cpp affine_test.cpp)
 
 add_executable(ChePP_core_tests ${CORE_SOURCES})
 add_executable(ChePP_nnue_tests ${NNUE_SOURCES})
@@ -52,11 +51,26 @@ target_link_libraries(ChePP_core_tests PRIVATE
         GTest::gtest
         GTest::gtest_main
         ChePP_core
+        warnings
+        sanitizers
+        optimization
 )
 
 
-target_link_libraries(ChePP_nnue_tests PRIVATE hwy hwy_test ${HWY_TEST_LIBS} GTest::gtest GTest::gtest_main ChePP_nnue ChePP_core)
-target_include_directories(ChePP_nnue_tests PRIVATE .)
+target_link_libraries(ChePP_nnue_tests PRIVATE
+        hwy
+        hwy_test
+        ${HWY_TEST_LIBS}
+        GTest::gtest
+        GTest::gtest_main
+        ChePP_core
+        mdspan
+        ChePP_nnue
+        warnings
+        optimization
+)
+
+target_include_directories(ChePP_nnue_tests PRIVATE . ${ChePP_nnue_SOURCE_DIR})
 
 include(GoogleTest)
 gtest_discover_tests(ChePP_core_tests)

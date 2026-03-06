@@ -21,8 +21,8 @@ namespace chepp {
             Node* prev{};
             int   ply{};
 
-            Positions::Handle           position{};
-            chepp::nnue::Arch::Network* network{};
+            Positions::Handle    position{};
+            nnue::Arch::Network* network{};
 
             bool is_repetition{false};
             int  static_eval{0};
@@ -41,12 +41,12 @@ namespace chepp {
             RefutationHistory* refutation_history{};
         };
 
-        explicit SearchStack(const Positions& positions, const std::shared_ptr<chepp::nnue::Arch::Kernels>& kernels)
-            : m_positions(positions), m_network(kernels), m_nodes(std::make_unique<Node[]>(MAX_PLY)),
+        explicit SearchStack(const Positions& positions, const std::shared_ptr<nnue::Arch::Network>& network)
+            : m_positions(positions), m_network(network), m_nodes(std::make_unique<Node[]>(MAX_PLY)),
               m_history(std::make_unique<History>()), m_capture_history(std::make_unique<CaptureHistory>()),
               m_continuation_history(std::make_unique<ContinuationHistory>()),
               m_null_move_continuation_history(std::make_unique<History>()) {
-            m_network.init(m_positions.last());
+            m_network->init(m_positions.last());
             update_last_node();
         }
 
@@ -72,7 +72,7 @@ namespace chepp {
             const int init_ply = ply();
             m_positions.do_move(move);
             if (update_nnue && move != Move::none() && move != Move::null()) {
-                m_network.update(m_positions[init_ply], m_positions[ply()]);
+                m_network->update(m_positions[init_ply], m_positions[ply()]);
             }
             update_last_node();
         }
@@ -83,7 +83,7 @@ namespace chepp {
             const Move move = m_positions.last().move();
             reset_last_node();
             if (update_nnue && move != Move::none() && move != Move::null()) {
-                m_network.undo();
+                m_network->undo();
             }
             m_positions.undo_move();
         }
@@ -95,7 +95,7 @@ namespace chepp {
             node.prev  = ply() == 0 ? nullptr : &m_nodes[ply() - 1];
             node.ply   = ply();
 
-            node.network       = &m_network;
+            node.network       = m_network.get();
             node.position      = m_positions.handle_to_last();
             node.is_repetition = m_positions.is_repetition();
 
@@ -126,9 +126,9 @@ namespace chepp {
             node.single_extensions  = 0;
         }
 
-        Positions                  m_positions;
-        chepp::nnue::Arch::Network m_network;
-        std::unique_ptr<Node[]>    m_nodes;
+        Positions                            m_positions;
+        std::shared_ptr<nnue::Arch::Network> m_network;
+        std::unique_ptr<Node[]>              m_nodes;
 
         std::unique_ptr<History>             m_history{};
         std::unique_ptr<CaptureHistory>      m_capture_history{};

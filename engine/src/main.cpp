@@ -1,4 +1,4 @@
-#include "UCI.h"
+#include "engine.h"
 using namespace chepp;
 int
 main() {
