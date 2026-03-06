@@ -12,7 +12,7 @@ FetchContent_MakeAvailable(mdspan)
 
 add_library(ChePP_nnue STATIC nnue.cpp)
 
-embed_bin(TARGET ChePP_nnue NAME weights BIN ${CMAKE_CURRENT_SOURCE_DIR}/weights/weights.net DIR ${CMAKE_CURRENT_SOURCE_DIR}/weights)
+embed_bin(TARGET ChePP_nnue NAME weights BIN ${CMAKE_CURRENT_SOURCE_DIR}/weights/weights.net DIR ${CMAKE_CURRENT_SOURCE_DIR}/weights QUALIFIER "")
 
 target_link_libraries(ChePP_nnue PRIVATE warnings optimization target ChePP_core mdspan)
 target_link_libraries(ChePP_nnue PUBLIC hwy)
