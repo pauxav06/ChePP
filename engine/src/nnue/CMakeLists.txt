@@ -19,3 +19,4 @@ target_link_libraries(ChePP_nnue PRIVATE warnings optimization target ChePP_core
 target_link_libraries(ChePP_nnue PUBLIC hwy)
 target_compile_definitions(ChePP_nnue PUBLIC HWY_COMPILE_ONLY_STATIC HWY_AUTOTUNE_STDSORT)
 target_include_directories(ChePP_nnue PUBLIC include)
+target_include_directories(ChePP_nnue PRIVATE .)
