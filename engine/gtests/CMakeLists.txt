@@ -52,7 +52,6 @@ target_link_libraries(ChePP_core_tests PRIVATE
         GTest::gtest_main
         ChePP_core
         warnings
-        sanitizers
         optimization
 )
 
