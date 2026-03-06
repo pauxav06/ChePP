@@ -17,6 +17,7 @@ jobs:
           - { c: gcc-14, cpp: g++-14, os: ubuntu-latest }
           - { c: clang, cpp: clang++, os: ubuntu-latest }
           - { c: cl, cpp: cl, os: windows-latest }
+          - { c: clang, cpp: clang++, os: macos-latest }
         build_type: [Release]
 
     steps:
@@ -49,7 +50,7 @@ jobs:
             -S ${{ github.workspace }}
 
       - name: Build
-        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target ChePP
+        run: cmake --build ${{ steps.strings.outputs.build-output-dir }} --config ${{ matrix.build_type }} --target ChePP -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
 
       - name: Test
         working-directory: ${{ steps.strings.outputs.build-output-dir }}
