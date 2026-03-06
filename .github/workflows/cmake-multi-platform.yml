@@ -13,7 +13,6 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
         compiler_combo:
           - { c: gcc-14, cpp: g++-14, os: ubuntu-latest }
           - { c: clang, cpp: clang++, os: ubuntu-latest }
@@ -30,17 +29,17 @@ jobs:
           echo "build-output-dir=${{ github.workspace }}/build" >> "$GITHUB_OUTPUT"
 
       - name: Install GCC 14
-        if: runner.os == 'Linux' && matrix.c_compiler == 'gcc-14'
+        if: runner.os == 'Linux' && matrix.compiler_combo.c == 'gcc-14'
         run: |
           sudo apt update
           sudo apt install -y gcc-14 g++-14
 
       - name: Configure CMake
         run: |
-            cmake -B ${{ steps.strings.outputs.build-output-dir }} \
-            -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }} \
-            -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }} \
-            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }} \
+            cmake -B ${{ steps.strings.outputs.build-output-dir }}
+            -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }}
+            -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }}
+            -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
             -S ${{ github.workspace }}
 
       - name: Build
