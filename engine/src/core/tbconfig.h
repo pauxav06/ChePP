@@ -56,7 +56,6 @@ tb_king_attacks(int x);
 
 #define TB_CUSTOM_POP_COUNT(x) tb_popcnt64(x)
 
-
 /*
  * Define TB_CUSTOM_LSB to override the internal lsb
  * implementation. To do this supply a macro or function definition
@@ -103,6 +102,22 @@ tb_king_attacks(int x);
  * Define TB_NO_HW_POP_COUNT if there is no hardware popcount instruction.
  */
 /* #define TB_NO_HW_POP_COUNT */
+
+/***************************************************************************/
+/* SCORING CONSTANTS                                                       */
+/***************************************************************************/
+/*
+ * Fathom can produce scores for tablebase moves. These depend on the
+ * value of a pawn, and the magnitude of mate scores. The following
+ * constants are representative values but will likely need
+ * modification to adapt to an engine's own internal score values.
+ */
+
+#define TB_VALUE_PAWN 100 /* value of pawn in endgame */
+#define TB_VALUE_MATE 32000
+#define TB_VALUE_INFINITE 32767 /* value above all normal score values */
+#define TB_VALUE_DRAW 0
+#define TB_MAX_MATE_PLY 255
 
 /***************************************************************************/
 /* ENGINE INTEGRATION CONFIG                                               */

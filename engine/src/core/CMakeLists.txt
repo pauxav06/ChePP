@@ -1,6 +1,6 @@
 FetchContent_Declare(
         fathom
-        GIT_REPOSITORY https://github.com/basil00/Fathom.git
+        GIT_REPOSITORY https://github.com/jdart1/Fathom.git
         GIT_TAG master
 )
 FetchContent_MakeAvailable(fathom)
