@@ -14,6 +14,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
+        c_compiler: [cl, gcc-14, clalg]
+        cpp_compiler: [cl ,g++-14, clang++]
         build_type: [Release]
         include:
           - os: windows-latest

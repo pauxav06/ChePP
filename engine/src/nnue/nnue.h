@@ -387,6 +387,7 @@ namespace chepp::nnue {
 
     // This variable controls which layers will be compiled
     static constexpr auto ALL_LAYERS = std::tuple_cat(Arch::layers{});
+
     void
     register_all_layers(KernelRegistry&);
 } // namespace chepp::nnue

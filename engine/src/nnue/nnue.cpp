@@ -1,12 +1,11 @@
 #include "nnue.h"
 #include <hwy/auto_tune.h>
 #include <hwy/base.h>
-#include <hwy/nanobenchmark.h>
 
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "nnue.cpp"
 
-#include "hwy/foreach_target.h"
+#include <hwy/foreach_target.h>
 #include <hwy/highway.h>
 
 #include "accumulator-inl.h"
