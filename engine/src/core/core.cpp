@@ -59,7 +59,7 @@ namespace chepp {
             return false;
         }
 
-        if (tb_init(path.begin())) {
+        if (tb_init(path.data())) {
             return true;
         }
         std::cerr << "Tablebase init failed: " << path << "\n";
