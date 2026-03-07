@@ -1,4 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
+
+cmake_policy(SET CMP0079 NEW)
+cmake_policy(SET CMP0069 NEW)
+
 project(ChePP LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -7,11 +11,17 @@ set(CMAKE_C_STANDARD_REQUIRED ON)
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
-cmake_policy(SET CMP0079 NEW)
+include(FetchContent)
+include(CheckSourceCompiles)
+include(CheckSourceRuns)
+
+include(cmake/options.cmake)
+include(cmake/warnings.cmake)
+include(cmake/optimizations.cmake)
+include(cmake/sanitizers.cmake)
+include(cmake/targets.cmake)
 
 # Dependencies
-
-include(FetchContent)
 
 FetchContent_Declare(argparse GIT_REPOSITORY https://github.com/p-ranav/argparse.git GIT_TAG v3.1)
 FetchContent_MakeAvailable(argparse)
@@ -31,8 +41,6 @@ FetchContent_MakeAvailable(fathom)
 
 
 # Compatibility layer for partial cpp standard support
-
-include(CheckSourceCompiles)
 
 add_library(compat INTERFACE)
 target_include_directories(compat INTERFACE ${CMAKE_SOURCE_DIR}/compat)

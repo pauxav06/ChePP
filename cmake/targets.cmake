@@ -19,3 +19,18 @@ if(MSVC)
 else()
         target_compile_options(target INTERFACE -march=native)
 endif()
+
+get_target_property(COMP_OPTS target INTERFACE_COMPILE_OPTIONS)
+
+set(CMAKE_REQUIRED_FLAGS ${COMP_OPTS})
+unset(HAVE_PEXT CACHE)
+check_source_runs(CXX [[
+    #include <immintrin.h>
+    int main () { return _pext_u64(0, 9); }
+]] HAVE_PEXT)
+
+if (HAVE_PEXT)
+    add_compile_definitions(CHEPP_PEXT=1)
+else()
+    add_compile_definitions(CHEPP_PEXT=0)
+endif()

@@ -18,7 +18,7 @@ jobs:
           - { c: clang, cpp: clang++, os: ubuntu-latest }
           - { c: cl, cpp: cl, os: windows-latest }
           - { c: clang, cpp: clang++, os: macos-latest }
-        build_type: [Release]
+        build_type: [Release, Debug]
 
     steps:
       - uses: actions/checkout@v4

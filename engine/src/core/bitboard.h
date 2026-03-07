@@ -14,8 +14,6 @@
 #include <ranges>
 #include <string>
 
-#define CHEPP_PEXT 0
-
 #if CHEPP_PEXT == 1
 #include <immintrin.h>
 #endif

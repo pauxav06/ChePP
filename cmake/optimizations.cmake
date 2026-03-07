@@ -1,16 +1,18 @@
 add_library(optimization INTERFACE)
 
-set(NO_LTO OFF CACHE BOOL "Disable Link Time Optimization")
-if (NOT NO_LTO AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
-    set_property(TARGET optimization PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+set(NO_LTO FALSE CACHE BOOL "Disable Link Time Optimization")
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported)
+if(ipo_supported AND NOT NO_LTO AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
+
 
 if(MSVC)
     if(CMAKE_BUILD_TYPE MATCHES "Debug")
         target_compile_options(optimization INTERFACE /Od /Zi)
     else()
-        target_compile_options(optimization INTERFACE /O2 /Oi /GL /Gy)
-        target_link_options(optimization INTERFACE /LTCG)
+        target_compile_options(optimization INTERFACE /O2 /Oi /Gy)
     endif()
 else()
     if(CMAKE_BUILD_TYPE MATCHES "Debug")

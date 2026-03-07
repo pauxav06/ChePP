@@ -34,7 +34,7 @@ endforeach ()
 target_include_directories(ChePP_core PUBLIC ${GEN_DIR})
 
 target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1 CHEPP_USE_TB=1)
-target_link_libraries(ChePP_core PRIVATE options  warnings optimization target)
+target_link_libraries(ChePP_core PRIVATE options warnings optimization target)
 target_link_libraries(ChePP_core PUBLIC compat)
 target_include_directories(ChePP_core PRIVATE ${fathom_SOURCE_DIR}/src)
 target_include_directories(ChePP_core PUBLIC include ${hedley_SOURCE_DIR})
