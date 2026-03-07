@@ -1,5 +1,9 @@
 add_library(optimization INTERFACE)
 
+if (NOT NO_LTO AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
+    set_property(TARGET optimization PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+endif()
+
 if(MSVC)
     if(CMAKE_BUILD_TYPE MATCHES "Debug")
         target_compile_options(optimization INTERFACE /Od /Zi)
@@ -12,8 +16,6 @@ else()
         target_compile_options(optimization INTERFACE -O0 -g)
     else()
         target_compile_options(optimization INTERFACE -O3 -fstrict-aliasing -fomit-frame-pointer)
-        target_compile_options(optimization INTERFACE -flto)
-        target_link_options(optimization INTERFACE -flto)
         target_compile_definitions(optimization INTERFACE NDEBUG)
     endif()
 endif()

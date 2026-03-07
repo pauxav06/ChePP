@@ -59,7 +59,7 @@ namespace chepp::nnue::layers {
                         AlignedVector<type> output(operation_t::output_size_v + kernel->padding());
 
                         std::vector<idx_t> idx(IS);
-                        std::ranges::iota(idx, 0);
+                        std::iota(std::begin(idx), std::end(idx), static_cast<idx_t>(0));
 
                         ref->forward(std::data(idx), std::size(idx), std::data(output));
                         auto ref_output = output;

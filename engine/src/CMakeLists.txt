@@ -1,5 +1,5 @@
 add_executable(bin2cpp bin2cpp.cpp)
-target_link_libraries(bin2cpp PRIVATE warnings optimization compat target argparse)
+target_link_libraries(bin2cpp PRIVATE options warnings optimization compat target argparse)
 
 function(embed_bin)
     cmake_parse_arguments(EMBED "" "TARGET;NAME;BIN;DIR;QUALIFIER" "" ${ARGN})
@@ -23,4 +23,4 @@ add_subdirectory(nnue)
 add_subdirectory(engine)
 
 add_executable(ChePP main.cpp)
-target_link_libraries(ChePP compat warnings optimization target ChePP_core ChePP_nnue ChePP_engine)
+target_link_libraries(ChePP options compat warnings optimization target ChePP_core ChePP_nnue ChePP_engine)

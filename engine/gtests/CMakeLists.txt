@@ -49,6 +49,7 @@ target_link_libraries(ChePP_core_tests PRIVATE
         GTest::gtest
         GTest::gtest_main
         ChePP_core
+        options
         compat
         warnings
         optimization
@@ -62,6 +63,7 @@ target_link_libraries(ChePP_nnue_tests PRIVATE
         hwy_test
         GTest::gtest
         GTest::gtest_main
+        options
         compat
         warnings
         optimization
