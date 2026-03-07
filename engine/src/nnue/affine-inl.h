@@ -210,7 +210,7 @@ namespace chepp::nnue::layers {
                     for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
                         *regs[u] = hn::Zero(Dout());
                     }
-                    *regs[0] = hn::Load(Dout(), &m_biases[b, 0]);
+                    *regs[0] = hn::Load(Dout(), &MD_ACCESS(m_biases, b, 0));
                     for (extent_type c = 0; c < m_weights.extent(1); ++c) {
                         for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
                             packed_type packed{0};

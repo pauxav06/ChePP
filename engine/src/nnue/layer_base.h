@@ -10,6 +10,7 @@
 #include <functional>
 #include <memory>
 #include <numeric>
+#include <stop_token>
 #include <string>
 #include <type_traits>
 #include <typeindex>
