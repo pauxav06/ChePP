@@ -18,7 +18,7 @@ jobs:
           - { c: clang, cpp: clang++, os: ubuntu-latest }
           - { c: cl, cpp: cl, os: windows-latest }
           - { c: clang, cpp: clang++, os: macos-latest }
-        build_type: [Debug]
+        build_type: [Release]
 
     steps:
       - uses: actions/checkout@v4
@@ -47,7 +47,7 @@ jobs:
             -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }}
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }}
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-            -DCMAKE_INTERPROCEDURAL_OPTIMIZATION=OFF
+            -DNO_LTO
             -S ${{ github.workspace }}
 
       - name: Build
