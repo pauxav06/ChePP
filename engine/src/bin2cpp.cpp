@@ -1,14 +1,13 @@
 #include <argparse/argparse.hpp>
+#include <cassert>
 #include <cstdint>
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
-#include <nlohmann/json.hpp>
 #include <vector>
 
 namespace fs = std::filesystem;
-using json   = nlohmann::json;
 
 inline std::string
 sanitize_name(const std::string& s) {

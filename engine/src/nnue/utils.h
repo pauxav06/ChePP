@@ -57,7 +57,7 @@
 #define IF_1(val, other) val
 #define IF_0(val, other) other
 
-#define EXTENT_IF(cond, val) (IF_ELSE(cond, val, std::dynamic_extent))
+#define EXTENT_IF(cond, val) (IF_ELSE(cond, val, md::dynamic_extent))
 #define HWY_CONSTEXPR_EXT(val) EXTENT_IF(HWY_HAVE_CONSTEXPR_LANES, val)
 #define HWY_STATIC_CONSTEXPR IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, static constexpr, )
 
@@ -76,16 +76,15 @@
 #define GET_REG(N) *regs[N]
 
 template <typename IT>
-concept byte_input_or_output_iterator = requires
-{
-    std::is_convertible_v<std::decay_t<typename std::iterator_traits<IT>::value_type>, uint8_t>;
-};
+concept byte_input_or_output_iterator =
+    requires { std::is_convertible_v<std::decay_t<typename std::iterator_traits<IT>::value_type>, uint8_t>; };
 
 namespace chepp::nnue::utils {
     template <typename T, byte_input_or_output_iterator It>
-    bool read_n(It& begin, const It& end, const std::size_t n) {
+    bool
+    read_n(It& begin, const It& end, const std::size_t n) {
         return std::ranges::advance(begin, n * sizeof(T), end) == 0;
     }
-}
+} // namespace chepp::nnue::utils
 
 #endif

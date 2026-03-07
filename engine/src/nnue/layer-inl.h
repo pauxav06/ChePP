@@ -1,7 +1,5 @@
 #include "layer_base.h"
-
-#include <experimental/mdarray>
-#include <experimental/mdspan>
+#include "mdspan.h"
 
 #if defined(CHEPP_LAYER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_LAYER_INL_H_
@@ -10,18 +8,10 @@
 #define CHEPP_LAYER_INL_H_
 #endif
 
-#if MDSPAN_USE_BRACKET_OPERATOR
-#define MD_ACCESS(c, ...) c[__VA_ARGS__]
-#else
-#define MD_ACCESS(c, ...) c(__VA_ARGS__)
-#endif
-
 #include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
 namespace chepp::nnue::layers {
-    namespace stdx = std::experimental;
-
     namespace HWY_NAMESPACE {
         template <typename, auto>
         struct Kernel;

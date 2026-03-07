@@ -1,12 +1,5 @@
-FetchContent_Declare(
-        fathom
-        GIT_REPOSITORY https://github.com/jdart1/Fathom.git
-        GIT_TAG master
-)
-FetchContent_MakeAvailable(fathom)
-
 add_executable(dump_bin dump_bin.cpp)
-target_link_libraries(dump_bin PRIVATE warnings optimization target argparse tl::expected)
+target_link_libraries(dump_bin PRIVATE warnings optimization target compat argparse)
 target_include_directories(dump_bin PRIVATE ${hedley_SOURCE_DIR})
 
 function(generate_bin)
@@ -41,6 +34,6 @@ endforeach ()
 target_include_directories(ChePP_core PUBLIC ${GEN_DIR})
 
 target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1 CHEPP_USE_TB=1)
-target_link_libraries(ChePP_core PUBLIC tl::expected)
-target_include_directories(ChePP_core PRIVATE warnings optimization target ${fathom_SOURCE_DIR}/src)
+target_link_libraries(ChePP_core PRIVATE compat warnings optimization target)
+target_include_directories(ChePP_core PRIVATE ${fathom_SOURCE_DIR}/src)
 target_include_directories(ChePP_core PUBLIC include ${hedley_SOURCE_DIR})

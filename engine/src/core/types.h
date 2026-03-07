@@ -1,12 +1,13 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
+#include <version>
+
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cassert>
 #include <cstdint>
-#include <expected>
 #include <format>
 #include <ostream>
 #include <print>
@@ -14,8 +15,10 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-#include <tl/expected.hpp>
+
 #include <vector>
+
+#include "expected.h"
 
 namespace chepp {
     using namespace std::literals;

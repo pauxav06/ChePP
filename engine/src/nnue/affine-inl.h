@@ -28,13 +28,7 @@ namespace chepp::nnue::layers {
         using namespace hwy;
         using namespace utils;
 
-        template <typename InT,
-                  std::size_t IS,
-                  typename OutT,
-                  std::size_t OS,
-                  typename WT,
-                  typename BT,
-                  default_config_t cfg>
+        template <typename InT, size_t IS, typename OutT, size_t OS, typename WT, typename BT, default_config_t cfg>
             requires(std::is_same_v<default_config_t, decltype(cfg)>)
         struct Kernel<Affine<InT, IS, OutT, OS, WT, BT>, cfg> final : Affine<InT, IS, OutT, OS, WT, BT>::ikernel_t {
             using affine_t = Affine<InT, IS, OutT, OS, WT, BT>;
@@ -46,28 +40,27 @@ namespace chepp::nnue::layers {
 
             using weight_t          = affine_t::weight_t;
             using bias_t            = affine_t::bias_t;
-            using weights_extents_t = std::extents<std::size_t, affine_t::output_size_v, affine_t::input_size_v>;
-            using biases_extents_t  = std::extents<std::size_t, affine_t::output_size_v>;
+            using weights_extents_t = md::extents<size_t, affine_t::output_size_v, affine_t::input_size_v>;
+            using biases_extents_t  = md::extents<size_t, affine_t::output_size_v>;
 
             using input_t  = affine_t::input_t;
             using output_t = affine_t::output_t;
 
-            using input_extents_t  = std::extents<std::size_t, affine_t::input_size_v>;
-            using output_extents_t = std::extents<std::size_t, affine_t::output_size_v>;
+            using input_extents_t  = md::extents<size_t, affine_t::input_size_v>;
+            using output_extents_t = md::extents<size_t, affine_t::output_size_v>;
 
-            using weights_t =
-                stdx::mdarray<const weight_t, weights_extents_t, std::layout_right, hwy::AlignedVector<weight_t>>;
-            using biases_t =
-                stdx::mdarray<const bias_t, biases_extents_t, std::layout_right, hwy::AlignedVector<bias_t>>;
+            using weights_t = md::mdspan<const weight_t, weights_extents_t>;
+            using biases_t  = md::mdspan<const bias_t, biases_extents_t>;
 
             [[nodiscard]] std::string
             name() const noexcept override {
                 return std::format("default,target={}", TargetName(HWY_TARGET));
             }
 
-            explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept : base_t(l) {
-                std::ranges::copy(layer().weights(), std::begin(m_weights.container()));
-                std::ranges::copy(layer().biases(), std::begin(m_biases.container()));
+            explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
+                : base_t(l), m_weights_data(std::begin(l->weights()), std::end(l->weights())),
+                  m_biases_data(std::begin(l->biases()), std::end(l->biases())), m_weights(std::data(m_weights_data)),
+                  m_biases(std::data(m_biases_data)) {
             }
 
             void
@@ -83,17 +76,13 @@ namespace chepp::nnue::layers {
             }
 
           private:
-            weights_t m_weights;
-            biases_t  m_biases;
+            hwy::AlignedVector<weight_t> m_weights_data;
+            hwy::AlignedVector<bias_t>   m_biases_data;
+            weights_t                    m_weights;
+            biases_t                     m_biases;
         };
 
-        template <typename InT,
-                  std::size_t IS,
-                  typename OutT,
-                  std::size_t OS,
-                  typename WT,
-                  typename BT,
-                  AffineSimdColMaj cfg>
+        template <typename InT, size_t IS, typename OutT, size_t OS, typename WT, typename BT, AffineSimdColMaj cfg>
             requires(std::is_same_v<AffineSimdColMaj, decltype(cfg)> &&
                      std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
                      is_power_of_two(cfg.unroll))
@@ -124,29 +113,27 @@ namespace chepp::nnue::layers {
 
             using packed_type = hn::TFromD<Dpacked>;
 
-            HWY_STATIC_CONSTEXPR std::size_t m_input_lanes{hn::Lanes(Din())};
-            HWY_STATIC_CONSTEXPR std::size_t m_output_lanes{hn::Lanes(Dout())};
-            static constexpr std::size_t     m_padded_input_size{pad_up(affine_t::input_size_v, pack* unroll)};
-            static constexpr std::size_t     m_input_padding{m_padded_input_size - affine_t::input_size_v};
-            static constexpr std::size_t     m_chunks{m_padded_input_size / (pack * unroll)};
-            HWY_STATIC_CONSTEXPR std::size_t m_padded_output_size{pad_up(affine_t::output_size_v, m_output_lanes)};
-            HWY_STATIC_CONSTEXPR std::size_t m_output_padding{m_padded_output_size - affine_t::output_size_v};
-            HWY_STATIC_CONSTEXPR std::size_t m_blocks{m_padded_output_size / m_output_lanes};
+            HWY_STATIC_CONSTEXPR size_t m_input_lanes{hn::Lanes(Din())};
+            HWY_STATIC_CONSTEXPR size_t m_output_lanes{hn::Lanes(Dout())};
+            static constexpr size_t     m_padded_input_size{pad_up(affine_t::input_size_v, pack* unroll)};
+            static constexpr size_t     m_input_padding{m_padded_input_size - affine_t::input_size_v};
+            static constexpr size_t     m_chunks{m_padded_input_size / (pack * unroll)};
+            HWY_STATIC_CONSTEXPR size_t m_padded_output_size{pad_up(affine_t::output_size_v, m_output_lanes)};
+            HWY_STATIC_CONSTEXPR size_t m_output_padding{m_padded_output_size - affine_t::output_size_v};
+            HWY_STATIC_CONSTEXPR size_t m_blocks{m_padded_output_size / m_output_lanes};
 
-            using weights_extents_t = std::extents<std::size_t,
-                                                   HWY_CONSTEXPR_EXT(m_blocks),
-                                                   HWY_CONSTEXPR_EXT(m_chunks),
-                                                   unroll,
-                                                   HWY_CONSTEXPR_EXT(hn::Lanes(Dw()))>;
-            using weights_t =
-                stdx::mdarray<const weight_t, weights_extents_t, std::layout_right, hwy::AlignedVector<weight_t>>;
+            using weights_extents_t = md::extents<size_t,
+                                                  HWY_CONSTEXPR_EXT(m_blocks),
+                                                  HWY_CONSTEXPR_EXT(m_chunks),
+                                                  unroll,
+                                                  HWY_CONSTEXPR_EXT(hn::Lanes(Dw()))>;
+            using weights_t         = md::mdspan<const weight_t, weights_extents_t>;
 
             using biases_extents_t =
-                std::extents<std::size_t, HWY_CONSTEXPR_EXT(m_blocks), HWY_CONSTEXPR_EXT(m_output_lanes)>;
-            using biases_t =
-                stdx::mdarray<const bias_t, biases_extents_t, std::layout_right, hwy::AlignedVector<bias_t>>;
+                md::extents<size_t, HWY_CONSTEXPR_EXT(m_blocks), HWY_CONSTEXPR_EXT(m_output_lanes)>;
+            using biases_t = md::mdspan<const bias_t, biases_extents_t>;
 
-            using input_view_extents_t  = std::extents<size_t, HWY_CONSTEXPR_EXT(m_chunks), unroll, pack>;
+            using input_view_extents_t  = md::extents<size_t, HWY_CONSTEXPR_EXT(m_chunks), unroll, pack>;
             using output_view_extents_t = biases_extents_t;
 
             static constexpr input_view_extents_t      m_input_view_extents{m_chunks, unroll, pack};
@@ -160,12 +147,12 @@ namespace chepp::nnue::layers {
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
-            [[nodiscard]] std::size_t
+            [[nodiscard]] size_t
             input_padding() const noexcept override {
                 return m_input_padding;
             }
 
-            [[nodiscard]] std::size_t
+            [[nodiscard]] size_t
             output_padding() const noexcept override {
                 return m_output_padding;
             }
@@ -185,8 +172,10 @@ namespace chepp::nnue::layers {
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
-                : base_t(l), m_weights(m_blocks, m_chunks, unroll, hn::Lanes(Dw())),
-                  m_biases(m_blocks, m_output_lanes) {
+                : base_t(l), m_weights_data(m_padded_input_size * m_padded_output_size),
+                  m_biases_data(m_padded_output_size),
+                  m_weights(std::data(m_weights_data), m_blocks, m_chunks, unroll, hn::Lanes(Dw())),
+                  m_biases(std::data(m_biases_data), m_blocks, m_output_lanes) {
                 const matrix::MatrixView w{
                     std::data(layer().weights()), affine_t::output_size_v, affine_t::input_size_v};
                 const auto w_t0 = pad(w, m_output_padding, m_input_padding);
@@ -196,23 +185,23 @@ namespace chepp::nnue::layers {
                 const matrix::MatrixView b{std::data(layer().biases()), affine_t::output_size_v, 1};
                 const auto               b_t0 = pad(b, m_output_padding, 0);
 
-                materialize(w_t2, std::data(m_weights));
-                materialize(b_t0, std::data(m_biases));
+                materialize(w_t2, std::data(m_weights_data));
+                materialize(b_t0, std::data(m_biases_data));
             }
 
             void
             forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept override {
-                std::mdspan input{in_ptr, m_input_view_extents};
-                std::mdspan output{out_ptr, m_output_view_extents};
+                md::mdspan input{in_ptr, m_input_view_extents};
+                md::mdspan output{out_ptr, m_output_view_extents};
 
                 DECLARE_REG_BANK(weights_t::static_extent(2), Vout);
                 for (extent_type b = 0; b < m_weights.extent(0); ++b) {
-                    for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
+                    for (size_t u = 0; u < m_weights.extent(2); ++u) {
                         *regs[u] = hn::Zero(Dout());
                     }
                     *regs[0] = hn::Load(Dout(), &MD_ACCESS(m_biases, b, 0));
                     for (extent_type c = 0; c < m_weights.extent(1); ++c) {
-                        for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
+                        for (size_t u = 0; u < m_weights.extent(2); ++u) {
                             packed_type packed{0};
                             std::memcpy(&packed, &MD_ACCESS(input, c, u, 0), sizeof(packed_type)); // cast is UB
                             auto in  = hn::Set(Dpacked(), packed);
@@ -230,17 +219,13 @@ namespace chepp::nnue::layers {
             }
 
           private:
-            weights_t m_weights;
-            biases_t  m_biases;
+            hwy::AlignedVector<weight_t> m_weights_data;
+            hwy::AlignedVector<output_t> m_biases_data;
+            weights_t                    m_weights;
+            biases_t                     m_biases;
         };
 
-        template <typename InT,
-                  std::size_t IS,
-                  typename OutT,
-                  std::size_t OS,
-                  typename WT,
-                  typename BT,
-                  AffineSimdRowMaj cfg>
+        template <typename InT, size_t IS, typename OutT, size_t OS, typename WT, typename BT, AffineSimdRowMaj cfg>
             requires(std::is_same_v<AffineSimdRowMaj, decltype(cfg)> &&
                      std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
                      is_power_of_two(cfg.unroll))
@@ -270,26 +255,24 @@ namespace chepp::nnue::layers {
 
             using packed_type = hn::TFromD<Dpacked>;
 
-            HWY_STATIC_CONSTEXPR std::size_t m_input_lanes{hn::Lanes(Din())};
-            HWY_STATIC_CONSTEXPR std::size_t m_output_lanes{hn::Lanes(Dout())};
-            HWY_STATIC_CONSTEXPR std::size_t m_padded_input_size{pad_up(affine_t::input_size_v, m_input_lanes)};
-            HWY_STATIC_CONSTEXPR std::size_t m_input_padding{m_padded_input_size - affine_t::input_size_v};
-            HWY_STATIC_CONSTEXPR std::size_t m_chunks{m_padded_input_size / m_input_lanes};
-            static constexpr std::size_t     m_padded_output_size{pad_up(affine_t::output_size_v, unroll)};
-            static constexpr std::size_t     m_output_padding{m_padded_output_size - affine_t::output_size_v};
-            static constexpr std::size_t     m_blocks{m_padded_output_size / unroll};
+            HWY_STATIC_CONSTEXPR size_t m_input_lanes{hn::Lanes(Din())};
+            HWY_STATIC_CONSTEXPR size_t m_output_lanes{hn::Lanes(Dout())};
+            HWY_STATIC_CONSTEXPR size_t m_padded_input_size{pad_up(affine_t::input_size_v, m_input_lanes)};
+            HWY_STATIC_CONSTEXPR size_t m_input_padding{m_padded_input_size - affine_t::input_size_v};
+            HWY_STATIC_CONSTEXPR size_t m_chunks{m_padded_input_size / m_input_lanes};
+            static constexpr size_t     m_padded_output_size{pad_up(affine_t::output_size_v, unroll)};
+            static constexpr size_t     m_output_padding{m_padded_output_size - affine_t::output_size_v};
+            static constexpr size_t     m_blocks{m_padded_output_size / unroll};
 
-            using weights_extents_t = std::
-                extents<std::size_t, m_blocks, HWY_CONSTEXPR_EXT(m_chunks), unroll, HWY_CONSTEXPR_EXT(hn::Lanes(Dw()))>;
-            using weights_t =
-                stdx::mdarray<const weight_t, weights_extents_t, std::layout_right, hwy::AlignedVector<weight_t>>;
+            using weights_extents_t =
+                md::extents<size_t, m_blocks, HWY_CONSTEXPR_EXT(m_chunks), unroll, HWY_CONSTEXPR_EXT(hn::Lanes(Dw()))>;
+            using weights_t = md::mdspan<const weight_t, weights_extents_t>;
 
-            using biases_extents_t = std::extents<std::size_t, m_blocks, unroll>;
-            using biases_t =
-                stdx::mdarray<const bias_t, biases_extents_t, std::layout_right, hwy::AlignedVector<bias_t>>;
+            using biases_extents_t = md::extents<size_t, m_blocks, unroll>;
+            using biases_t         = md::mdspan<const bias_t, biases_extents_t>;
 
             using input_view_extents_t =
-                std::extents<size_t, HWY_CONSTEXPR_EXT(m_chunks), HWY_CONSTEXPR_EXT(m_input_lanes)>;
+                md::extents<size_t, HWY_CONSTEXPR_EXT(m_chunks), HWY_CONSTEXPR_EXT(m_input_lanes)>;
             using output_view_extents_t = biases_extents_t;
 
             HWY_STATIC_CONSTEXPR input_view_extents_t m_input_view_extents{m_chunks, m_input_lanes};
@@ -303,12 +286,12 @@ namespace chepp::nnue::layers {
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
             }
 
-            [[nodiscard]] std::size_t
+            [[nodiscard]] size_t
             input_padding() const noexcept override {
                 return m_input_padding;
             }
 
-            [[nodiscard]] std::size_t
+            [[nodiscard]] size_t
             output_padding() const noexcept override {
                 return m_output_padding;
             }
@@ -328,7 +311,11 @@ namespace chepp::nnue::layers {
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
-                : base_t(l), m_weights(m_blocks, m_chunks, unroll, hn::Lanes(Dw())), m_biases(m_blocks, unroll) {
+                : base_t(l), m_weights_data(m_padded_input_size * m_padded_output_size),
+                  m_biases_data(m_padded_output_size),
+
+                  m_weights(std::data(m_weights_data), m_blocks, m_chunks, unroll, hn::Lanes(Dw())),
+                  m_biases(std::data(m_biases_data), m_blocks, unroll) {
                 const matrix::MatrixView w{
                     std::data(layer().weights()), affine_t::output_size_v, affine_t::input_size_v};
                 const auto w_t0 = pad(w, m_output_padding, m_input_padding);
@@ -338,14 +325,14 @@ namespace chepp::nnue::layers {
                 const matrix::MatrixView b{std::data(layer().biases()), affine_t::output_size_v, 1};
                 const auto               b_t0 = pad(b, m_output_padding, 0);
 
-                materialize(w_t2, std::data(m_weights));
-                materialize(b_t0, std::data(m_biases));
+                materialize(w_t2, std::data(m_weights_data));
+                materialize(b_t0, std::data(m_biases_data));
             }
 
             void
             forward(const input_t* HWY_RESTRICT in_ptr, output_t* HWY_RESTRICT out_ptr) const noexcept override {
-                std::mdspan input{in_ptr, m_input_view_extents};
-                std::mdspan output{out_ptr, m_output_view_extents};
+                md::mdspan input{in_ptr, m_input_view_extents};
+                md::mdspan output{out_ptr, m_output_view_extents};
 
                 DECLARE_REG_BANK(weights_t::static_extent(2), Vout);
                 for (extent_type b = 0; b < m_weights.extent(0); ++b) {
@@ -366,8 +353,10 @@ namespace chepp::nnue::layers {
             }
 
           private:
-            weights_t m_weights;
-            biases_t  m_biases;
+            hwy::AlignedVector<weight_t> m_weights_data;
+            hwy::AlignedVector<bias_t>   m_biases_data;
+            weights_t                    m_weights;
+            biases_t                     m_biases;
         };
     }; // namespace HWY_NAMESPACE
 } // namespace chepp::nnue::layers
