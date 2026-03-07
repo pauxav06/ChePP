@@ -57,7 +57,7 @@
 #define IF_1(val, other) val
 #define IF_0(val, other) other
 
-#define EXTENT_IF(cond, val) (IF_ELSE(cond, val, md::dynamic_extent))
+#define EXTENT_IF(cond, val) (IF_ELSE(cond, val, std::dynamic_extent))
 #define HWY_CONSTEXPR_EXT(val) EXTENT_IF(HWY_HAVE_CONSTEXPR_LANES, val)
 #define HWY_STATIC_CONSTEXPR IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, static constexpr, )
 
