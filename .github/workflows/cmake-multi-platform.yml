@@ -47,7 +47,7 @@ jobs:
             -DCMAKE_C_COMPILER=${{ matrix.compiler_combo.c }}
             -DCMAKE_CXX_COMPILER=${{ matrix.compiler_combo.cpp }}
             -DCMAKE_BUILD_TYPE=${{ matrix.build_type }}
-            -DNO_LTO
+            -DNO_LTO=TRUE
             -S ${{ github.workspace }}
 
       - name: Build
