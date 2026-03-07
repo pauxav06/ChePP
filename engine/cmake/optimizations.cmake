@@ -1,5 +1,6 @@
 add_library(optimization INTERFACE)
 
+set(NO_LTO OFF CACHE BOOL "Disable Link Time Optimization")
 if (NOT NO_LTO AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
     set_property(TARGET optimization PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()

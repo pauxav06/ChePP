@@ -8,9 +8,10 @@
 #define HWY_TARGET_INCLUDE "relu_test.cpp"
 #include "hwy/foreach_target.h"
 
-#include "../relu-inl.h"
 #include <hwy/highway.h>
 #include <hwy/tests/test_util-inl.h>
+
+#include "../relu-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 

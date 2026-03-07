@@ -1,7 +1,6 @@
 #include <hwy/base.h>
 
 #include "hwy/nanobenchmark.h"
-#include "hwy/tests/hwy_gtest.h"
 
 #undef HWY_DISABLED_TARGETS
 #define HWY_DISABLED_TARGETS HWY_SCALAR
@@ -117,5 +116,4 @@ namespace chepp::nnue::layers {
         HWY_AFTER_TEST();
     } // namespace
 } // namespace chepp::nnue::layers
-// HWY_TEST_MAIN();
 #endif // HWY_ONCE
