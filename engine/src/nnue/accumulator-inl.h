@@ -1,5 +1,8 @@
+#include "mdspan.h"
+
 #include "accumulator.h"
 #include "matrix.h"
+
 #include <cassert>
 #include <cstring>
 #include <hwy/aligned_allocator.h>

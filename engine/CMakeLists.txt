@@ -5,4 +5,3 @@ include(cmake/targets.cmake)
 
 add_subdirectory(src)
 add_subdirectory(gtests)
-enable_testing()

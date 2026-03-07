@@ -1,16 +1,13 @@
 #ifndef TYPES_H_INCLUDED
 #define TYPES_H_INCLUDED
 
-#include <version>
+#include "format.h"
 
 #include <algorithm>
 #include <array>
 #include <bit>
 #include <cassert>
 #include <cstdint>
-#include <format>
-#include <ostream>
-#include <print>
 #include <ranges>
 #include <sstream>
 #include <string>
@@ -132,14 +129,6 @@ namespace chepp {
         std::array<T, N> m_data{};
         size_type        m_size{0};
     };
-
-    template <typename... Ts>
-    std::string
-    format_error(Ts&&... xs) {
-        std::ostringstream oss;
-        (oss << ... << xs);
-        return oss.str();
-    }
 
     template <typename Derived>
     struct Printable {
@@ -384,9 +373,9 @@ namespace chepp {
 
 template <typename T>
     requires std::is_base_of_v<chepp::Printable<T>, T>
-struct std::formatter<T> : std::formatter<std::string> {
+struct fmt::formatter<T> : fmt::formatter<std::string> {
     auto
-    format(T value, std::format_context& ctx) const {
+    format(T value, fmt::format_context& ctx) const {
         return std::ranges::copy(std::move(value).to_string(), ctx.out()).out;
     }
 };
@@ -676,7 +665,7 @@ namespace chepp {
             if (s.size() == 1 && s[0] >= 'a' && s[0] <= 'h') {
                 return File{s[0] - 'a'};
             }
-            return tl::unexpected{format_error("unknown file", s)};
+            return tl::unexpected{fmt::format("unknown file {}", s)};
         }
     };
 
@@ -709,7 +698,7 @@ namespace chepp {
             if (sv.size() == 1 && sv[0] >= '1' && sv[0] <= '8') {
                 return Rank{sv[0] - '1'};
             }
-            return tl::unexpected{format_error("unknown rank", sv)};
+            return tl::unexpected{fmt::format("unknown rank {}", sv)};
         }
     };
 
@@ -776,14 +765,14 @@ namespace chepp {
                 return parse_t{tl::in_place};
             }
             if (s.size() != 2) {
-                return parse_t{tl::unexpect, std::format("unknown square {}", s)};
+                return parse_t{tl::unexpect, fmt::format("unknown square {}", s)};
             }
             const auto file = File::from_string(s.substr(0, 1));
             const auto rank = Rank::from_string(s.substr(1, 1));
             if (!file) {
-                return parse_t{tl::unexpect, std::format("could not build square: {}", file.error())};
+                return parse_t{tl::unexpect, fmt::format("could not build square: {}", file.error())};
             } else if (!rank) {
-                return parse_t{tl::unexpect, std::format("could not build square: {}", rank.error())};
+                return parse_t{tl::unexpect, fmt::format("could not build square: {}", rank.error())};
             }
             return parse_t{tl::in_place, *file, *rank};
         }
@@ -880,11 +869,11 @@ namespace chepp {
         [[nodiscard]] static tl::expected<PieceType, std::string>
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
-                return tl::unexpected{format_error("expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             };
             const auto it = repr.find(s[0]);
             if (it == std::string::npos) {
-                return tl::unexpected{format_error("expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             }
             return PieceType{it};
         }
@@ -933,11 +922,11 @@ namespace chepp {
         [[nodiscard]] static tl::expected<Color, std::string>
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
-                return tl::unexpected{format_error("expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             }
             const auto it = repr.find(s[0]);
             if (it == std::string::npos) {
-                return tl::unexpected{format_error("expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             }
             return Color{it};
         }
@@ -979,12 +968,12 @@ namespace chepp {
         [[nodiscard]] static tl::expected<Piece, std::string>
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
-                return tl::unexpected{std::format("expected char in {} but found {}", repr, s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             }
             if (const auto it = repr.find(s[0]); it != std::string::npos) {
                 return Piece{it};
             }
-            return tl::unexpected{format_error("expected char in ", repr, " but found ", s)};
+            return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
         }
     };
 
@@ -1110,11 +1099,11 @@ namespace chepp {
         [[nodiscard]] static tl::expected<CastlingType, std::string>
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
-                return tl::unexpected{format_error("Expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             }
             const auto it = repr.find(s[0]);
             if (it == std::string::npos) {
-                return tl::unexpected{format_error("Expected char in ", repr, " but found ", s)};
+                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
             };
             return CastlingType{it};
         }
@@ -1229,7 +1218,7 @@ namespace chepp {
         from_string(const std::string_view sv) {
             const auto it = std::ranges::find(repr, sv);
             if (it == repr.end()) {
-                return tl::unexpected{format_error("unexpected string", sv)};
+                return tl::unexpected{fmt::format("unexpected string {}", sv)};
             }
             return CastlingRights(std::distance(repr.begin(), it));
         }
@@ -1417,9 +1406,9 @@ namespace chepp {
         [[nodiscard]] std::string
         to_string() const noexcept {
             if (type_of() != PROMOTION) {
-                return std::format("{}{}", from_sq(), to_sq());
+                return fmt::format("{}{}", from_sq(), to_sq());
             } else {
-                return std::format("{}{}{}", from_sq(), to_sq(), promotion_type());
+                return fmt::format("{}{}{}", from_sq(), to_sq(), promotion_type());
             }
         }
 
@@ -1473,7 +1462,7 @@ namespace chepp {
     inline tl::expected<Move, std::string>
     Move::from_uci(const std::string_view s, const UCICtx& info) {
         auto err = [](const std::string& msg) {
-            return tl::unexpected{format_error("error while parsing uci move: ", msg)};
+            return tl::unexpected{fmt::format("error while parsing uci move: {}", msg)};
         };
         if (!(s.size() == 4 || s.size() == 5)) {
             return err("invalid string size");
@@ -1535,7 +1524,7 @@ namespace chepp {
         [[nodiscard]] static tl::expected<Fen, std::string>
         from_string(const std::string& s) noexcept {
             auto err = [](const std::string& msg) {
-                return tl::unexpected{format_error("error while parsing fen: ", msg)};
+                return tl::unexpected{fmt::format("error while parsing fen: {}", msg)};
             };
             Fen                fen{};
             std::istringstream iss{s};
@@ -1590,18 +1579,18 @@ namespace chepp {
 
             const auto ep_square = Square::from_string(ep_str);
             if (!ep_square) {
-                return err(format_error("Invalid en-passant square: ", ep_square.error()));
+                return err(fmt::format("Invalid en-passant square: {}", ep_square.error()));
             }
             fen.ep_square = ep_square.value();
 
             if (halfmove_str.size() > 3 || fullmove_str.size() > 3)
-                return tl::unexpected(std::format("Halfmove/fullmove field too long"));
+                return tl::unexpected(fmt::format("Halfmove/fullmove field too long"));
 
             try {
                 fen.halfmove = static_cast<uint16_t>(std::stoi(halfmove_str));
                 fen.fullmove = static_cast<uint16_t>(std::stoi(fullmove_str));
             } catch (const std::exception& e) {
-                return err(format_error("Invalid move counters in FEN: ", e.what()));
+                return err(fmt::format("Invalid move counters in FEN: {}", e.what()));
             }
             if (fen.fullmove < 1) {
                 return err("Invalid move counters in FEN: ");
@@ -1623,22 +1612,22 @@ namespace chepp {
                         ++empty;
                     } else {
                         if (empty > 0) {
-                            std::print(oss, "{}", empty);
+                            fmt::print(oss, "{}", empty);
                             empty = 0;
                         }
-                        std::print(oss, "{}", pc);
+                        fmt::print(oss, "{}", pc);
                     }
                 }
                 if (empty > 0) {
-                    std::print(oss, "{}", empty);
+                    fmt::print(oss, "{}", empty);
                 }
 
                 if (rank > RANK_1) {
-                    std::print(oss, "/");
+                    fmt::print(oss, "/");
                 }
             }
 
-            std::print(oss, " {} {} {} {} {}", color, crs, ep_square, halfmove, fullmove);
+            fmt::print(oss, " {} {} {} {} {}", color, crs, ep_square, halfmove, fullmove);
             return oss.str();
         }
 

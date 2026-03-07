@@ -1,3 +1,5 @@
+#include "mdspan.h"
+
 #include "relu.h"
 #include "utils.h"
 
@@ -97,7 +99,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return format_error("Simd: target = ", hwy::TargetName(HWY_TARGET), ", unroll = ", unroll);
+                return fmt::format("Simd,target={},unroll={}", hwy::TargetName(HWY_TARGET), unroll);
             }
 
             [[nodiscard]] size_t

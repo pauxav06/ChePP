@@ -229,14 +229,15 @@ namespace chepp {
                         time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                         auto nps         = m_statistics.nodes / time_since_start.count();
                         auto pv          = get_pv(ss().position(), root_best_move);
-                        std::print(std::cout,
-                                   "info score {} depth {} nodes {} nps {} tb_hits {} pv {}\n",
-                                   score,
-                                   depth,
-                                   m_statistics.nodes,
-                                   nps,
-                                   m_statistics.tb_hits,
-                                   format_pv_line(pv));
+                        fmt::println(std::cout,
+                                     "info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
+                                     score,
+                                     depth,
+                                     m_statistics.nodes,
+                                     nps,
+                                     m_statistics.tb_hits,
+                                     format_pv_line(pv));
+                        std::flush(std::cout);
 
                         TimeManager::UpdateInfo update_info;
                         update_info.eval = eval;
@@ -778,7 +779,8 @@ namespace chepp {
                 if (w.joinable()) w.join();
 
             if (const auto move = get_best_move(); move != Move::none()) {
-                std::print(std::cout, "bestmove {}\n", move);
+                fmt::print(std::cout, "bestmove {}\n", move);
+                std::flush(std::cout);
             }
 
             threads.clear();

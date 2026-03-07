@@ -1,5 +1,5 @@
 add_executable(bin2cpp bin2cpp.cpp)
-target_link_libraries(bin2cpp PRIVATE warnings optimization target argparse)
+target_link_libraries(bin2cpp PRIVATE warnings optimization compat target argparse)
 
 function(embed_bin)
     cmake_parse_arguments(EMBED "" "TARGET;NAME;BIN;DIR;QUALIFIER" "" ${ARGN})

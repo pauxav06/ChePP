@@ -13,8 +13,6 @@ if(NOT GTest_FOUND AND NOT TARGET gtest)
     FetchContent_MakeAvailable(googletest)
 endif()
 
-enable_testing()
-
 set (CORE_SOURCES
     perft_tests.cpp
     repetitions_test.cpp
@@ -37,7 +35,7 @@ else()
     endif()
 endif()
 
-set (NNUE_SOURCES accum_test.cpp affine_test.cpp)
+set (NNUE_SOURCES accum_test.cpp affine_test.cpp relu_test.cpp)
 
 add_executable(ChePP_core_tests ${CORE_SOURCES})
 add_executable(ChePP_nnue_tests ${NNUE_SOURCES})
@@ -51,25 +49,33 @@ target_link_libraries(ChePP_core_tests PRIVATE
         GTest::gtest
         GTest::gtest_main
         ChePP_core
+        compat
         warnings
         optimization
 )
 
 
 target_link_libraries(ChePP_nnue_tests PRIVATE
+        ChePP_core
+        ChePP_nnue
         hwy
         hwy_test
-        ${HWY_TEST_LIBS}
         GTest::gtest
         GTest::gtest_main
-        ChePP_core
-        mdspan
-        ChePP_nnue
+        compat
         warnings
         optimization
 )
+message(status ${ChePP_nnue_SOURCE_DIR})
 
-target_include_directories(ChePP_nnue_tests PRIVATE . ${ChePP_nnue_SOURCE_DIR})
+target_include_directories(ChePP_nnue_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+
+
+
+
+
+
+
 
 include(GoogleTest)
 gtest_discover_tests(ChePP_core_tests)

@@ -49,7 +49,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return format_error("Affine: ", type_name_v<input_t>, " -> ", type_name_v<output_t>);
+                return fmt::format("affine,input-type={},output-type={}", type_name_v<input_t>, type_name_v<output_t>);
             }
 
             [[nodiscard]] HWY_INLINE std::span<const weight_t>

@@ -19,8 +19,9 @@ FetchContent_MakeAvailable(argparse)
 FetchContent_Declare(hedley GIT_REPOSITORY https://github.com/nemequ/hedley.git GIT_TAG master)
 FetchContent_MakeAvailable(hedley)
 
-set(HWY_ENABLE_CONTRIB OFF)
-set(HWY_ENABLE_TESTS OFF)
+set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "" FORCE)
+set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
+set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
 FetchContent_Declare(highway GIT_REPOSITORY https://github.com/google/highway.git GIT_TAG master)
 FetchContent_MakeAvailable(highway)
@@ -86,6 +87,30 @@ else()
     message(STATUS "using std::mdspan")
 endif()
 
+unset(HAVE_FMT CACHE)
+check_source_compiles(CXX [[
+    #include <version>
+    #ifndef __cpp_lib_print
+    #error
+    #endif
+    int main(void) { return 0; }
+]] HAVE_FMT)
+
+if(NOT HAVE_FMT)
+    message(STATUS "std::format not found, fetching fmtlib")
+
+    set(FMT_MODULE OFF CACHE BOOL "" FORCE)
+    FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git GIT_TAG master)
+    FetchContent_MakeAvailable(fmt)
+
+    target_link_libraries(compat INTERFACE fmt::fmt)
+else()
+    target_compile_definitions(compat INTERFACE USE_STD_FMT)
+    message(STATUS "using std::format")
+endif()
+
+include(CTest)
+enable_testing()
 
 add_subdirectory(engine)
 #add_subdirectory(nnue_training)

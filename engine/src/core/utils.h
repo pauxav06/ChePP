@@ -2,6 +2,7 @@
 #define CHEPP_UTILS_H
 
 #include "expected.h"
+#include "format.h"
 
 #include <algorithm>
 #include <cstdint>

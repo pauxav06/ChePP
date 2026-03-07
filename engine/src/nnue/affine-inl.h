@@ -5,6 +5,7 @@
 
 #include "affine.h"
 #include "matrix.h"
+#include "mdspan.h"
 #include "utils.h"
 
 #include <memory>

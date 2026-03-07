@@ -1,11 +1,14 @@
 #include <hwy/base.h>
 #include <hwy/nanobenchmark.h>
 
+#undef HWY_DISABLED_TARGETS
+#define HWY_DISABLED_TARGETS HWY_SCALAR
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "relu_test.cpp"
 #include "hwy/foreach_target.h"
 
-#include "relu-inl.h"
+#include "../relu-inl.h"
 #include <hwy/highway.h>
 #include <hwy/tests/test_util-inl.h>
 
@@ -20,24 +23,22 @@ namespace chepp::nnue::layers {
             struct Test {
                 using input_type  = InT;
                 using output_type = OutT;
-                using layer_t     = ClippedReLULayer<input_type, IS, output_type, Q>;
+                using operation_t = ClippedRelu<input_type, IS, output_type, Q>;
+                using layer_t     = operation_t::layer_t;
 
                 Test() {
-                    register_kernel<layer_t, default_config>();
-                    register_kernel<layer_t, ClippedReluSimd{1}>();
-                    register_kernel<layer_t, ClippedReluSimd{2}>();
-                    register_kernel<layer_t, ClippedReluSimd{4}>();
-                    register_kernel<layer_t, ClippedReluSimd{8}>();
+                    register_kernel<default_config>();
+                    register_kernel<ClippedReluSimd{1}>();
+                    register_kernel<ClippedReluSimd{2}>();
+                    register_kernel<ClippedReluSimd{4}>();
+                    register_kernel<ClippedReluSimd{8}>();
                     // register_kernel<layer_t, ClippedReluSimd{16}>();
                 }
 
-                template <typename Layer, auto cfg>
+                template <auto cfg>
                 void
                 register_kernel() {
-                    auto key = registery.register_kernel<Layer, HWY_TARGET, cfg>();
-                    if (!cfg_mapping.contains(key)) {
-                        cfg_mapping.emplace(key, cfg_mapping.size());
-                    }
+                    registery.register_kernel<operation_t, HWY_TARGET, cfg>();
                 }
 
                 void
@@ -45,31 +46,14 @@ namespace chepp::nnue::layers {
                     using namespace hwy;
 
                     const auto layer   = std::make_shared<layer_t>();
-                    const auto kernels = registery.make_all_kernels(layer);
-                    const auto ref     = *registery.make_kernel(layer, HWY_TARGET, default_config);
+                    const auto kernels = registery.make_all_kernels<operation_t>(layer);
+                    const auto ref     = registery.make_kernel<operation_t>(layer, HWY_TARGET, default_config);
 
                     for (const auto& kernel : kernels) {
                         AlignedVector<input_type>  input(IS + kernel->input_padding());
                         AlignedVector<output_type> output(IS + kernel->output_padding());
 
                         fill_random(input, -10, 10);
-
-                        FuncInput   inp{};
-                        hwy::Result res{};
-                        Params      params{};
-                        params.verbose        = false;
-                        params.target_rel_mad = 0.5;
-                        hwy::MeasureClosure(
-                            [&](auto) -> FuncOutput {
-                                kernel->forward(std::data(input), std::data(output));
-                                return output[0];
-                            },
-                            &inp,
-                            1,
-                            &res,
-                            params);
-
-                        std::cout << TargetName(HWY_TARGET) << ": " << res.ticks << std::endl;
 
                         ref->forward(std::data(input), std::data(output));
                         auto ref_output = output;
@@ -80,8 +64,7 @@ namespace chepp::nnue::layers {
                     }
                 }
 
-                KernelRegistry                             registery{};
-                std::unordered_map<KernelKey, std::size_t> cfg_mapping{};
+                KernelRegistry registery{};
             };
 
             void
@@ -90,8 +73,10 @@ namespace chepp::nnue::layers {
                 Test<int16_t, 2048, uint8_t, 1>{}.inference();
                 Test<int32_t, 16, uint8_t, 64>{}.inference();
                 Test<int32_t, 32, uint8_t, 64>{}.inference();
-
                 // Edge cases
+                Test<int32_t, 1, uint8_t, 4>{}.inference();
+                Test<int32_t, 23, uint8_t, 8>{}.inference();
+                Test<int32_t, 765, uint8_t, 16>{}.inference();
             }
 
         } // namespace

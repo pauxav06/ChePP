@@ -1,6 +1,3 @@
-#include "layer_base.h"
-#include "mdspan.h"
-
 #if defined(CHEPP_LAYER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_LAYER_INL_H_
 #undef CHEPP_LAYER_INL_H_

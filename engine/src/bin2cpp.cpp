@@ -1,3 +1,5 @@
+#include "format.h"
+
 #include <argparse/argparse.hpp>
 #include <cassert>
 #include <cstdint>
@@ -44,46 +46,47 @@ main(int argc, char** argv) {
     try {
         std::ifstream input(input_path, std::ios::binary);
         if (!input) {
-            throw std::runtime_error(std::format("Failed to open input file {}", input_path.string()));
+            throw std::runtime_error(fmt::format("Failed to open input file {}", input_path.string()));
         }
         std::ofstream header(header_path, std::ios::binary);
         if (!header) {
-            throw std::runtime_error(std::format("Failed to open header {}", header_path.string()));
+            throw std::runtime_error(fmt::format("Failed to open header {}", header_path.string()));
         }
         std::ofstream inc(inc_path, std::ios::binary);
         if (!inc) {
-            throw std::runtime_error(std::format("Failed to open inc {}", inc_path.string()));
+            throw std::runtime_error(fmt::format("Failed to open inc {}", inc_path.string()));
         }
 
         std::vector<uint8_t> data((std::istreambuf_iterator(input)), std::istreambuf_iterator<char>());
 
         std::string array_name = "GENERATED_" + sanitize_name(name);
 
-        std::print(header, "#pragma once\n");
-        std::print(header, "#include <array>\n");
-        std::print(header, "#include <cstdint>\n\n");
-        std::print(header, "#if defined(IDE) && IDE == 1\n");
-        std::print(header, "inline {} const std::array<uint8_t, {}> {}{{}};\n", qualifier, data.size(), array_name);
-        std::print(header, "#else\n");
-        std::print(header, "#include \"{}\"\n", inc_path.string());
-        std::print(header, "#endif\n");
+        fmt::println(header, "#pragma once");
+        fmt::println(header, "#include <array>");
+        fmt::println(header, "#include <cstdint>");
+        fmt::println(header, "");
+        fmt::println(header, "#if defined(IDE) && IDE == 1");
+        fmt::println(header, "inline {} const std::array<uint8_t, {}> {}{{}};", qualifier, data.size(), array_name);
+        fmt::println(header, "#else");
+        fmt::println(header, "#include \"{}\"", inc_path.string());
+        fmt::println(header, "#endif");
 
-        std::print(inc, "inline {} const std::array<uint8_t, {}> {}{{\n", qualifier, data.size(), array_name);
+        fmt::println(inc, "inline {} const std::array<uint8_t, {}> {}{{", qualifier, data.size(), array_name);
         for (std::size_t i = 0; i < data.size(); ++i) {
-            std::print(inc, "0x{:02X}", data[i]);
+            fmt::print(inc, "0x{:02X}", data[i]);
             if (i != (data.size() - 1)) {
-                std::print(inc, ",");
+                fmt::print(inc, ",");
             }
-            if ((i + 1) % 16 == 0) std::print(inc, "\n");
+            if ((i + 1) % 16 == 0) fmt::println(inc, "");
         }
-        std::print(inc, "\n}};\n");
+        fmt::println(inc, "\n}};");
 
-        std::print(std::cout, "Generated {} ({} bytes)\n", header_path.string(), data.size());
+        fmt::println(std::cout, "Generated {} ({} bytes)", header_path.string(), data.size());
     } catch (std::exception& e) {
         fs::remove(input_path);
         fs::remove(inc_path);
         fs::remove(header_path);
-        std::print(std::cerr, "Error: {}\n", e.what());
+        fmt::println(std::cerr, "Error: {}", e.what());
         return 1;
     }
 }

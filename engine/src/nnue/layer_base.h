@@ -203,7 +203,7 @@ namespace chepp::nnue {
             if (m_kernels.contains(typeid(Operation))) {
                 for (const auto& [_, cfgs] : m_kernels.at(typeid(Operation))) {
                     for (const auto& [_1, factory] : cfgs) {
-                        res.emplace_back(std::any_cast<factory_t<Operation>>(factory(layer)));
+                        res.emplace_back(std::any_cast<factory_t<Operation>>(factory)(layer));
                     }
                 }
             }

@@ -421,7 +421,7 @@ namespace chepp {
     Position::to_string() const {
         std::ostringstream res{};
 
-        std::print(res,
+        fmt::print(res,
                    "Position\n"
                    "Side to move: {}\n"
                    "Castling rights: {}\n"
@@ -437,12 +437,12 @@ namespace chepp {
             for (auto file = FILE_A; file <= FILE_H; ++file) {
                 const Square sq{file, RANK_8 - rank};
                 const Piece  pc = piece_at(sq);
-                std::print(res, "{} ", pc);
+                fmt::print(res, "{} ", pc);
             }
-            std::print(res, "\n");
+            fmt::print(res, "\n");
         }
 
-        std::print(res,
+        fmt::print(res,
                    "  a b c d e f g h \n"
                    "Fen: {}\n",
                    to_fen().to_string());
@@ -908,7 +908,7 @@ namespace chepp {
             size_t nodes = 0;
             perft(next, depth - 1, nodes);
 
-            std::print(std::cout, "{} {} {}: {}\n", prev.piece_at(mv.from_sq()), mv.from_sq(), mv.to_sq(), nodes);
+            fmt::print(std::cout, "{} {} {}: {}\n", prev.piece_at(mv.from_sq()), mv.from_sq(), mv.to_sq(), nodes);
 
             total += nodes;
         }
@@ -1073,7 +1073,7 @@ namespace chepp {
 
                 if constexpr (validate) {
                     if (!m_positions.back().is_valid(m)) {
-                        return tl::unexpected(std::format("Invalid move in moves[{}]: {} (at ply {})", i, m, i + 1));
+                        return tl::unexpected(fmt::format("Invalid move in moves[{}]: {} (at ply {})", i, m, i + 1));
                     }
                 }
 

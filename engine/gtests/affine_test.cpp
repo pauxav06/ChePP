@@ -1,15 +1,19 @@
 #include <hwy/base.h>
 
+#include "hwy/nanobenchmark.h"
+#include "hwy/tests/hwy_gtest.h"
+
+#undef HWY_DISABLED_TARGETS
+#define HWY_DISABLED_TARGETS HWY_SCALAR
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "affine_test.cpp"
 #include "hwy/foreach_target.h"
 
 #include "hwy/highway.h"
-#include "hwy/nanobenchmark.h"
-#include "hwy/tests/hwy_gtest.h"
 #include "hwy/tests/test_util-inl.h"
 
-#include "../affine.h"
+#include "../affine-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 
@@ -30,29 +34,29 @@ namespace chepp::nnue::layers {
                 using layer_t     = operation_t::layer_t;
 
                 Test() {
-                    register_kernel<operation_t, default_config>();
-                    register_kernel<operation_t, AffineSimdColMaj{1, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{2, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{4, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{8, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{1, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{2, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{4, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdColMaj{8, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{1, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{2, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{4, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{8, AffineOperation::SumOfMulQuadAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{1, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{2, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{4, AffineOperation::MulPairwiseAdd}>();
-                    register_kernel<operation_t, AffineSimdRowMaj{8, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<default_config>();
+                    register_kernel<AffineSimdColMaj{1, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdColMaj{2, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdColMaj{4, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdColMaj{8, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdColMaj{1, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdColMaj{2, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdColMaj{4, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdColMaj{8, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdRowMaj{1, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdRowMaj{2, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdRowMaj{4, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdRowMaj{8, AffineOperation::SumOfMulQuadAdd}>();
+                    register_kernel<AffineSimdRowMaj{1, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdRowMaj{2, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdRowMaj{4, AffineOperation::MulPairwiseAdd}>();
+                    register_kernel<AffineSimdRowMaj{8, AffineOperation::MulPairwiseAdd}>();
                 }
 
-                template <typename Layer, auto cfg>
+                template <auto cfg>
                 void
                 register_kernel() {
-                    registery.register_kernel<Layer, HWY_TARGET, cfg>();
+                    registery.register_kernel<operation_t, HWY_TARGET, cfg>();
                 }
 
                 void
@@ -65,38 +69,19 @@ namespace chepp::nnue::layers {
                     fill_random(weights);
                     fill_random(biases, 0, 128);
 
-                    const layer_t layer{weights, biases};
-                    const auto    kernels = registery.make_all_kernels<operation_t>();
-                    const auto    ref     = registery.make_kernel<operation_t>(HWY_TARGET, default_config);
-                    const auto    ref_ex  = ref->compile(layer);
+                    const auto layer   = std::make_shared<layer_t>(weights, biases);
+                    const auto kernels = registery.make_all_kernels<operation_t>(layer);
+                    const auto ref     = registery.make_kernel<operation_t>(layer, HWY_TARGET, default_config);
 
                     for (const auto& kernel : kernels) {
-                        const auto                 ex = kernel->compile(layer);
                         AlignedVector<input_type>  input(IS + kernel->input_padding());
                         AlignedVector<output_type> output(OS + kernel->output_padding());
 
                         fill_random(input, 0, 128);
 
-                        FuncInput inp{};
-                        Result    res{};
-                        Params    params{};
-                        params.verbose        = false;
-                        params.target_rel_mad = 0.5;
-                        hwy::MeasureClosure(
-                            [&](auto) -> FuncOutput {
-                                ex->forward(std::data(input), std::data(output));
-                                return output[0];
-                            },
-                            &inp,
-                            1,
-                            &res,
-                            params);
-
-                        std::cout << TargetName(HWY_TARGET) << ": " << res.ticks << std::endl;
-
-                        ref_ex->forward(std::data(input), std::data(output));
+                        ref->forward(std::data(input), std::data(output));
                         auto ref_output = output;
-                        ex->forward(std::data(input), std::data(output));
+                        kernel->forward(std::data(input), std::data(output));
 
                         HWY_ASSERT_ARRAY_EQ(ref_output.data(), output.data(), OS);
                     }

@@ -22,17 +22,17 @@ namespace chepp::nnue {
         void
         tune() noexcept {
             if (m_running.test_and_set()) {
-                std::print(std::cerr, "error: tuning is not available\n");
+                fmt::print(std::cerr, "error: tuning is not available\n");
                 return;
             }
             m_worker = std::jthread([&](const std::stop_token& st) {
                 auto res = Arch::make_best_kernels(m_registry, m_layers, st);
                 if (st.stop_requested()) {
-                    std::print(std::cerr, "info string tuning aborted\n");
+                    fmt::print(std::cerr, "info string tuning aborted\n");
                 } else {
                     std::scoped_lock lock{m_mtx};
                     m_network = std::make_shared<Arch::Network>(res);
-                    std::print(std::cout, "info string tuning successful\n");
+                    fmt::print(std::cout, "info string tuning successful\n");
                 }
                 m_running.clear();
             });

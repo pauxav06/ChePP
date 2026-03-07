@@ -1,6 +1,9 @@
 #include <hwy/base.h>
 #include <hwy/nanobenchmark.h>
 
+#undef HWY_DISABLED_TARGETS
+#define HWY_DISABLED_TARGETS HWY_SCALAR
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "accum_test.cpp"
 #include <hwy/foreach_target.h>
@@ -8,8 +11,7 @@
 #include <hwy/highway.h>
 #include <hwy/tests/test_util-inl.h>
 
-#include "../src/nnue/accumulator-inl.h"
-#include "../src/nnue/nnue.h"
+#include "../accumulator-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 
@@ -26,18 +28,18 @@ namespace chepp::nnue::layers {
                 using layer_t     = operation_t::layer_t;
 
                 Test() {
-                    register_kernel<operation_t, default_config>();
-                    register_kernel<operation_t, AccumulatorSimd{1}>();
-                    register_kernel<operation_t, AccumulatorSimd{2}>();
-                    register_kernel<operation_t, AccumulatorSimd{4}>();
-                    register_kernel<operation_t, AccumulatorSimd{8}>();
-                    register_kernel<operation_t, AccumulatorSimd{16}>();
+                    register_kernel<default_config>();
+                    register_kernel<AccumulatorSimd{1}>();
+                    register_kernel<AccumulatorSimd{2}>();
+                    register_kernel<AccumulatorSimd{4}>();
+                    register_kernel<AccumulatorSimd{8}>();
+                    register_kernel<AccumulatorSimd{16}>();
                 }
 
-                template <typename Layer, auto cfg>
+                template <auto cfg>
                 void
                 register_kernel() {
-                    registery.register_kernel<Layer, HWY_TARGET, cfg>();
+                    registery.register_kernel<operation_t, HWY_TARGET, cfg>();
                 }
 
                 void
@@ -45,40 +47,24 @@ namespace chepp::nnue::layers {
                     using namespace hwy;
 
                     std::vector<type> weights(IS * OS);
+                    fill_random(weights);
                     std::vector<type> biases(OS);
+                    fill_random(biases);
 
-                    layer_t    layer{weights, biases};
-                    const auto kernels = registery.make_all_kernels<operation_t>();
-                    auto       ref     = registery.make_kernel<operation_t>(HWY_TARGET, default_config)->compile(layer);
+                    auto       layer   = std::make_shared<layer_t>(weights, biases);
+                    const auto kernels = registery.make_all_kernels<operation_t>(layer);
+                    auto       ref     = registery.make_kernel<operation_t>(layer, HWY_TARGET, default_config);
 
                     for (const auto& kernel : kernels) {
-                        auto                exec = kernel->compile(layer);
-                        AlignedVector<type> output(std::get<0>(kernel->output_tokens()).padded_size());
+                        AlignedVector<type> output(operation_t::output_size_v + kernel->padding());
 
                         std::vector<idx_t> idx(IS);
                         std::ranges::iota(idx, 0);
 
-                        FuncInput   inp{};
-                        hwy::Result res{};
-                        Params      params{};
-                        params.verbose        = false;
-                        params.target_rel_mad = 0.5;
-                        hwy::MeasureClosure(
-                            [&](auto) -> FuncOutput {
-                                exec->forward(std::data(idx), std::size(idx), std::data(output));
-                                return output[0];
-                            },
-                            &inp,
-                            1,
-                            &res,
-                            params);
-
-                        std::cout << TargetName(HWY_TARGET) << ": " << res.ticks << std::endl;
-
                         ref->forward(std::data(idx), std::size(idx), std::data(output));
                         auto ref_output = output;
                         fill_random(output);
-                        exec->forward(std::data(idx), std::size(idx), std::data(output));
+                        kernel->forward(std::data(idx), std::size(idx), std::data(output));
 
                         HWY_ASSERT_ARRAY_EQ(ref_output.data(), output.data(), OS);
                     }
@@ -90,9 +76,8 @@ namespace chepp::nnue::layers {
             void
             runAllTests() {
                 // Important
-                // Test<uint16_t, 2048, int16_t, 1>{}.inference();
-                Test<uint16_t, 16, int16_t, 64>{}.inference();
-                Test<uint16_t, 32, int16_t, 64>{}.inference();
+                Test<uint16_t, 1024, int16_t, 1024>{}.inference();
+                Test<uint16_t, 1024, int16_t, 8>{}.inference();
 
                 // Edge cases
             }
