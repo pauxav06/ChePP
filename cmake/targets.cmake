@@ -22,6 +22,8 @@ endif()
 
 get_target_property(COMP_OPTS target INTERFACE_COMPILE_OPTIONS)
 
+set(PRV_FLAGS ${CMAKE_REQUIRED_FLAGS})
+
 set(CMAKE_REQUIRED_FLAGS ${COMP_OPTS})
 unset(HAVE_PEXT CACHE)
 check_source_runs(CXX [[
@@ -34,3 +36,5 @@ if (HAVE_PEXT)
 else()
     add_compile_definitions(CHEPP_PEXT=0)
 endif()
+
+set(CMAKE_REQUIRED_FLAGS ${PRV_FLAGS})

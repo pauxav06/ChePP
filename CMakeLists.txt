@@ -45,6 +45,8 @@ FetchContent_MakeAvailable(fathom)
 add_library(compat INTERFACE)
 target_include_directories(compat INTERFACE ${CMAKE_SOURCE_DIR}/compat)
 
+set(PRV_FLAGS ${CMAKE_REQUIRED_FLAGS})
+
 if (MSVC)
     set(CMAKE_REQUIRED_FLAGS "/std:c++23")
 elseif (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
@@ -116,6 +118,8 @@ else()
     target_compile_definitions(compat INTERFACE USE_STD_FMT)
     message(STATUS "using std::format")
 endif()
+
+set(CMAKE_REQUIRED_FLAGS ${PRV_FLAGS})
 
 include(CTest)
 enable_testing()
