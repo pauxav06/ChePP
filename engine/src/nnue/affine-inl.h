@@ -75,9 +75,10 @@ namespace chepp::nnue::layers {
                 for (extent_type row = 0; row < m_weights.extent(0); ++row) {
                     output_t acc = 0;
                     for (extent_type col = 0; col < m_weights.extent(1); ++col) {
-                        acc += static_cast<output_t>(m_weights[row, col]) * static_cast<output_t>(input[col]);
+                        acc +=
+                            static_cast<output_t>(MD_ACCESS(m_weights, row, col)) * static_cast<output_t>(input[col]);
                     }
-                    output[row] = acc + m_biases[row];
+                    output[row] = acc + MD_ACCESS(m_biases, row);
                 }
             }
 
@@ -213,9 +214,10 @@ namespace chepp::nnue::layers {
                     for (extent_type c = 0; c < m_weights.extent(1); ++c) {
                         for (std::size_t u = 0; u < m_weights.extent(2); ++u) {
                             packed_type packed{0};
-                            std::memcpy(&packed, &input[c, u, 0], sizeof(packed_type)); // cast is UB
+                            std::memcpy(&packed, &MD_ACCESS(input, c, u, 0), sizeof(packed_type)); // cast is UB
                             auto in  = hn::Set(Dpacked(), packed);
-                            *regs[u] = dot(hn::BitCast(Din(), in), hn::Load(Dw(), &m_weights[b, c, u, 0]), *regs[u]);
+                            *regs[u] = dot(
+                                hn::BitCast(Din(), in), hn::Load(Dw(), &MD_ACCESS(m_weights, b, c, u, 0)), *regs[u]);
                         }
                     }
                     constexpr_for<0, std::countr_zero(weights_t::static_extent(2))>([&](auto i) {
@@ -223,7 +225,7 @@ namespace chepp::nnue::layers {
                         constexpr_for<0, weights_t::static_extent(2), 2 * off>(
                             [&](auto j) { *regs[j] += *regs[j + off]; });
                     });
-                    hn::Store(*regs[0], Dout(), &output[b, 0]);
+                    hn::Store(*regs[0], Dout(), &MD_ACCESS(output, b, 0));
                 }
             }
 
@@ -351,14 +353,14 @@ namespace chepp::nnue::layers {
                         GET_REG(u) = hn::Zero(Dout());
                     }
                     for (extent_type c = 0; c < m_weights.extent(1); ++c) {
-                        auto in = hn::Load(Din(), &input[c, 0]);
+                        auto in = hn::Load(Din(), &MD_ACCESS(input, c, 0));
                         for (extent_type u = 0; u < m_weights.extent(2); ++u) {
-                            GET_REG(u) =
-                                dot(hn::BitCast(Din(), in), hn::Load(Dw(), &m_weights[b, c, u, 0]), GET_REG(u));
+                            GET_REG(u) = dot(
+                                hn::BitCast(Din(), in), hn::Load(Dw(), &MD_ACCESS(m_weights, b, c, u, 0)), GET_REG(u));
                         }
                     }
                     for (extent_type u = 0; u < m_weights.extent(2); ++u) {
-                        output[b, u] = hn::ReduceSum(Dout(), GET_REG(u)) + m_biases[b, u];
+                        MD_ACCESS(output, b, u) = hn::ReduceSum(Dout(), GET_REG(u)) + MD_ACCESS(m_biases, b, u);
                     }
                 }
             }

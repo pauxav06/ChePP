@@ -1,14 +1,19 @@
 #include "layer_base.h"
 
-#include <experimental/mdspan>
 #include <experimental/mdarray>
-
+#include <experimental/mdspan>
 
 #if defined(CHEPP_LAYER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_LAYER_INL_H_
 #undef CHEPP_LAYER_INL_H_
 #else
 #define CHEPP_LAYER_INL_H_
+#endif
+
+#if MDSPAN_USE_BRACKET_OPERATOR
+#define MD_ACCESS(c, ...) c[__VA_ARGS__]
+#else
+#define MD_ACCESS(c, ...) c(__VA_ARGS__)
 #endif
 
 #include <hwy/highway.h>

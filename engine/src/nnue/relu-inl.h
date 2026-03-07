@@ -42,13 +42,13 @@ namespace chepp::nnue::layers {
                 std::mdspan input{input_ptr, input_extents_t{}};
                 std::mdspan output{output_ptr, output_extents_t{}};
                 for (std::size_t i = 0; i < input.extent(0); ++i) {
-                    input_t val = input[i];
+                    input_t val = MD_ACCESS(input, i);
                     if constexpr (relu_t::shift != 0) {
                         val /= relu_t::quantize;
                     }
-                    val       = std::max(relu_t::min, val);
-                    val       = std::min(relu_t::max, val);
-                    output[i] = static_cast<output_t>(val);
+                    val                  = std::max(relu_t::min, val);
+                    val                  = std::min(relu_t::max, val);
+                    MD_ACCESS(output, i) = static_cast<output_t>(val);
                 }
             }
         };
@@ -140,7 +140,7 @@ namespace chepp::nnue::layers {
                     for (std::size_t u = 0; u < input.extent(1); ++u) {
                         for (std::size_t v = 0; v < input.extent(2); ++v) {
                             auto idx     = u * input.extent(2) + v;
-                            GET_REG(idx) = hn::Load(Din(), &input[c, u, v, 0]);
+                            GET_REG(idx) = hn::Load(Din(), &MD_ACCESS(input, c, u, v, 0));
                             if constexpr (relu_t::shift != 0) {
                                 GET_REG(idx) = hn::ShiftRight<relu_t::shift>(GET_REG(idx));
                             }
@@ -149,7 +149,7 @@ namespace chepp::nnue::layers {
                     constexpr_for<0, unroll>([&](auto U) {
                         Vouts v_out_s = ordered_demote_tree<factor>(regs.template subspan<U * factor, factor>());
                         Vout  v_out   = hn::BitCast(Dout(), hn::Max(hn::Zero(Douts()), v_out_s));
-                        hn::Store(v_out, Dout(), &output[c, U, 0]);
+                        hn::Store(v_out, Dout(), &MD_ACCESS(output, c, U, 0));
                     });
                 }
             }

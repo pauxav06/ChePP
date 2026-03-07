@@ -58,7 +58,7 @@ namespace chepp::nnue::layers {
                 std::memcpy(out_ptr, std::data(m_biases), std::size(m_biases) * sizeof(value_t));
                 for (std::size_t i = 0; i < nb_idx; ++i) {
                     for (std::size_t j = 0; j < accum_t::output_size_v; ++j) {
-                        out_ptr[j] += m_weights[idx[i], j];
+                        out_ptr[j] += MD_ACCESS(m_weights, idx[i], j);
                     }
                 }
             }
@@ -73,12 +73,12 @@ namespace chepp::nnue::layers {
                 std::memcpy(out_ptr, input_ptr, accum_t::output_size_v * sizeof(value_t));
                 for (std::size_t i = 0; i < nb_added; ++i) {
                     for (std::size_t j = 0; j < accum_t::output_size_v; ++j) {
-                        out_ptr[j] += m_weights[added[i], j];
+                        out_ptr[j] += MD_ACCESS(m_weights, added[i], j);
                     }
                 }
                 for (std::size_t i = 0; i < nb_removed; ++i) {
                     for (std::size_t j = 0; j < accum_t::output_size_v; ++j) {
-                        out_ptr[j] -= m_weights[removed[i], j];
+                        out_ptr[j] -= MD_ACCESS(m_weights, removed[i], j);
                     }
                 }
             }
@@ -159,18 +159,18 @@ namespace chepp::nnue::layers {
                 DECLARE_REG_BANK(unroll, Vec)
                 for (std::size_t c{0}; c < out.extent(0); ++c) {
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
-                        *regs[u] = hn::Load(D(), &m_biases[c, u, 0]);
+                        *regs[u] = hn::Load(D(), &MD_ACCESS(m_biases, c, u, 0));
                     }
                     for (std::size_t i{0}; i < n_idx; ++i) {
                         if (i + 1 < n_idx) {
-                            hwy::Prefetch(&m_weights[idx_ptr[i + 1], c, 0, 0]);
+                            hwy::Prefetch(&MD_ACCESS(m_weights, idx_ptr[i + 1], c, 0, 0));
                         }
                         for (std::size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] += hn::Load(D(), &m_weights[idx_ptr[i], c, u, 0]);
+                            *regs[u] += hn::Load(D(), &MD_ACCESS(m_weights, idx_ptr[i], c, u, 0));
                         }
                     }
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
-                        hn::Store(*regs[u], D(), &out[c, u, 0]);
+                        hn::Store(*regs[u], D(), &MD_ACCESS(out, c, u, 0));
                     }
                 }
             }
@@ -189,20 +189,20 @@ namespace chepp::nnue::layers {
                 DECLARE_REG_BANK(unroll, Vec)
                 for (std::size_t c{0}; c < out.extent(0); ++c) {
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
-                        *regs[u] = hn::Load(D(), &input[c, u, 0]);
+                        *regs[u] = hn::Load(D(), &MD_ACCESS(input, c, u, 0));
                     }
                     for (std::size_t i{0}; i < n_added; ++i) {
                         for (std::size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] += hn::Load(D(), &m_weights[added_ptr[i], c, u, 0]);
+                            *regs[u] += hn::Load(D(), &MD_ACCESS(m_weights, added_ptr[i], c, u, 0));
                         }
                     }
                     for (std::size_t i{0}; i < n_removed; ++i) {
                         for (std::size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] -= hn::Load(D(), &m_weights[removed_ptr[i], c, u, 0]);
+                            *regs[u] -= hn::Load(D(), &MD_ACCESS(m_weights, removed_ptr[i], c, u, 0));
                         }
                     }
                     for (std::size_t u{0}; u < out.extent(1); ++u) {
-                        hn::Store(*regs[u], D(), &out[c, u, 0]);
+                        hn::Store(*regs[u], D(), &MD_ACCESS(out, c, u, 0));
                     }
                 }
             }
