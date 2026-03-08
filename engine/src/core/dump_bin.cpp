@@ -1,8 +1,10 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iostream>
 #include <memory>
+#include <unordered_map>
 #include <vector>
 
 #include "bitboard.h"
@@ -13,38 +15,38 @@ using namespace chepp;
 namespace fs = std::filesystem;
 
 inline bool
-write_magic_bishops(FILE* out) {
+write_magic_bishops(std::ofstream& out) {
     const auto b = std::make_unique<movegen::detail::Magics<BISHOP>>();
     b->init();
-    std::fwrite(b.get(), 1, sizeof(*b), out);
-    return true;
+    out.write(reinterpret_cast<const char*>(b.get()), sizeof(*b));
+    return out.good();
 }
 
 inline bool
-write_magic_rooks(FILE* out) {
+write_magic_rooks(std::ofstream& out) {
     auto b = std::make_unique<movegen::detail::Magics<ROOK>>();
     b->init();
-    std::fwrite(b.get(), 1, sizeof(*b), out);
-    return true;
+    out.write(reinterpret_cast<const char*>(b.get()), sizeof(*b));
+    return out.good();
 }
 
 inline bool
-write_lines(FILE* out) {
+write_lines(std::ofstream& out) {
     auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_lines);
-    std::fwrite(l.get(), 1, sizeof(*l), out);
-    return true;
+    out.write(reinterpret_cast<const char*>(l.get()), sizeof(*l));
+    return out.good();
 }
 
 inline bool
-write_from_to(FILE* out) {
+write_from_to(std::ofstream& out) {
     auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_from_to);
-    std::fwrite(l.get(), 1, sizeof(*l), out);
-    return true;
+    out.write(reinterpret_cast<const char*>(l.get()), sizeof(*l));
+    return out.good();
 }
 
 int
 main(int argc, char** argv) {
-    std::unordered_map<std::string, std::function<bool(FILE*)>> targets;
+    std::unordered_map<std::string, std::function<bool(std::ofstream&)>> targets;
     targets.emplace("magic_rooks", write_magic_rooks);
     targets.emplace("magic_bishops", write_magic_bishops);
     targets.emplace("lines", write_lines);
@@ -63,11 +65,13 @@ main(int argc, char** argv) {
     auto     target = program.get<std::string>("--target");
 
     try {
-        file_ptr out(fopen(path.string().c_str(), "wb"));
+        std::ofstream out(path, std::ios::binary);
         if (!out) {
-            throw std::runtime_error(fmt::format("failed to open file {}", path.c_str()));
+            throw std::runtime_error(fmt::format("failed to open file {}", path.string()));
         }
-        targets.at(target)(out.get());
+        if (!targets.at(target)(out)) {
+            throw std::runtime_error("Failed to write target data");
+        }
     } catch (const std::exception& e) {
         fmt::println(stderr, "{}", e.what());
         fs::remove(path);

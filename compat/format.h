@@ -23,11 +23,4 @@ struct fclose_deleter {
     }
 };
 
-#include <memory>
-using file_ptr = std::unique_ptr<FILE, fclose_deleter>;
-
-namespace chepp {
-    using ::file_ptr;
-}
-
 #endif // CHEPP_FORMAT_H
