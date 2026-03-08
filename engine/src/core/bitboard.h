@@ -14,23 +14,9 @@
 #include <ranges>
 #include <string>
 
-#if defined(__BMI2__)
-#include <immintrin.h>
-#define PEXT 1
-#else
-#define PEXT 0
-#endif
-
 namespace chepp {
-    inline uint64_t
-    pext(const uint64_t val, const uint64_t mask) {
-#if PEXT == 1
-        return _pext_u64(val, mask);
-#endif
-        (void)val;
-        (void)mask;
-        throw std::runtime_error("unsupported pext");
-    }
+    uint64_t
+    pext(uint64_t val, uint64_t mask) noexcept;
 
     class Bitboard {
       public:
@@ -574,7 +560,7 @@ namespace chepp::movegen {
         };
 
         template <PieceType pc>
-        using Magics = MagicsBase<pc, std::conditional_t<PEXT, PEXTIndexer, ShiftIndexer>>;
+        using Magics = MagicsBase<pc, std::conditional_t<CHEPP_PEXT, PEXTIndexer, ShiftIndexer>>;
     } // namespace detail
 } // namespace chepp::movegen
 

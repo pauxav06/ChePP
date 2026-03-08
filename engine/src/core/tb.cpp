@@ -1,12 +1,10 @@
-#include "bitboard.h"
 #include "position.h"
-#include "tbconfig.h"
-#include "types.h"
+
 #include <filesystem>
 
 #if CHEPP_USE_TB
+#include "tbconfig.h"
 #include "tbprobe.c"
-#include "tbprobe.h"
 #endif
 
 namespace chepp {

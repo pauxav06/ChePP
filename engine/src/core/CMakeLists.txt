@@ -1,4 +1,4 @@
-add_executable(dump_bin dump_bin.cpp)
+add_executable(dump_bin dump_bin.cpp bitboard.cpp)
 target_link_libraries(dump_bin PRIVATE options warnings optimization target compat argparse)
 target_include_directories(dump_bin PRIVATE ${hedley_SOURCE_DIR})
 
@@ -20,7 +20,7 @@ function(generate_bin)
     set(${DUMP_BIN} ${BIN} PARENT_SCOPE)
 endfunction()
 
-add_library(ChePP_core STATIC core.cpp)
+add_library(ChePP_core STATIC bitboard.cpp tb.cpp)
 
 set(GEN_DIR       ${CMAKE_CURRENT_SOURCE_DIR}/generated)
 set(ASSETS magic_rooks magic_bishops lines from_to)
