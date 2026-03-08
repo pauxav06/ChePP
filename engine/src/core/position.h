@@ -13,6 +13,7 @@
 #include <ranges>
 #include <utility>
 #include <vector>
+#include <span>
 
 namespace chepp {
     struct Position {
@@ -905,7 +906,9 @@ namespace chepp {
     // Expensive function, should only be called for user input validation
     inline bool
     Position::is_valid(const Move move) const {
-        return std::ranges::contains(gen_legal(*this), move);
+        auto moves = gen_moves(*this);
+        return std::find(moves.begin(), moves.end(), move) != moves.end();
+        //return std::ranges::contains(gen_legal(*this), move);
     }
 
     inline tl::expected<tl::monostate, std::string>
