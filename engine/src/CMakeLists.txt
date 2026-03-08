@@ -3,6 +3,7 @@ target_link_libraries(bin2cpp PRIVATE options warnings optimization compat targe
 
 function(embed_bin)
     cmake_parse_arguments(EMBED "" "TARGET;NAME;BIN;DIR;QUALIFIER" "" ${ARGN})
+    file(MAKE_DIRECTORY ${EMBED_DIR}/generated)
     set(OUTPUT ${EMBED_DIR}/generated/${EMBED_NAME}.h)
     add_custom_command(
             OUTPUT ${OUTPUT}
