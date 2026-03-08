@@ -45,7 +45,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format(
+                return fmt::format(
                     "clipped-relu,input_type={},output_type={}", type_name_v<input_t>, type_name_v<output_t>);
             }
 

@@ -46,7 +46,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format(
+                return fmt::format(
                     "name=Accumulator,input-type={},output-type={}", type_name_v<value_t>, type_name_v<value_t>);
             }
 

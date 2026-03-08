@@ -55,7 +55,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("default,target={}", TargetName(HWY_TARGET));
+                return fmt::format("default,target={}", TargetName(HWY_TARGET));
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
@@ -142,7 +142,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("simd-column-major,target={},unroll={},operation={}",
+                return fmt::format("simd-column-major,target={},unroll={},operation={}",
                                    hwy::TargetName(HWY_TARGET),
                                    unroll,
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
@@ -169,7 +169,7 @@ namespace chepp::nnue::layers {
                     const Vout  sum1 = hn::WidenMulPairwiseAdd(Dout(), sum0, hn::Set(Dhalf(), 1));
                     return hn::Add(acc, sum1);
                 }
-                std::unreachable();
+                HEDLEY_UNREACHABLE();
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
@@ -281,7 +281,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("simd-row-major,target={},unroll={},operation={}",
+                return fmt::format("simd-row-major,target={},unroll={},operation={}",
                                    hwy::TargetName(HWY_TARGET),
                                    unroll,
                                    (cfg.operation == AffineOperation::SumOfMulQuadAdd ? "VNNI" : "fallback"));
@@ -308,7 +308,7 @@ namespace chepp::nnue::layers {
                     const Vout  sum1 = hn::WidenMulPairwiseAdd(Dout(), sum0, hn::Set(Dhalf(), 1));
                     return hn::Add(acc, sum1);
                 }
-                std::unreachable();
+                HEDLEY_UNREACHABLE();
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept

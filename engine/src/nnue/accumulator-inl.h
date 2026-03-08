@@ -44,7 +44,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("default,target={}", hwy::TargetName(HWY_TARGET));
+                return fmt::format("default,target={}", hwy::TargetName(HWY_TARGET));
             }
 
             explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept
@@ -128,7 +128,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("simd,target={},unroll={}", hwy::TargetName(HWY_TARGET), unroll);
+                return fmt::format("simd,target={},unroll={}", hwy::TargetName(HWY_TARGET), unroll);
             }
 
             [[nodiscard]] size_t

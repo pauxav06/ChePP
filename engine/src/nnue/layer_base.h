@@ -129,9 +129,9 @@ namespace chepp::nnue {
         }
 
         template <typename CfgType>
-        inline static std::unordered_map<CfgType, std::type_index>&
+        inline static std::unordered_map<std::remove_cvref_t<CfgType>, std::type_index>&
         type_mapping() noexcept {
-            static std::unordered_map<CfgType, std::type_index> res{};
+            static std::unordered_map<std::remove_cvref_t<CfgType>, std::type_index> res{};
             return res;
         }
 
@@ -144,12 +144,13 @@ namespace chepp::nnue {
                            std::unordered_map<std::size_t, std::unordered_map<std::type_index, std::any>>>
             m_kernels{};
 
-        template <typename CfgType, CfgType cfg>
+        template <auto cfg>
         static std::type_index
         register_type() {
             std::scoped_lock lock{type_mtx()};
+            using CfgType = std::remove_cvref_t<decltype(cfg)>;
             type_mapping<CfgType>().emplace(cfg, typeid(std::integral_constant<CfgType, cfg>));
-            return typeid(std::integral_constant<CfgType, cfg>);
+            return typeid(std::integral_constant<std::remove_cvref_t<CfgType>, cfg>);
         }
 
         template <typename CfgType>
@@ -170,7 +171,7 @@ namespace chepp::nnue {
 
             std::scoped_lock lock{m_mtx};
 
-            auto cfg_key = register_type<decltype(cfg), cfg>();
+            auto cfg_key = register_type<cfg>();
             m_kernels[typeid(Operation)][hwy_target][cfg_key] =
                 factory_t<Operation>{[](const std::shared_ptr<layer_t>& layer) {
                     return std::make_shared<typename Kernel<hwy_target, Operation, cfg>::type>(layer);

@@ -36,7 +36,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] std::string
             name() const noexcept override {
-                return std::format("default,target={}", hwy::TargetName(HWY_TARGET));
+                return fmt::format("default,target={}", hwy::TargetName(HWY_TARGET));
             }
 
             void
