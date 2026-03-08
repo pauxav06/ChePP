@@ -153,7 +153,7 @@ namespace chepp {
         is_tactical(Move move) const;
         [[nodiscard]] bool
         is_valid(Move move) const;
-        [[nodiscard]] static tl::expected<std::monostate, std::string>
+        [[nodiscard]] static tl::expected<tl::monostate, std::string>
         is_ok_verbose();
         template <bool verbose = false>
         [[nodiscard]] bool
@@ -421,7 +421,7 @@ namespace chepp {
                        hash());
 
         for (auto rank = RANK_1; rank <= RANK_8; ++rank) {
-            std::format_to(out, "{} ", (RANK_8 - rank).index() + 1);
+            fmt::format_to(out, "{} ", (RANK_8 - rank).index() + 1);
             for (auto file = FILE_A; file <= FILE_H; ++file) {
                 const Square sq{file, RANK_8 - rank};
                 const Piece  pc = piece_at(sq);
@@ -908,10 +908,10 @@ namespace chepp {
         return std::ranges::contains(gen_legal(*this), move);
     }
 
-    inline tl::expected<std::monostate, std::string>
+    inline tl::expected<tl::monostate, std::string>
     Position::is_ok_verbose() {
         /**
-        auto err = [](std::string msg) -> std::expected<std::monostate, std::string> {
+        auto err = [](std::string msg) -> std::expected<tl::monostate, std::string> {
             return std::unexpected(std::move(msg));
         };
 
@@ -1011,7 +1011,7 @@ namespace chepp {
         }
 
         **/
-        return tl::expected<std::monostate, std::string>(std::monostate{});
+        return tl::expected<tl::monostate, std::string>(tl::monostate{});
     }
 
     template <bool verbose>
@@ -1037,7 +1037,7 @@ namespace chepp {
         }
 
         template <bool validate = false>
-        tl::expected<std::monostate, std::string>
+        tl::expected<tl::monostate, std::string>
         set_pos(const Position& pos, const std::span<const Move> moves = {}) {
             clear();
 
@@ -1067,11 +1067,11 @@ namespace chepp {
             }
 
             m_start_size = m_positions.size();
-            return tl::expected<std::monostate, std::string>(std::monostate{});
+            return tl::expected<tl::monostate, std::string>(tl::monostate{});
         }
 
         template <bool validate = false>
-        tl::expected<std::monostate, std::string>
+        tl::expected<tl::monostate, std::string>
         set_fen(const std::string& fen_string, const std::span<Move> moves = {}) {
             auto fen = Fen::from_string(fen_string);
             if (!fen) {
