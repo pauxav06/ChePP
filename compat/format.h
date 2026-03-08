@@ -14,13 +14,4 @@
 namespace fmt = std;
 #endif
 
-struct fclose_deleter {
-    void
-    operator()(FILE* f) const noexcept {
-        if (f) {
-            fclose(f);
-        }
-    }
-};
-
 #endif // CHEPP_FORMAT_H
