@@ -10,9 +10,7 @@
 
 #include <algorithm>
 #include <functional>
-#include <future>
 #include <memory>
-#include <sstream>
 #include <string>
 #include <unordered_map>
 #include <utility>
@@ -239,7 +237,7 @@ namespace chepp {
         }
 
         void
-        print_uci_options(std::ostream& os) const {
+        print_uci_options(FILE* os) const {
             for (const auto& p : m_params) {
                 fmt::print(os, "{}\n", p->uci_declare());
             }
@@ -334,7 +332,7 @@ namespace chepp {
             m_param_handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this]() {
                 m_tt.reset();
                 m_tt.init(m_params.hash_size);
-                fmt::print(std::cout, "info string Hash Size {}\n", m_params.hash_size);
+                fmt::print(stdout, "info string Hash Size {}\n", m_params.hash_size);
                 return true;
             });
             m_param_handler.add<EngineParamSpin>(
@@ -342,13 +340,13 @@ namespace chepp {
             m_param_handler.add<EngineParamString>("SyzygyPath", m_params.tb_path, "", [this]() {
                 const bool val = init_tb(m_params.tb_path);
                 if (val) {
-                    fmt::print(std::cout, "info string set tb path\n");
+                    fmt::print(stdout, "info string set tb path\n");
                 }
                 return val;
             });
             m_param_handler.add<EngineParamButton>("Clear Hash", [this]() {
                 m_tt.reset();
-                fmt::print(std::cout, "info string Hash cleared\n");
+                fmt::print(stdout, "info string Hash cleared\n");
                 return true;
             });
             m_param_handler.add<EngineParamButton>("Tune", [this]() {
@@ -369,17 +367,17 @@ namespace chepp {
         void
         uci() const {
             if (m_state != Waiting) return;
-            fmt::print(std::cout,
+            fmt::print(stdout,
                        "id name ChePP\n"
                        "id author pauxav06\n");
-            m_param_handler.print_uci_options(std::cout);
-            fmt::print(std::cout, "uciok\n");
+            m_param_handler.print_uci_options(stdout);
+            fmt::print(stdout, "uciok\n");
         }
 
         void
         isready() const {
             if (m_state != Waiting) return;
-            fmt::print(std::cout, "readyok\n");
+            fmt::print(stdout, "readyok\n");
         }
 
         void
@@ -438,13 +436,13 @@ namespace chepp {
             auto movegen{Fen::from_string(fen).transform(&Position::from_fen)};
 
             if (!movegen) {
-                fmt::print(std::cerr, "Invalid fen {}\n", movegen.error());
+                fmt::print(stderr, "Invalid fen {}\n", movegen.error());
                 return;
             }
             if (iss >> token && token == "moves") {
                 auto err = parse_moves(iss, *movegen);
                 if (!err) {
-                    fmt::print(std::cerr, "Invalid move {}\n", err.error());
+                    fmt::print(stderr, "Invalid move {}\n", err.error());
                     return;
                 }
                 moves = *err;
@@ -452,7 +450,7 @@ namespace chepp {
 
             Positions temp{};
             if (auto err = temp.set_fen<true>(fen, moves); !err) {
-                fmt::print(std::cerr, "Invalid fen: {}\n", err.error());
+                fmt::print(stderr, "Invalid fen: {}\n", err.error());
                 return;
             }
             m_pos = temp;
@@ -497,16 +495,16 @@ namespace chepp {
         void
         eval() const {
             using namespace chepp::nnue;
-            fmt::print(std::cout, "{}\n", m_pos.last().to_string());
+            fmt::print(stdout, "{}\n", m_pos.last().to_string());
             auto network = m_handle.get();
             network->init(m_pos.last());
-            fmt::print(std::cout, "Evaluation for {} (cp):\n", m_pos.last().side_to_move());
+            fmt::print(stdout, "Evaluation for {} (cp):\n", m_pos.last().side_to_move());
             network->dbg_uci(m_pos.last().side_to_move());
         }
 
         void
         nnue_cfg() {
-            // std::cout << "info string " << chepp::nnue::Arch::print_cfg();
+            // stdout << "info string " << chepp::nnue::Arch::print_cfg();
         }
 
         static void
@@ -535,7 +533,7 @@ namespace chepp {
             auto ms  = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             auto ns  = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-            std::cout << "Time for " << n_iterations << " evaluations: " << ms.count()
+            stdout << "Time for " << n_iterations << " evaluations: " << ms.count()
                       << " (" << ns.count() / n_iterations << " ns/it) (tot "<<  tot <<  ")"
                       << std::endl;
 
@@ -547,7 +545,7 @@ namespace chepp {
             ms  = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
             ns  = std::chrono::duration_cast<std::chrono::nanoseconds>(end - start);
 
-            std::cout << "time for " << n_iterations << " refreshes: " << ms.count()
+            stdout << "time for " << n_iterations << " refreshes: " << ms.count()
                       << " (" << ns.count() / n_iterations << " ns/it) (tot "<<  tot <<  ")"
                       << std::endl;
 
@@ -573,13 +571,13 @@ namespace chepp {
                 go(line);
             } else if (line.rfind("setoption", 0) == 0) {
                 if (!m_param_handler.handle_setoption(line))
-                    fmt::print(std::cerr, "info string Unknown option or invalid value\n");
+                    fmt::print(stderr, "info string Unknown option or invalid value\n");
             } else if (line == "evaluate" || line == "eval") {
                 eval();
             } else if (line == "bench") {
                 bench();
             } else if (line == "print") {
-                fmt::print(std::cout, "{}\n", m_pos.last().to_string());
+                fmt::print(stdout, "{}\n", m_pos.last().to_string());
             } else if (line == "cfg") {
                 nnue_cfg();
             } else if (line == "stop") {
@@ -597,8 +595,9 @@ namespace chepp {
             std::string line;
             while (m_state != Terminated && std::getline(in, line)) {
                 handle_command(line);
-                std::flush(std::cout);
+                std::fflush(stdout);
             }
+
             return 0;
         }
     };

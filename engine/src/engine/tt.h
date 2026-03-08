@@ -1,11 +1,8 @@
-//
-// Created by paul on 7/30/25.
-//
-
 #ifndef TT_H
 #define TT_H
 
 #include "core.h"
+#include "format.h"
 
 #include <bit>
 #include <optional>
@@ -62,7 +59,7 @@ namespace chepp {
             m_size       = floor_power_of_two(mb * 1024 * 1024 / sizeof(Entry));
             m_table.resize(m_size);
             std::ranges::fill(m_table, Entry());
-            std::cout << "Init tt with " << m_size << " entries" << std::endl;
+            fmt::println(stdout, "Init tt with {} entries ", m_size);
         }
 
         void

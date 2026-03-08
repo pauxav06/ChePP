@@ -265,12 +265,6 @@ namespace chepp {
             return out;
         }
 
-        friend std::ostream&
-        operator<<(std::ostream& os, const Bitboard& o) {
-            os << o.to_string();
-            return os;
-        }
-
       private:
         U64 m_{0};
     };

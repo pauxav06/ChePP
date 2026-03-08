@@ -1,3 +1,4 @@
+#include "format.h"
 #include "position.h"
 
 #include <filesystem>
@@ -12,18 +13,18 @@ namespace chepp {
     init_tb(const std::string_view path) {
 #if CHEPP_USE_TB
         if (!std::filesystem::exists(path)) {
-            std::cerr << "Tablebase path does not exist: " << path << "\n";
+            fmt::println(stderr, "Tablebase path does not exist: {}", path);
             return false;
         }
 
         if (tb_init(path.data())) {
             return true;
         }
-        std::cerr << "Tablebase init failed: " << path << "\n";
+        fmt::println(stderr, "Failed to initialize TB: {}", path);
         return false;
 #else
         (void)path;
-        throw std::runtime_error("TB are not active");
+        throw std::runtime_error("TB are not enabled");
 #endif
     }
 
@@ -44,7 +45,7 @@ namespace chepp {
                             ep_sq,
                             side_to_move() == WHITE);
 #else
-        throw std::runtime_error("TB are not active");
+        throw std::runtime_error("TB are not enabled");
 #endif
     }
 
@@ -66,7 +67,7 @@ namespace chepp {
                              side_to_move() == WHITE,
                              nullptr);
 #else
-        throw std::runtime_error("TB are not active");
+        throw std::runtime_error("TB are not enabled");
 #endif
     }
 } // namespace chepp

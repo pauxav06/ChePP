@@ -6,52 +6,45 @@
 #include <vector>
 
 #include "bitboard.h"
+#include "format.h"
 #include <argparse/argparse.hpp>
 
 using namespace chepp;
 namespace fs = std::filesystem;
 
 inline bool
-write_magic_bishops(std::ostream& out) {
+write_magic_bishops(FILE* out) {
     const auto b = std::make_unique<movegen::detail::Magics<BISHOP>>();
     b->init();
-    std::vector<char> data(sizeof(*b));
-    std::memcpy(std::data(data), b.get(), sizeof(*b));
-    out.write(std::data(data), static_cast<std::streamsize>(std::size(data)));
+    std::fwrite(b.get(), 1, sizeof(*b), out);
     return true;
 }
 
 inline bool
-write_magic_rooks(std::ostream& out) {
+write_magic_rooks(FILE* out) {
     auto b = std::make_unique<movegen::detail::Magics<ROOK>>();
     b->init();
-    std::vector<char> data(sizeof(*b));
-    std::memcpy(std::data(data), b.get(), sizeof(*b));
-    out.write(std::data(data), static_cast<std::streamsize>(std::size(data)));
+    std::fwrite(b.get(), 1, sizeof(*b), out);
     return true;
 }
 
 inline bool
-write_lines(std::ostream& out) {
-    auto              l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_lines);
-    std::vector<char> data(sizeof(*l));
-    std::memcpy(std::data(data), l.get(), sizeof(*l));
-    out.write(std::data(data), static_cast<std::streamsize>(std::size(data)));
+write_lines(FILE* out) {
+    auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_lines);
+    std::fwrite(l.get(), 1, sizeof(*l), out);
     return true;
 }
 
 inline bool
-write_from_to(std::ostream& out) {
+write_from_to(FILE* out) {
     auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_from_to);
-    std::vector<char> data(sizeof(*l));
-    std::memcpy(std::data(data), l.get(), sizeof(*l));
-    out.write(std::data(data), static_cast<std::streamsize>(std::size(data)));
+    std::fwrite(l.get(), 1, sizeof(*l), out);
     return true;
 }
 
 int
 main(int argc, char** argv) {
-    std::unordered_map<std::string, std::function<bool(std::ostream&)>> targets;
+    std::unordered_map<std::string, std::function<bool(FILE*)>> targets;
     targets.emplace("magic_rooks", write_magic_rooks);
     targets.emplace("magic_bishops", write_magic_bishops);
     targets.emplace("lines", write_lines);
@@ -70,10 +63,13 @@ main(int argc, char** argv) {
     auto     target = program.get<std::string>("--target");
 
     try {
-        std::ofstream out(path, std::ios::binary);
-        targets.at(target)(out);
+        file_ptr out(fopen(path.c_str(), "wb"));
+        if (!out) {
+            throw std::runtime_error(fmt::format("failed to open file {}", path.c_str()));
+        }
+        targets.at(target)(out.get());
     } catch (const std::exception& e) {
-        std::cerr << "Error: " << e.what() << "\n";
+        fmt::println(stderr, "{}", e.what());
         fs::remove(path);
         return 1;
     }

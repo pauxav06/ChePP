@@ -6,11 +6,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdint>
-#include <iterator>
-#include <ranges>
-#include <utility>
-#include <vector>
 
 namespace chepp {
     struct TimeManager {

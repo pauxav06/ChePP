@@ -1,4 +1,6 @@
 #include "engine.h"
+
+#include <iostream>
 using namespace chepp;
 int
 main() {

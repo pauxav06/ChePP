@@ -12,7 +12,6 @@
 #include <array>
 #include <chrono>
 #include <functional>
-#include <iostream>
 #include <memory>
 #include <thread>
 #include <unordered_map>
@@ -168,11 +167,11 @@ namespace chepp {
 
         static std::string
         format_pv_line(const MoveList& pv_line) {
-            std::ostringstream oss;
+            std::string out;
             for (const auto m : pv_line) {
-                oss << m << " ";
+                fmt::format_to(std::back_inserter(out), "{} ", m);
             }
-            return oss.str();
+            return out;
         }
 
         [[nodiscard]] bool
@@ -227,9 +226,9 @@ namespace chepp {
                         auto time_since_start =
                             std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                         time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
-                        auto nps         = m_statistics.nodes / time_since_start.count();
+                        auto nps         = m_statistics.nodes / time_since_start.count() * 1000;
                         auto pv          = get_pv(ss().position(), root_best_move);
-                        fmt::println(std::cout,
+                        fmt::println(stdout,
                                      "info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                                      score,
                                      depth,
@@ -237,7 +236,7 @@ namespace chepp {
                                      nps,
                                      m_statistics.tb_hits,
                                      format_pv_line(pv));
-                        std::flush(std::cout);
+                        std::fflush(stdout);
 
                         TimeManager::UpdateInfo update_info;
                         update_info.eval = eval;
@@ -779,8 +778,8 @@ namespace chepp {
                 if (w.joinable()) w.join();
 
             if (const auto move = get_best_move(); move != Move::none()) {
-                fmt::print(std::cout, "bestmove {}\n", move);
-                std::flush(std::cout);
+                fmt::println(stdout, "bestmove {}", move);
+                std::fflush(stdout);
             }
 
             threads.clear();

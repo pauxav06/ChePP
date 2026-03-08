@@ -10,7 +10,6 @@
 #include "network.h"
 
 #include <cassert>
-#include <cstddef>
 #include <memory>
 
 namespace chepp {

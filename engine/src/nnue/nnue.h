@@ -220,13 +220,13 @@ namespace chepp::nnue {
 
             void
             dbg_uci(const Color side) noexcept {
-                fmt::print(std::cout, "{:<8}{:<8}{:<8}{}\n", "Bucket", "PSQT", "Pos", "Total");
+                fmt::print(stdout, "{:<8}{:<8}{:<8}{}\n", "Bucket", "PSQT", "Pos", "Total");
 
                 for (std::size_t b = 0; b < buckets; ++b) {
                     const auto [pos, psqt] = forward_bucket(side, b);
                     auto total             = pos + psqt;
 
-                    fmt::print(std::cout, "{:<8}{:<8}{:<8}{}{}\n", b, psqt, pos, total, (b == bucket() ? " <-" : ""));
+                    fmt::print(stdout, "{:<8}{:<8}{:<8}{}{}\n", b, psqt, pos, total, (b == bucket() ? " <-" : ""));
                 }
             }
 

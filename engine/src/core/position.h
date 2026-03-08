@@ -1,28 +1,17 @@
 #ifndef POSITION_H_INCLUDED
 #define POSITION_H_INCLUDED
 
+#include "format.h"
+
 #include "bitboard.h"
 #include "movegen.h"
 #include "types.h"
 #include "zobrist.h"
 
-#include <bit>
-#include <chrono>
-#include <cmath>
 #include <cstring>
-#include <expected>
-#include <functional>
-#include <iostream>
-#include <map>
-#include <memory>
 #include <ostream>
 #include <ranges>
-
-#include <sstream>
-#include <unordered_map>
 #include <utility>
-
-#include <map>
 #include <vector>
 
 namespace chepp {
@@ -419,35 +408,36 @@ namespace chepp {
 
     inline std::string
     Position::to_string() const {
-        std::ostringstream res{};
+        std::string res{};
+        res.reserve(400);
+        auto out = std::back_inserter(res);
 
-        fmt::print(res,
-                   "Position\n"
-                   "Side to move: {}\n"
-                   "Castling rights: {}\n"
-                   "EP square: {}\n"
-                   "Zobrist hash: {:#X}\n",
-                   side_to_move(),
-                   castling_rights(),
-                   ep_square(),
-                   hash());
+        fmt::format_to(out,
+                       "Position\n"
+                       "Side to move: {}\n"
+                       "Castling rights: {}\n"
+                       "EP square: {}\n"
+                       "Zobrist hash: {:#X}\n",
+                       side_to_move(),
+                       castling_rights(),
+                       ep_square(),
+                       hash());
 
         for (auto rank = RANK_1; rank <= RANK_8; ++rank) {
-            res << (RANK_8 - rank).index() + 1 << " ";
+            std::format_to(out, "{} ", (RANK_8 - rank).index() + 1);
             for (auto file = FILE_A; file <= FILE_H; ++file) {
                 const Square sq{file, RANK_8 - rank};
                 const Piece  pc = piece_at(sq);
-                fmt::print(res, "{} ", pc);
+                fmt::format_to(out, "{} ", pc);
             }
-            fmt::print(res, "\n");
+            fmt::format_to(out, "\n");
         }
 
-        fmt::print(res,
-                   "  a b c d e f g h \n"
-                   "Fen: {}\n",
-                   to_fen().to_string());
-
-        return res.str();
+        fmt::format_to(out,
+                       "  a b c d e f g h \n"
+                       "Fen: {}\n",
+                       to_fen());
+        return res;
     }
 
     template <Color c>
@@ -908,12 +898,11 @@ namespace chepp {
             size_t nodes = 0;
             perft(next, depth - 1, nodes);
 
-            fmt::print(std::cout, "{} {} {}: {}\n", prev.piece_at(mv.from_sq()), mv.from_sq(), mv.to_sq(), nodes);
+            fmt::println(stdout, "{} {} {}: {}", prev.piece_at(mv.from_sq()), mv.from_sq(), mv.to_sq(), nodes);
 
             total += nodes;
         }
-
-        std::cout << "Total: " << total << '\n';
+        fmt::println(stdout, "Total {}", total);
     }
 
     // Expensive function, should only be called for user input validation
@@ -1033,7 +1022,7 @@ namespace chepp {
     Position::is_ok() const {
         auto ok = is_ok_verbose();
         if (!ok && verbose) {
-            std::cerr << ok.error() << std::endl;
+            fmt::println(stderr, "{}", ok.error());
         }
         return ok.has_value();
     }

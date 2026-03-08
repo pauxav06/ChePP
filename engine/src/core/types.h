@@ -12,11 +12,11 @@
 #include <sstream>
 #include <string>
 #include <string_view>
-
 #include <vector>
 
 #include "expected.h"
 
+// TODO replace calls to format_to to format_to_n
 namespace chepp {
     using namespace std::literals;
 
@@ -130,36 +130,6 @@ namespace chepp {
         size_type        m_size{0};
     };
 
-    template <typename Derived>
-    struct Printable {
-        friend std::ostream&
-        operator<<(std::ostream& os, const Derived& e) {
-            return os << e.to_string();
-        }
-    };
-
-    template <typename Derived>
-    struct Parsable {
-        friend std::istream&
-        operator>>(std::istream& is, Derived& obj) {
-            std::string buffer;
-
-            if (!(is >> buffer)) {
-                return is;
-            }
-
-            auto result = Derived::parse(buffer);
-
-            if (result) {
-                obj = std::move(*result);
-            } else {
-                is.setstate(std::ios::failbit);
-            }
-
-            return is;
-        }
-    };
-
     // a custom enum of consecutive integers 0 ... N and a NONE value N + 1
     // values will wrap like integers if they go passed the NONE value
     // f eg, for a Color enum with [WHITE, BLACK, NONE], incrementing will result in the following sequence
@@ -171,7 +141,7 @@ namespace chepp {
               bool        EnableInc        = false,
               bool        EnableArithmetic = false>
         requires(std::is_integral_v<UnderlyingT> && std::is_unsigned_v<UnderlyingT>)
-    struct EnumBase : Printable<DerivedT>, Parsable<DerivedT> {
+    struct EnumBase {
         static constexpr bool EnableInc_v        = EnableInc;
         static constexpr bool EnableArithmetic_v = EnableArithmetic;
 
@@ -370,15 +340,6 @@ namespace chepp {
         ValueT m_val = NONE_VALUE;
     };
 } // namespace chepp
-
-template <typename T>
-    requires std::is_base_of_v<chepp::Printable<T>, T>
-struct fmt::formatter<T> : fmt::formatter<std::string> {
-    auto
-    format(T value, fmt::format_context& ctx) const {
-        return std::ranges::copy(std::move(value).to_string(), ctx.out()).out;
-    }
-};
 
 struct constexpr_in_place_t {};
 inline constexpr constexpr_in_place_t constexpr_in_place{};
@@ -652,11 +613,6 @@ namespace chepp {
 
         static constexpr std::string_view repr{"abcdefgh-"};
 
-        [[nodiscard]] std::string
-        to_string() const noexcept {
-            return std::string{repr.at(index())};
-        }
-
         [[nodiscard]] static tl::expected<File, std::string>
         from_string(const std::string_view s) noexcept {
             if (s == "-") {
@@ -678,17 +634,22 @@ namespace chepp {
     inline constexpr File FILE_G{6};
     inline constexpr File FILE_H{7};
     inline constexpr File NO_FILE{8};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::File> : fmt::formatter<char> {
+    auto
+    format(const chepp::File value, fmt::format_context& ctx) const {
+        return formatter<char>::format(chepp::File::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     struct Rank : EnumBase<Rank, uint8_t, 8, true, true> {
         using base = EnumBase;
         using base::EnumBase;
 
         static constexpr std::string_view repr{"12345678-"};
-
-        [[nodiscard]] constexpr std::string
-        to_string() const noexcept {
-            return std::string{repr.at(index())};
-        }
 
         [[nodiscard]] static tl::expected<Rank, std::string>
         from_string(const std::string_view sv) {
@@ -711,7 +672,17 @@ namespace chepp {
     inline constexpr Rank RANK_7{6};
     inline constexpr Rank RANK_8{7};
     inline constexpr Rank NO_RANK{8};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::Rank> : fmt::formatter<char> {
+    auto
+    format(const chepp::Rank value, fmt::format_context& ctx) const {
+        return formatter<char>::format(chepp::Rank::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     using Coordinates = std::pair<File, Rank>;
 
     struct Square : EnumBase<Square, uint8_t, 64, true, true> {
@@ -748,14 +719,6 @@ namespace chepp {
         [[nodiscard]] constexpr Square
         flipped_vertically() const noexcept {
             return Square{FILE_H - file(), rank()};
-        }
-
-        [[nodiscard]] constexpr std::string
-        to_string() const noexcept {
-            if (is_none()) {
-                return "-";
-            }
-            return file().to_string() + rank().to_string();
         }
 
         using parse_t = tl::expected<Square, std::string>;
@@ -850,7 +813,24 @@ namespace chepp {
     inline constexpr Square H7{FILE_H, RANK_7};
     inline constexpr Square H8{FILE_H, RANK_8};
     inline constexpr Square NO_SQUARE{64};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::Square> : fmt::formatter<std::string_view> {
+    auto
+    format(const chepp::Square value, fmt::format_context& ctx) const {
+        if (value.is_none()) {
+            return formatter<std::string_view>::format("-", ctx);
+        } else {
+            char res[3];
+            auto out = std::begin(res);
+            out      = fmt::format_to(out, "{}{}", value.file(), value.rank());
+            return formatter<std::string_view>::format(std::string_view{res, out}, ctx);
+        }
+    }
+};
+
+namespace chepp {
     struct PieceType : EnumBase<PieceType, uint8_t, 6, true, true> {
         using base = EnumBase;
         using base::EnumBase;
@@ -861,21 +841,17 @@ namespace chepp {
 
         static constexpr std::string_view repr{"pnbrqk-"};
 
-        [[nodiscard]] std::string
-        to_string() const noexcept {
-            return std::string{repr.at(index())};
-        }
-
-        [[nodiscard]] static tl::expected<PieceType, std::string>
+        using parse_result_t = tl::expected<PieceType, std::string>;
+        [[nodiscard]] static parse_result_t
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
-                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
+                return parse_result_t{tl::unexpect, fmt::format("expected char in {} but found {}", repr, s)};
             };
             const auto it = repr.find(s[0]);
             if (it == std::string::npos) {
-                return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
+                return parse_result_t{tl::unexpect, fmt::format("expected char in {} but found {}", repr, s)};
             }
-            return PieceType{it};
+            return parse_result_t{tl::in_place, it};
         }
     };
 
@@ -893,7 +869,17 @@ namespace chepp {
     PieceType::piece_value() const {
         return piece_type_value.at(*this);
     }
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::PieceType> : fmt::formatter<char> {
+    auto
+    format(const chepp::PieceType value, fmt::format_context& ctx) const {
+        return fmt::formatter<char>::format(chepp::PieceType::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     struct Color : EnumBase<Color, uint8_t, 2> {
         using base = EnumBase;
         using base::EnumBase;
@@ -914,11 +900,6 @@ namespace chepp {
 
         static constexpr std::string_view repr = {"wb-"};
 
-        [[nodiscard]] constexpr std::string
-        to_string() const noexcept {
-            return std::string{repr.at(index())};
-        }
-
         [[nodiscard]] static tl::expected<Color, std::string>
         from_string(const std::string_view s) noexcept {
             if (s.size() != 1) {
@@ -935,7 +916,17 @@ namespace chepp {
     inline constexpr Color WHITE{0};
     inline constexpr Color BLACK{1};
     inline constexpr Color NO_COLOR{2};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::Color> : fmt::formatter<char> {
+    auto
+    format(const chepp::Color value, fmt::format_context& ctx) const {
+        return fmt::formatter<char>::format(chepp::Color::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     struct Piece : EnumBase<Piece, uint8_t, 12, true, true> {
         using base = EnumBase;
         using base::EnumBase;
@@ -960,10 +951,6 @@ namespace chepp {
         }
 
         static constexpr std::string_view repr{"PpNnBbRrQqKk-"};
-        [[nodiscard]] std::string
-        to_string() const noexcept {
-            return std::string{repr.at(index())};
-        }
 
         [[nodiscard]] static tl::expected<Piece, std::string>
         from_string(const std::string_view s) noexcept {
@@ -990,7 +977,17 @@ namespace chepp {
     inline constexpr Piece B_QUEEN{BLACK, QUEEN};
     inline constexpr Piece B_KING{BLACK, KING};
     inline constexpr Piece NO_PIECE{12};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::Piece> : fmt::formatter<char> {
+    auto
+    format(const chepp::Piece value, fmt::format_context& ctx) const {
+        return fmt::formatter<char>::format(chepp::Piece::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     // add a to a square value to get a shift in the associated direction
     // shift a bitboard by the value to get a shift in the associated direction
     // be careful, this on its own wraps around the board edges
@@ -1104,7 +1101,7 @@ namespace chepp {
             const auto it = repr.find(s[0]);
             if (it == std::string::npos) {
                 return tl::unexpected{fmt::format("expected char in {} but found {}", repr, s)};
-            };
+            }
             return CastlingType{it};
         }
     };
@@ -1119,10 +1116,20 @@ namespace chepp {
     inline constexpr CastlingType WHITE_QUEENSIDE{WHITE, QUEENSIDE};
     inline constexpr CastlingType BLACK_QUEENSIDE{BLACK, QUEENSIDE};
     inline constexpr CastlingType NO_CASTLING_TYPE{4};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::CastlingType> : fmt::formatter<char> {
+    auto
+    format(const chepp::CastlingType value, fmt::format_context& ctx) const {
+        return fmt::formatter<char>::format(chepp::CastlingType::repr.at(value.index()), ctx);
+    }
+};
+
+namespace chepp {
     struct Move;
 
-    struct CastlingRights : Printable<CastlingRights>, Parsable<CastlingRights> {
+    struct CastlingRights {
         using MaskT                        = uint8_t;
         static constexpr std::size_t NComb = 16;
 
@@ -1209,11 +1216,6 @@ namespace chepp {
         static constexpr std::array<std::string_view, NComb> repr = {
             "-", "K", "Q", "KQ", "k", "Kk", "Qk", "KQk", "q", "Kq", "Qq", "KQq", "kq", "Kkq", "Qkq", "KQkq"};
 
-        [[nodiscard]] std::string_view
-        to_string() const noexcept {
-            return repr.at(m_mask);
-        }
-
         [[nodiscard]] static tl::expected<CastlingRights, std::string>
         from_string(const std::string_view sv) {
             const auto it = std::ranges::find(repr, sv);
@@ -1257,7 +1259,17 @@ namespace chepp {
     inline constexpr CastlingRights CASTLING_Qkq{WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
 
     inline constexpr CastlingRights CASTLING_KQkq{WHITE_KINGSIDE, WHITE_QUEENSIDE, BLACK_KINGSIDE, BLACK_QUEENSIDE};
+} // namespace chepp
 
+template <>
+struct fmt::formatter<chepp::CastlingRights> : fmt::formatter<std::string_view> {
+    auto
+    format(const chepp::CastlingRights value, fmt::format_context& ctx) const {
+        return fmt::formatter<std::string_view>::format(chepp::CastlingRights::repr.at(value.mask()), ctx);
+    }
+};
+
+namespace chepp {
     namespace bit {
         template <std::unsigned_integral T>
         constexpr int
@@ -1316,7 +1328,7 @@ namespace chepp {
     // 6-11 bit : from square (square 0 to 63)
     // 12-13 bit : promotion piece type (shifted by KNIGHT which is the lowest promotion to fit) or
     // castle type 14-15: promotion (1), en passant (2), castling (3)
-    struct Move : Printable<Move>, Parsable<Move> {
+    struct Move {
       public:
         Move() : m_data(0) {
         }
@@ -1403,15 +1415,6 @@ namespace chepp {
             return static_cast<CastlingType>(m_data >> 12 & 0b11);
         }
 
-        [[nodiscard]] std::string
-        to_string() const noexcept {
-            if (type_of() != PROMOTION) {
-                return fmt::format("{}{}", from_sq(), to_sq());
-            } else {
-                return fmt::format("{}{}{}", from_sq(), to_sq(), promotion_type());
-            }
-        }
-
         struct UCICtx {
             const EnumArray<Piece, Square>& pieces;
             const Square                    ep_square;
@@ -1450,6 +1453,21 @@ namespace chepp {
 } // namespace chepp
 
 template <>
+struct fmt::formatter<chepp::Move> : fmt::formatter<std::string_view> {
+    auto
+    format(const chepp::Move move, fmt::format_context& ctx) const {
+        char res[6];
+        auto out = std::begin(res);
+        if (move.type_of() != chepp::PROMOTION) {
+            out = fmt::format_to(out, "{}{}", move.from_sq(), move.to_sq());
+        } else {
+            out = fmt::format_to(out, "{}{}{}", move.from_sq(), move.to_sq(), move.promotion_type());
+        }
+        return fmt::formatter<std::string_view>::format(std::string_view{res, out}, ctx);
+    }
+};
+
+template <>
 struct std::hash<chepp::Move> {
     std::size_t
     operator()(const chepp::Move& m) const noexcept {
@@ -1458,7 +1476,6 @@ struct std::hash<chepp::Move> {
 };
 
 namespace chepp {
-
     inline tl::expected<Move, std::string>
     Move::from_uci(const std::string_view s, const UCICtx& info) {
         auto err = [](const std::string& msg) {
@@ -1522,13 +1539,16 @@ namespace chepp {
         uint16_t                 halfmove{}, fullmove{};
 
         [[nodiscard]] static tl::expected<Fen, std::string>
-        from_string(const std::string& s) noexcept {
+        from_string(const std::string_view sv) noexcept {
             auto err = [](const std::string& msg) {
                 return tl::unexpected{fmt::format("error while parsing fen: {}", msg)};
             };
-            Fen                fen{};
-            std::istringstream iss{s};
-            std::string        board_str, color_str, castling_str, ep_str, halfmove_str, fullmove_str;
+
+            Fen fen{};
+
+            std::string board_str, color_str, castling_str, ep_str, halfmove_str, fullmove_str;
+
+            std::istringstream iss{std::string(sv)};
             if (!(iss >> board_str >> color_str >> castling_str >> ep_str >> halfmove_str >> fullmove_str)) {
                 return err("FEN parse error: expected 6 fields");
             }
@@ -1583,60 +1603,66 @@ namespace chepp {
             }
             fen.ep_square = ep_square.value();
 
-            if (halfmove_str.size() > 3 || fullmove_str.size() > 3)
-                return tl::unexpected(fmt::format("Halfmove/fullmove field too long"));
+            if (auto [ptr, ec] = std::from_chars(
+                    std::data(fullmove_str), std::data(fullmove_str) + std::size(fullmove_str), fen.fullmove);
+                ec != std::errc{}) {
+                return err(fmt::format("Invalid move fullmove in FEN"));
+            }
 
-            try {
-                fen.halfmove = static_cast<uint16_t>(std::stoi(halfmove_str));
-                fen.fullmove = static_cast<uint16_t>(std::stoi(fullmove_str));
-            } catch (const std::exception& e) {
-                return err(fmt::format("Invalid move counters in FEN: {}", e.what()));
-            }
             if (fen.fullmove < 1) {
-                return err("Invalid move counters in FEN: ");
+                return err("Invalid move fullmove in FEN");
             }
+
+            if (auto [ptr, ec] = std::from_chars(
+                    std::data(halfmove_str), std::data(fullmove_str) + std::size(halfmove_str), fen.halfmove);
+                ec != std::errc{}) {
+                return err(fmt::format("Invalid move halfmove in FEN"));
+            }
+
             return fen;
         }
+    };
+} // namespace chepp
+template <>
+struct fmt::formatter<chepp::Fen> : fmt::formatter<std::string> {
+    auto
+    format(const chepp::Fen fen, fmt::format_context& ctx) const {
+        using namespace chepp;
+        std::string res;
+        res.reserve(128);
+        auto out = std::back_inserter(res);
 
-        [[nodiscard]] std::string
-        to_string() const {
-            std::ostringstream oss;
+        for (const auto r : Rank::all()) {
+            const auto rank  = RANK_8 - r;
+            int        empty = 0;
+            for (auto file = FILE_A; file <= FILE_H; ++file) {
+                const Square sq{file, rank};
 
-            for (auto r = RANK_1; r <= RANK_8; ++r) {
-                const auto rank  = RANK_8 - r;
-                int        empty = 0;
-                for (auto file = FILE_A; file <= FILE_H; ++file) {
-                    const Square sq{file, rank};
-
-                    if (Piece pc = pieces.at(sq); pc == NO_PIECE) {
-                        ++empty;
-                    } else {
-                        if (empty > 0) {
-                            fmt::print(oss, "{}", empty);
-                            empty = 0;
-                        }
-                        fmt::print(oss, "{}", pc);
+                if (Piece pc = fen.pieces.at(sq); pc == NO_PIECE) {
+                    ++empty;
+                } else {
+                    if (empty > 0) {
+                        fmt::format_to(out, "{}", empty);
+                        empty = 0;
                     }
-                }
-                if (empty > 0) {
-                    fmt::print(oss, "{}", empty);
-                }
-
-                if (rank > RANK_1) {
-                    fmt::print(oss, "/");
+                    fmt::format_to(out, "{}", pc);
                 }
             }
+            if (empty > 0) {
+                fmt::format_to(out, "{}", empty);
+            }
 
-            fmt::print(oss, " {} {} {} {} {}", color, crs, ep_square, halfmove, fullmove);
-            return oss.str();
+            if (rank > RANK_1) {
+                fmt::format_to(out, "/");
+            }
         }
 
-        friend auto&
-        operator<<(std::ostream& os, const Fen& fen) {
-            os << fen.to_string();
-            return os;
-        }
-    };
+        fmt::format_to(out, " {} {} {} {} {}", fen.color, fen.crs, fen.ep_square, fen.halfmove, fen.fullmove);
+        return fmt::formatter<std::string>::format(res, ctx);
+    }
+};
+
+namespace chepp {
 
     inline constexpr int MAX_PLY = 255;
 
