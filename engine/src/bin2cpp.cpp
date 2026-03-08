@@ -40,15 +40,15 @@ main(int argc, char** argv) {
     auto inc_path    = (output_dir / name) += ".inc";
 
     try {
-        file_ptr input{fopen(input_path.c_str(), "rb")};
+        file_ptr input{fopen(input_path.string().c_str(), "rb")};
         if (!input.get()) {
             throw std::runtime_error(fmt::format("Failed to open input file {}", input_path.string()));
         }
-        file_ptr header{fopen(header_path.c_str(), "wb")};
+        file_ptr header{fopen(header_path.string().c_str(), "wb")};
         if (!header.get()) {
             throw std::runtime_error(fmt::format("Failed to open header {}", header_path.string()));
         }
-        file_ptr inc{fopen(inc_path.c_str(), "wb")};
+        file_ptr inc{fopen(inc_path.string().c_str(), "wb")};
         if (!inc.get()) {
             throw std::runtime_error(fmt::format("Failed to open inc {}", inc_path.string()));
         }

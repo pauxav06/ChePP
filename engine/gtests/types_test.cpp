@@ -3,6 +3,7 @@
 //
 
 #include "core.h"
+#include "format.h"
 
 #include <gtest/gtest.h>
 #include <random>
@@ -40,10 +41,10 @@ namespace chepp {
 
     TYPED_TEST(EnumStringTest, RoundtripConversion) {
         for (auto e : TypeParam::all()) {
-            std::string s    = e.to_string();
+            std::string s    = fmt::format("{}", e);
             auto        back = TypeParam::from_string(s);
             EXPECT_TRUE(back.has_value()) << "Empty optional for valid enum member: " << s;
-            EXPECT_EQ(*back, e) << "Forward and back do not match: " << s << " -> " << *back;
+            EXPECT_EQ(*back, e) << "Forward and back do not match: " << s << " -> " << std::format("{}", *back);
         }
     }
 
@@ -70,7 +71,7 @@ namespace chepp {
         const size_t                               max_length = []() {
             size_t ret = 0;
             for (const TypeParam e : TypeParam::all()) {
-                ret = std::max(ret, e.to_string().size());
+                ret = std::max(ret, fmt::format("{}", e).size());
             }
             return ret;
         }();
@@ -104,7 +105,7 @@ namespace chepp {
                 Square sq{f, r};
                 EXPECT_EQ(sq.file(), f);
                 EXPECT_EQ(sq.rank(), r);
-                EXPECT_EQ(sq.to_string(), (f.to_string() + r.to_string()));
+                EXPECT_EQ(fmt::format("{}", sq), fmt::format("{}{}", f, r));
                 EXPECT_EQ(sq.flipped_vertically().rank(), r);
                 EXPECT_EQ(sq.flipped_vertically().file() + sq.file(), FILE_H);
                 EXPECT_EQ(sq.flipped_horizontally().file(), f);
@@ -142,10 +143,10 @@ namespace chepp {
     TEST(CastlingTest, KingAndRookMoves) {
         auto [kfrom, kto] = WHITE_KINGSIDE.king_move();
         auto [rfrom, rto] = WHITE_KINGSIDE.rook_move();
-        EXPECT_EQ(kfrom.to_string(), "e1");
-        EXPECT_EQ(kto.to_string(), "g1");
-        EXPECT_EQ(rfrom.to_string(), "h1");
-        EXPECT_EQ(rto.to_string(), "f1");
+        EXPECT_EQ(fmt::format("{}", kfrom), "e1");
+        EXPECT_EQ(fmt::format("{}", kto), "g1");
+        EXPECT_EQ(fmt::format("{}", rfrom), "h1");
+        EXPECT_EQ(fmt::format("{}", rto), "f1");
     }
 
     TEST(CastlingRightsTest, LostFromMove) {
@@ -175,9 +176,9 @@ namespace chepp {
 
     TEST(MoveTest, BasicEncodeDecode) {
         Move m{E2, E4};
-        EXPECT_EQ(m.from_sq().to_string(), "e2");
-        EXPECT_EQ(m.to_sq().to_string(), "e4");
-        EXPECT_EQ(m.to_string(), "e2e4");
+        EXPECT_EQ(fmt::format("{}", m.from_sq()), "e2");
+        EXPECT_EQ(fmt::format("{}", m.to_sq()), "e4");
+        EXPECT_EQ(fmt::format("{}", m), "e2e4");
         EXPECT_EQ(m.type_of(), NORMAL);
     }
 
@@ -185,11 +186,11 @@ namespace chepp {
         Move pm = Move::make<PROMOTION>(E7, E8, QUEEN);
         EXPECT_EQ(pm.type_of(), PROMOTION);
         EXPECT_EQ(pm.promotion_type(), QUEEN);
-        EXPECT_EQ(pm.to_string(), "e7e8q");
+        EXPECT_EQ(fmt::format("{}", pm), "e7e8q");
         Move pm1 = Move::make<PROMOTION>(F2, F1, KNIGHT);
         EXPECT_EQ(pm1.type_of(), PROMOTION);
         EXPECT_EQ(pm1.promotion_type(), KNIGHT);
-        EXPECT_EQ(pm1.to_string(), "f2f1n");
+        EXPECT_EQ(fmt::format("{}", pm1), "f2f1n");
     }
 
     TEST(MoveTest, CastlingEncoding) {
@@ -205,8 +206,8 @@ namespace chepp {
         Move::UCICtx info{pieces, NO_SQUARE, CastlingRights::none()};
         auto         mv = Move::from_uci("e2e4", info);
         ASSERT_TRUE(mv.has_value());
-        EXPECT_EQ(mv->from_sq().to_string(), "e2");
-        EXPECT_EQ(mv->to_sq().to_string(), "e4");
+        EXPECT_EQ(fmt::format("{}", mv->from_sq()), "e2");
+        EXPECT_EQ(fmt::format("{}", mv->to_sq()), "e4");
     }
 
     TEST(MoveFromUciTest, EnPassant) {
@@ -245,12 +246,12 @@ namespace chepp {
     }
 
     TEST(CastlingRights, RoundtripAndInvalid) {
-        EXPECT_EQ(std::string(CASTLING_NONE.to_string()), std::string("-"));
-        EXPECT_EQ(std::string(CASTLING_K.to_string()), std::string("K"));
-        EXPECT_EQ(std::string(CASTLING_Q.to_string()), std::string("Q"));
-        EXPECT_EQ(std::string(CASTLING_KQ.to_string()), std::string("KQ"));
-        EXPECT_EQ(std::string(CASTLING_kq.to_string()), std::string("kq"));
-        EXPECT_EQ(std::string(CASTLING_KQkq.to_string()), std::string("KQkq"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_NONE), std::string("-"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_K), std::string("K"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_Q), std::string("Q"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_KQ), std::string("KQ"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_kq), std::string("kq"));
+        EXPECT_EQ(fmt::format("{}", CASTLING_KQkq), std::string("KQkq"));
 
         auto opt = CastlingRights::from_string("KQ");
         ASSERT_TRUE(opt.has_value());
@@ -271,16 +272,16 @@ namespace chepp {
         cr.add(WHITE_KINGSIDE);
         EXPECT_TRUE(cr.has(WHITE_KINGSIDE));
         EXPECT_FALSE(cr.has(WHITE_QUEENSIDE));
-        EXPECT_EQ(cr.to_string(), std::string("K"));
+        EXPECT_EQ(fmt::format("{}", cr), std::string("K"));
 
         cr.add(WHITE_QUEENSIDE);
         EXPECT_TRUE(cr.has(WHITE_QUEENSIDE));
-        EXPECT_EQ(cr.to_string(), std::string("KQ"));
+        EXPECT_EQ(fmt::format("{}", cr), std::string("KQ"));
 
         cr.remove(WHITE_KINGSIDE);
         EXPECT_FALSE(cr.has(WHITE_KINGSIDE));
         EXPECT_TRUE(cr.has(WHITE_QUEENSIDE));
-        EXPECT_EQ(cr.to_string(), std::string("Q"));
+        EXPECT_EQ(fmt::format("{}", cr), std::string("Q"));
     }
 
     TEST(CastlingRights, RemoveOtherAndKeep) {

@@ -185,10 +185,7 @@ namespace chepp {
 
         [[nodiscard]] std::string
         to_string() const;
-        friend std::ostream&
-        operator<<(std::ostream& os, const Position& pos) {
-            return os << pos.to_string();
-        }
+
         [[nodiscard]] Fen
         to_fen() const;
 

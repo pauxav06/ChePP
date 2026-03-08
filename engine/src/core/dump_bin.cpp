@@ -63,7 +63,7 @@ main(int argc, char** argv) {
     auto     target = program.get<std::string>("--target");
 
     try {
-        file_ptr out(fopen(path.c_str(), "wb"));
+        file_ptr out(fopen(path.string().c_str(), "wb"));
         if (!out) {
             throw std::runtime_error(fmt::format("failed to open file {}", path.c_str()));
         }

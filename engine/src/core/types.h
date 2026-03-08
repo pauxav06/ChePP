@@ -7,6 +7,7 @@
 #include <array>
 #include <bit>
 #include <cassert>
+#include <charconv>
 #include <cstdint>
 #include <ranges>
 #include <sstream>
