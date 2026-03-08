@@ -44,7 +44,7 @@ namespace chepp {
             std::string s    = fmt::format("{}", e);
             auto        back = TypeParam::from_string(s);
             EXPECT_TRUE(back.has_value()) << "Empty optional for valid enum member: " << s;
-            EXPECT_EQ(*back, e) << "Forward and back do not match: " << s << " -> " << std::format("{}", *back);
+            EXPECT_EQ(*back, e) << "Forward and back do not match: " << s << " -> " << fmt::format("{}", *back);
         }
     }
 
