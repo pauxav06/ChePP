@@ -22,7 +22,7 @@ endfunction()
 
 add_library(ChePP_core STATIC bitboard.cpp tb.cpp)
 
-set(GEN_DIR       ${CMAKE_CURRENT_SOURCE_DIR}/generated)
+set(GEN_DIR       ${CMAKE_CURRENT_BINARY_DIR})
 set(ASSETS magic_rooks magic_bishops lines from_to)
 
 foreach(name IN LISTS ASSETS)

@@ -26,7 +26,7 @@ int
 main(int argc, char** argv) {
     argparse::ArgumentParser program("bin2cpp");
     program.add_argument("--input").required().help("Path to input file");
-    program.add_argument("--output_dir").required().help("Path to output directory");
+    program.add_argument("--output-dir").required().help("Path to output directory");
     program.add_argument("--name").required().help("Name");
     program.add_argument("--q").choices("", "constexpr", "constinit").default_value("");
 
@@ -34,11 +34,11 @@ main(int argc, char** argv) {
 
     fs::path input_path = program.get<std::string>("--input");
     auto     name       = program.get<std::string>("--name");
-    fs::path output_dir = program.get<std::string>("--output_dir");
+    fs::path output_dir = program.get<std::string>("--output-dir");
     auto     qualifier  = program.get<std::string>("--q");
 
-    auto header_path = output_dir / (name + ".h");
-    auto inc_path    = output_dir / (name + ".inc");
+    auto header_path = output_dir / "generated" / (name + ".h");
+    auto inc_path    = output_dir / "generated" / (name + ".inc");
 
     try {
         std::ifstream input(input_path, std::ios::binary);

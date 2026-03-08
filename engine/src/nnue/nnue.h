@@ -11,7 +11,7 @@
 
 #include <utility>
 
-#include "weights/weights.h"
+#include "generated/weights.h"
 
 namespace chepp::nnue {
     template <typename Operation>
