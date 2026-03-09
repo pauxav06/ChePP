@@ -28,11 +28,11 @@ namespace chepp::nnue::layers {
             forward(const input_t*, output_t*) const noexcept = 0;
             [[nodiscard]] virtual size_t
             input_padding() const noexcept {
-                return 0uz;
+                return size_t{0};
             }
             [[nodiscard]] virtual size_t
             output_padding() const noexcept {
-                return 0uz;
+                return size_t{0};
             }
         };
 

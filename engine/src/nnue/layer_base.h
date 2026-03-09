@@ -230,8 +230,8 @@ namespace chepp::nnue {
             }
 
             hwy::AutoTune<size_t> tune{};
-            std::vector           indices(candidates.size(), 0uz);
-            std::iota(indices.begin(), indices.end(), 0uz);
+            std::vector           indices(candidates.size(), size_t{0});
+            std::iota(indices.begin(), indices.end(), size_t{0});
             tune.SetCandidates(std::move(indices));
 
             while (!tune.Best()) {
