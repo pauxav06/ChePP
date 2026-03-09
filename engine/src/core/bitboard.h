@@ -3,6 +3,7 @@
 
 #include "types.h"
 #include "utils.h"
+#include "ranges.h"
 
 #include <array>
 #include <cassert>
@@ -11,7 +12,6 @@
 #include <hedley.h>
 #include <mutex>
 #include <random>
-#include <ranges>
 #include <string>
 
 namespace chepp {
@@ -251,8 +251,8 @@ namespace chepp {
                                                   "1 . . . . . . . . 1 \n"
                                                   "  A B C D E F G H   \n";
 
-            static constexpr auto row_len = std::distance(empty_board, std::ranges::find(empty_board, '8'));
-            static constexpr auto col_len = std::distance(empty_board, std::ranges::find(empty_board, 'A'));
+            static constexpr auto row_len = std::distance(empty_board, ranges::find(empty_board, '8'));
+            static constexpr auto col_len = std::distance(empty_board, ranges::find(empty_board, 'A'));
 
             std::string out(empty_board);
 
@@ -445,15 +445,15 @@ namespace chepp::movegen {
 
                 for (Square sq : Square::all()) {
                     const auto        mask = relevancy_mask<pc>(sq);
-                    const std::size_t combinations{1uz << mask.popcount()};
+                    const std::size_t combinations{size_t{1} << mask.popcount()};
 
                     std::vector<mask_type> blockers_vec;
                     blockers_vec.reserve(combinations);
-                    for (std::size_t comb{0uz}; comb < combinations; ++comb) {
+                    for (std::size_t comb{size_t{0}}; comb < combinations; ++comb) {
                         Bitboard    bb{0};
                         std::size_t idx{0};
                         for (const Square s : mask) {
-                            if (comb & (1uz << idx++)) {
+                            if (comb & (size_t{1} << idx++)) {
                                 bb.set(s);
                             }
                         }
@@ -482,9 +482,9 @@ namespace chepp::movegen {
             using magic_type = uint64_t;
             using shift_type = int32_t;
 
-            mask_type  m_mask;
-            shift_type m_shift;
-            magic_type m_magic;
+            mask_type  m_mask{};
+            shift_type m_shift{};
+            magic_type m_magic{};
 
             static ShiftIndexer
             make(const mask_type mask, const std::vector<mask_type>& blockers) {
@@ -501,7 +501,6 @@ namespace chepp::movegen {
                 return "ShiftIndexer";
             }
 
-          private:
             static magic_type
             find_magic(const mask_type mask, const std::vector<mask_type>& blockers) {
                 constexpr uint64_t MAX_TRIES = 1'000'000;
@@ -540,11 +539,11 @@ namespace chepp::movegen {
             using index_type = uint32_t;
             using mask_type  = Bitboard::U64;
 
-            mask_type m_mask;
+            mask_type m_mask{};
 
             static constexpr PEXTIndexer
             make(const mask_type mask, const std::vector<mask_type>&) {
-                return PEXTIndexer(mask);
+                return PEXTIndexer{mask};
             }
 
             [[nodiscard]] HEDLEY_ALWAYS_INLINE index_type

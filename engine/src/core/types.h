@@ -2,6 +2,7 @@
 #define TYPES_H_INCLUDED
 
 #include "format.h"
+#include "ranges.h"
 
 #include <algorithm>
 #include <array>
@@ -9,7 +10,6 @@
 #include <cassert>
 #include <charconv>
 #include <cstdint>
-#include <ranges>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -374,7 +374,10 @@ namespace chepp {
 
         constexpr EnumArray(std::initializer_list<T> init) {
             assert(init.size() == count && "Initializer list must match EnumArray size");
-            std::copy(init.begin(), init.end(), data.begin());
+            std::size_t i{0};
+            for (const auto& e : init) {
+                data[i++] = e;
+            }
         }
 
         template <typename F>
@@ -382,7 +385,7 @@ namespace chepp {
         constexpr explicit EnumArray(std::in_place_t, F&& f) {
             for (std::size_t i = 0; i < count; ++i) {
                 Enum e(static_cast<typename Enum::ValueT>(i));
-                std::construct_at(&data[i], f(e));
+                data[i] = f(e);
             }
         }
 
@@ -390,7 +393,7 @@ namespace chepp {
             requires std::is_invocable_r_v<T, F, std::integral_constant<Enum, Enum{0}>>
         constexpr explicit EnumArray(constexpr_in_place_t, F&& f) {
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                ((std::construct_at(&data[Is], f(std::integral_constant<Enum, Enum{Is}>{}))), ...);
+                ((data[Is] = f(std::integral_constant<Enum, Enum{Is}>{})), ...);
             }(std::make_index_sequence<count>{});
         }
 
@@ -453,8 +456,8 @@ namespace chepp {
         constexpr void
         fill_pred(Func&& f) {
             for (std::size_t i = 0; i < count; ++i) {
-                Enum e(static_cast<Enum::ValueT>(i));
-                std::construct_at(&data[i], f(e));
+                Enum e(static_cast<typename Enum::ValueT>(i));
+                data[i] = f(e);
             }
         }
 
@@ -473,7 +476,7 @@ namespace chepp {
 } // namespace chepp
 
 template <typename T, typename Enum>
-inline constexpr bool std::ranges::enable_borrowed_range<chepp::EnumArray<T, Enum>> = true;
+inline constexpr bool ranges::enable_borrowed_range<chepp::EnumArray<T, Enum>> = true;
 
 namespace chepp {
     template <typename T, typename FirstEnum, typename... RestEnums>
@@ -508,20 +511,18 @@ namespace chepp {
         constexpr explicit EnumArray(std::in_place_t, F&& f) {
             for (std::size_t i = 0; i < count; ++i) {
                 FirstEnum e(static_cast<typename FirstEnum::ValueT>(i));
-                std::construct_at(
-                    &data[i], std::in_place, [&, e](auto... restEnums) { return std::forward<F>(f)(e, restEnums...); });
+                    data[i] = SubArrayT{std::in_place, [&, e](auto... restEnums) { return std::forward<F>(f)(e, restEnums...); }};
             }
         }
 
         template <typename F>
         constexpr explicit EnumArray(constexpr_in_place_t, F&& f) {
             [&]<std::size_t... Is>(std::index_sequence<Is...>) {
-                ((std::construct_at(&data[Is],
-                                    SubArrayT(constexpr_in_place,
+                ((data[Is] = SubArrayT(constexpr_in_place,
                                               [&](auto... restEnums) {
                                                   return f(std::integral_constant<FirstEnum, FirstEnum{Is}>{},
                                                            restEnums...);
-                                              }))),
+                                              })),
                  ...);
             }(std::make_index_sequence<count>{});
         }
@@ -826,7 +827,8 @@ struct fmt::formatter<chepp::Square> : fmt::formatter<std::string_view> {
             char res[3];
             auto out = std::begin(res);
             out      = fmt::format_to(out, "{}{}", value.file(), value.rank());
-            return formatter<std::string_view>::format(std::string_view{res, out}, ctx);
+            size_t written = std::distance(res, out);
+            return formatter<std::string_view>::format(std::string_view{res, written}, ctx);
         }
     }
 };
@@ -1049,6 +1051,10 @@ namespace chepp {
         QUEENSIDE = 1,
     };
 
+    struct FromTo {
+        Square from, to;
+    };
+
     struct CastlingType : EnumBase<CastlingType, uint8_t, 4> {
         using base = EnumBase;
         using base::EnumBase;
@@ -1074,14 +1080,14 @@ namespace chepp {
             return static_cast<ValueT>(1 << m_val);
         }
 
-        static const EnumArray<std::pair<Square, Square>, CastlingType> king_moves;
-        [[nodiscard]] constexpr std::pair<Square, Square>
+        static const EnumArray<FromTo, CastlingType> king_moves;
+        [[nodiscard]] constexpr FromTo
         king_move() const {
             assert(!is_none());
             return king_moves.at(*this);
         }
-        static const EnumArray<std::pair<Square, Square>, CastlingType> rook_moves;
-        [[nodiscard]] constexpr std::pair<Square, Square>
+        static const EnumArray<FromTo, CastlingType> rook_moves;
+        [[nodiscard]] constexpr FromTo
         rook_move() const {
             assert(!is_none());
             return rook_moves.at(*this);
@@ -1107,10 +1113,10 @@ namespace chepp {
         }
     };
 
-    inline constexpr EnumArray<std::pair<Square, Square>, CastlingType> CastlingType::king_moves{
-        std::pair{E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
-    inline constexpr EnumArray<std::pair<Square, Square>, CastlingType> CastlingType::rook_moves{
-        std::pair{H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
+    inline constexpr EnumArray<FromTo, CastlingType> CastlingType::king_moves{
+        {E1, G1}, {E1, C1}, {E8, G8}, {E8, C8}};
+    inline constexpr EnumArray<FromTo, CastlingType> CastlingType::rook_moves{
+        {H1, F1}, {A1, D1}, {H8, F8}, {A8, D8}};
 
     inline constexpr CastlingType WHITE_KINGSIDE{WHITE, KINGSIDE};
     inline constexpr CastlingType BLACK_KINGSIDE{BLACK, KINGSIDE};
@@ -1219,7 +1225,7 @@ namespace chepp {
 
         [[nodiscard]] static tl::expected<CastlingRights, std::string>
         from_string(const std::string_view sv) {
-            const auto it = std::ranges::find(repr, sv);
+            const auto it = ranges::find(repr, sv);
             if (it == repr.end()) {
                 return tl::unexpected{fmt::format("unexpected string {}", sv)};
             }
@@ -1464,7 +1470,8 @@ struct fmt::formatter<chepp::Move> : fmt::formatter<std::string_view> {
         } else {
             out = fmt::format_to(out, "{}{}{}", move.from_sq(), move.to_sq(), move.promotion_type());
         }
-        return fmt::formatter<std::string_view>::format(std::string_view{res, out}, ctx);
+        size_t written = std::distance(res, out);
+        return fmt::formatter<std::string_view>::format(std::string_view{res, written}, ctx);
     }
 };
 
@@ -1732,7 +1739,7 @@ namespace chepp {
         using Base::end;
         using Base::size;
 
-        template <typename ScoringFn, std::ranges::range Range>
+        template <typename ScoringFn, ranges::range Range>
             requires std::is_invocable_r_v<MoveScoreT, ScoringFn, Move>
         ScoredMoveList(Range&& move_list, ScoringFn&& scoring_fn) {
             for (auto&& move : move_list) {

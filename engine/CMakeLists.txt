@@ -1,2 +1,5 @@
 add_subdirectory(src)
-add_subdirectory(gtests)
+
+if (NOT CMAKE_CROSSCOMPILING)
+    add_subdirectory(gtests)
+endif()

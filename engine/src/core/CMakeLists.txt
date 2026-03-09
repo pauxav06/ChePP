@@ -1,3 +1,5 @@
+include(ExternalProject)
+
 add_executable(dump_bin dump_bin.cpp bitboard.cpp)
 target_link_libraries(dump_bin PRIVATE options warnings optimization target compat argparse)
 target_include_directories(dump_bin PRIVATE ${hedley_SOURCE_DIR})
@@ -6,6 +8,7 @@ function(generate_bin)
     cmake_parse_arguments(DUMP "" "NAME;OUT_DIR;BIN" "" ${ARGN})
 
     set(BIN ${DUMP_OUT_DIR}/${DUMP_NAME}.bin)
+
 
     add_custom_command(
             OUTPUT ${BIN}

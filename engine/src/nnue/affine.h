@@ -24,12 +24,12 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] virtual std::size_t
             input_padding() const noexcept {
-                return 0uz;
+                return size_t{0};
             }
 
             [[nodiscard]] virtual std::size_t
             output_padding() const noexcept {
-                return 0uz;
+                return size_t{0};
             }
         };
 

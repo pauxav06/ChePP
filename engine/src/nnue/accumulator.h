@@ -28,7 +28,7 @@ namespace chepp::nnue::layers {
 
             [[nodiscard]] virtual size_t
             padding() const noexcept {
-                return 0uz;
+                return size_t{0};
             }
         };
 

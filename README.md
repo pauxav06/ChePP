@@ -7,7 +7,9 @@
 <details>
 <summary>Linux/MacOS</summary>
 
-Tested with GCC 13-14-15-16, Clang 17-18, Apple-clang 17
+Requires a fairly modern compiler with at least C++20 support.
+Compatibility options present where possible.
+Tested with GCC 11-12-13-14-15-16, Clang 17-18, Apple-clang 17
 ```bash
 cmake -S . -B build
 cmake --build build --config Release

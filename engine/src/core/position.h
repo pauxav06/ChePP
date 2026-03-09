@@ -2,6 +2,9 @@
 #define POSITION_H_INCLUDED
 
 #include "format.h"
+#include "ranges.h"
+#include "mdspan.h"
+#include "span.h"
 
 #include "bitboard.h"
 #include "movegen.h"
@@ -10,10 +13,8 @@
 
 #include <cstring>
 #include <ostream>
-#include <ranges>
 #include <utility>
 #include <vector>
-#include <span>
 
 namespace chepp {
     struct Position {
@@ -864,7 +865,11 @@ namespace chepp {
     inline MoveList
     gen_legal(const Position& pos) {
         MoveList legal;
-        std::ranges::copy_if(gen_moves(pos), std::back_inserter(legal), std::bind_front(&Position::is_legal, pos));
+        auto all = gen_moves(pos);
+        std::copy_if(all.begin(),
+                     all.end(),
+                     std::back_inserter(legal),
+                     [&pos](Move m) { return pos.is_legal(m); });        
         return legal;
     }
 
@@ -908,7 +913,7 @@ namespace chepp {
     Position::is_valid(const Move move) const {
         auto moves = gen_moves(*this);
         return std::find(moves.begin(), moves.end(), move) != moves.end();
-        //return std::ranges::contains(gen_legal(*this), move);
+        //return ranges::contains(gen_legal(*this), move);
     }
 
     inline tl::expected<tl::monostate, std::string>
@@ -1041,7 +1046,7 @@ namespace chepp {
 
         template <bool validate = false>
         tl::expected<tl::monostate, std::string>
-        set_pos(const Position& pos, const std::span<const Move> moves = {}) {
+        set_pos(const Position& pos, const tcb::span<const Move> moves = {}) {
             clear();
 
             if constexpr (validate) {
@@ -1075,7 +1080,7 @@ namespace chepp {
 
         template <bool validate = false>
         tl::expected<tl::monostate, std::string>
-        set_fen(const std::string& fen_string, const std::span<Move> moves = {}) {
+        set_fen(const std::string& fen_string, const tcb::span<Move> moves = {}) {
             auto fen = Fen::from_string(fen_string);
             if (!fen) {
                 return tl::unexpected(fen.error());
@@ -1090,11 +1095,11 @@ namespace chepp {
             return static_cast<uint32_t>(m_positions.size() - m_start_size);
         }
 
-        std::span<Position>
+        tcb::span<Position>
         positions() {
             return {m_positions.data() + m_start_size - 1, m_positions.size() - m_start_size + 1};
         }
-        [[nodiscard]] std::span<const Position>
+        [[nodiscard]] tcb::span<const Position>
         positions() const {
             return {m_positions.data() + m_start_size - 1, m_positions.size() - m_start_size + 1};
         }
@@ -1132,8 +1137,8 @@ namespace chepp {
 
             m_positions.emplace_back(m_positions.back(), move);
 
-            const auto view = m_hashes | std::views::reverse | std::views::take(last().halfmove_clock());
-            const auto it   = std::ranges::find(view, last().hash(), &std::pair<zobrist::Hash, int>::first);
+            const auto view = m_hashes | ranges::views::reverse | ranges::views::take(last().halfmove_clock());
+            const auto it   = ranges::find(view, last().hash(), &std::pair<zobrist::Hash, int>::first);
 
             int c = it != view.end() ? it->second + 1 : 1;
             m_hashes.emplace_back(last().hash(), c);
@@ -1149,8 +1154,8 @@ namespace chepp {
 
         [[nodiscard]] bool
         is_repetition() const {
-            const auto view = m_hashes | std::views::reverse | std::views::take(last().halfmove_clock() + 1);
-            return std::ranges::any_of(view, [&](const auto h) { return h.second >= 3; });
+            const auto view = m_hashes | ranges::views::reverse | ranges::views::take(last().halfmove_clock() + 1);
+            return ranges::any_of(view, [&](const auto h) { return h.second >= 3; });
         }
 
         [[nodiscard]] bool

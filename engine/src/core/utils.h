@@ -151,7 +151,7 @@ namespace chepp::utils {
     template <std::size_t... Is, typename F>
     constexpr auto
     make_array_from_sequence(F&& f, std::index_sequence<Is...>) {
-        using T = decltype(f(0uz));
+        using T = decltype(f(size_t{0}));
         return std::array<T, sizeof...(Is)>{f(Is)...};
     }
 

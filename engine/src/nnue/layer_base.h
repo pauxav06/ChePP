@@ -220,11 +220,10 @@ namespace chepp::nnue {
             using result_t = std::shared_ptr<ikernel_t>;
 
             std::vector<factory_t<Operation>> candidates{};
-            for (const auto& [_, cfgs] : m_kernels.at(typeid(Operation))) {
-                for (const auto& [_1, factory] : cfgs) {
-                    candidates.push_back(std::any_cast<factory_t<Operation>>(factory));
-                }
+            for (const auto& [_1, factory] : m_kernels.at(typeid(Operation)).at(hwy::DispatchedTarget())) {
+                candidates.push_back(std::any_cast<factory_t<Operation>>(factory));
             }
+
 
             if (candidates.empty()) {
                 return result_t{};

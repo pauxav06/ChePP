@@ -27,7 +27,7 @@ namespace chepp::nnue {
 
         static auto
         make_kernel(const KernelRegistry& r, const layer_t& layer) {
-            return r.make_kernel<Operation>(layer, HWY_STATIC_TARGET, default_config);
+            return r.make_kernel<Operation>(layer, hwy::DispatchedTarget(), default_config);
         }
 
         static auto

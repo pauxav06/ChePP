@@ -8,6 +8,8 @@
 #include "generated/magic_bishops.h"
 #include "generated/magic_rooks.h"
 
+#include <bit>
+
 namespace chepp::movegen {
     namespace detail {
         inline constexpr auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
@@ -64,7 +66,7 @@ namespace chepp::movegen {
         return {};
     }
 
-    inline static constinit EnumArray<Bitboard (*)(Square, Bitboard, Color), PieceType> attack_table{
+    inline static const EnumArray<Bitboard (*)(Square, Bitboard, Color), PieceType> attack_table{
         constexpr_in_place, []<PieceType pt>(std::integral_constant<PieceType, pt>) { return &attacks<pt>; }};
 
     inline constexpr Bitboard

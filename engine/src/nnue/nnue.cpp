@@ -2,6 +2,9 @@
 #include <hwy/auto_tune.h>
 #include <hwy/base.h>
 
+#undef HWY_DISABLED_TARGETS
+#define HWY_DISABLED_TARGETS HWY_SCALAR
+
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "nnue.cpp"
 
