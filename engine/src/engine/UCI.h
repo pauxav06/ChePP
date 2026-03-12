@@ -503,8 +503,8 @@ namespace chepp {
         }
 
         void
-        nnue_cfg() {
-            // stdout << "info string " << chepp::nnue::Arch::print_cfg();
+        print_nnue() const {
+            m_handle.get()->print();
         }
 
         static void
@@ -578,8 +578,8 @@ namespace chepp {
                 bench();
             } else if (line == "print") {
                 fmt::print(stdout, "{}\n", m_pos.last().to_string());
-            } else if (line == "cfg") {
-                nnue_cfg();
+            } else if (line == "print-nnue") {
+                print_nnue();
             } else if (line == "stop") {
                 stop();
             } else if (line == "quit") {

@@ -1,5 +1,10 @@
-add_executable(bin2cpp bin2cpp.cpp)
-target_link_libraries(bin2cpp PRIVATE options warnings optimization compat target argparse)
+if(NOT CMAKE_CROSSCOMPILING)
+    add_executable(bin2cpp bin2cpp.cpp)
+    target_link_libraries(bin2cpp PRIVATE options warnings optimization compat target argparse)
+    export(TARGETS bin2cpp FILE ${CMAKE_BINARY_DIR}/Bin2CppConfig.cmake)
+else()
+    find_package(Bin2Cpp REQUIRED)
+endif()
 
 function(embed_bin)
     cmake_parse_arguments(EMBED "" "TARGET;NAME;BIN;DIR;QUALIFIER" "" ${ARGN})

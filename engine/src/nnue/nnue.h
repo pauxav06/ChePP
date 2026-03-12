@@ -25,6 +25,10 @@ namespace chepp::nnue {
             return Operation::make_layer(begin, end);
         }
 
+        static layer_t get_layer(const ikernel_t& ikernel) {
+            return ikernel->shared_layer();
+        }
+
         static auto
         make_kernel(const KernelRegistry& r, const layer_t& layer) {
             return r.make_kernel<Operation>(layer, hwy::DispatchedTarget(), default_config);
@@ -33,6 +37,11 @@ namespace chepp::nnue {
         static auto
         make_best_kernel(const KernelRegistry& r, const layer_t& layer, const std::stop_token& s) {
             return r.make_best_kernel<Operation>(layer, s);
+        }
+
+        static std::string
+        name(const layer_t& layer, const ikernel_t& ikernel, int indent = 0) {
+            return fmt::format("{}Layer: {} ({})\n", std::string(indent, ' '), layer->name(), ikernel->name());
         }
     };
 
@@ -47,6 +56,10 @@ namespace chepp::nnue {
             return make_array<N>([&](auto) { return Node::make_layer(begin, end); });
         }
 
+        static auto get_layer(const ikernel_t& ikernel) {
+            return make_array<N>([&](auto i) { return Node::get_layer(ikernel.at(i)); });
+        }
+
         static auto
         make_kernel(const KernelRegistry& r, const layer_t& layer) {
             return make_array<N>([&](auto i) { return Node::make_kernel(r, layer.at(i)); });
@@ -55,6 +68,17 @@ namespace chepp::nnue {
         static auto
         make_best_kernel(const KernelRegistry& r, const layer_t& layer, const std::stop_token& s) {
             return make_array<N>([&](auto i) { return Node::make_best_kernel(r, layer.at(i), s); });
+        }
+
+        static std::string
+        name(const layer_t& layer, const ikernel_t& ikernel, int indent = 0) {
+            std::string res;
+            auto out = std::back_inserter(res);
+            fmt::format_to(out, "{}Bucket[{}]:\n", std::string(indent, ' '), N);
+            for (size_t i = 0; i < N; i++) {
+                fmt::format_to(out, "{}", Node::name(layer.at(i), ikernel.at(i), indent + 2));
+            }
+            return res;
         }
     };
 
@@ -74,6 +98,10 @@ namespace chepp::nnue {
             return make_tuple<N>([&](auto i) { return node_t<i>::make_layer(begin, end); });
         }
 
+        static auto get_layer(const ikernel_t& ikernel) {
+            return make_tuple<N>([&](auto i) { return node_t<i>::get_layer(std::get<i>(ikernel)); });
+        }
+
         static auto
         make_best_kernel(const KernelRegistry& r, const layer_t& l, const std::stop_token& s) {
             return make_tuple<N>([&](auto i) { return node_t<i>::make_best_kernel(r, std::get<i>(l), s); });
@@ -82,6 +110,17 @@ namespace chepp::nnue {
         static auto
         make_kernel(const KernelRegistry& r, const layer_t& l) {
             return make_tuple<N>([&](auto i) { return node_t<i>::make_kernel(r, std::get<i>(l)); });
+        }
+
+        static std::string
+        name(const layer_t& layer, const ikernel_t& ikernel, int indent = 0) {
+            std::string res;
+            auto out = std::back_inserter(res);
+            fmt::format_to(out, "{}Multiple:\n", std::string(indent, ' '), N);
+            constexpr_for<0, N>([&](auto i) {
+                fmt::format_to(out, "{}", node_t<i>::name(std::get<i>(layer), std::get<i>(ikernel), indent + 2));
+            });
+            return res;
         }
     };
 
@@ -228,6 +267,10 @@ namespace chepp::nnue {
 
                     fmt::print(stdout, "{:<8}{:<8}{:<8}{}{}\n", b, psqt, pos, total, (b == bucket() ? " <-" : ""));
                 }
+            }
+
+            void print() const noexcept {
+                fmt::print(stdout, "{}", Topology::name(Topology::get_layer(m_kernels), m_kernels));
             }
 
             void

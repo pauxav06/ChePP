@@ -1,15 +1,15 @@
 add_library(options INTERFACE)
 
-if(MSVC)
-    target_compile_options(options INTERFACE /bigobj)
-else()
-    if (CMAKE_CXX_COMPILER_ID MATCHES "AppleClang")
-        target_compile_options(options INTERFACE -fexperimental-library)
-    endif()
-    if (CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-        target_compile_options(options INTERFACE -fconcepts)
-    endif()
-    #add_compile_options(-static-libgcc -static-libstdc++)
-    #add_link_options(-static-libgcc -static-libstdc++)
-endif()
+option(STATIC "Build static binaries" OFF)
+
+target_compile_options(options INTERFACE
+        $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+        $<$<CXX_COMPILER_ID:AppleClang>:-fexperimental-library>
+        $<$<CXX_COMPILER_ID:GNU>:-fconcepts>
+        $<$<BOOL:${STATIC}>:-static-libgcc -static-libstdc++ -static>
+)
+
+target_link_options(options INTERFACE
+        $<$<BOOL:${STATIC}>:-static-libgcc -static-libstdc++ -static>
+)
 

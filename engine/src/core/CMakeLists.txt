@@ -1,10 +1,16 @@
 include(ExternalProject)
 
-add_executable(dump_bin dump_bin.cpp bitboard.cpp)
-target_link_libraries(dump_bin PRIVATE options warnings optimization target compat argparse)
-target_include_directories(dump_bin PRIVATE ${hedley_SOURCE_DIR})
+if(NOT CMAKE_CROSSCOMPILING)
+    add_executable(dump_magics dump_magics.cpp bitboard.cpp)
+    target_link_libraries(dump_magics PRIVATE options warnings optimization target compat argparse)
+    target_include_directories(dump_magics PRIVATE ${hedley_SOURCE_DIR})
+    export(TARGETS dump_magics FILE ${CMAKE_BINARY_DIR}/DumpMagicsConfig.cmake)
+else()
+    find_package(DumpMagics REQUIRED)
+endif()
 
-function(generate_bin)
+
+function(generate_magics)
     cmake_parse_arguments(DUMP "" "NAME;OUT_DIR;BIN" "" ${ARGN})
 
     set(BIN ${DUMP_OUT_DIR}/${DUMP_NAME}.bin)
@@ -14,9 +20,9 @@ function(generate_bin)
             OUTPUT ${BIN}
 
             COMMAND ${CMAKE_COMMAND} -E make_directory ${DUMP_OUT_DIR}
-            COMMAND $<TARGET_FILE:dump_bin> --target ${DUMP_NAME} --output ${BIN}
+            COMMAND $<TARGET_FILE:dump_magics> --target ${DUMP_NAME} --output ${BIN}
 
-            DEPENDS dump_bin
+            DEPENDS dump_magics
             VERBATIM
     )
 
@@ -26,11 +32,16 @@ endfunction()
 add_library(ChePP_core STATIC bitboard.cpp tb.cpp)
 
 set(GEN_DIR       ${CMAKE_CURRENT_BINARY_DIR})
-set(ASSETS magic_rooks magic_bishops lines from_to)
+set(ASSETS lines from_to)
+if (HAVE_PEXT)
+    set(ASSETS ${ASSETS} magic_rooks_pext magic_bishops_pext)
+else()
+    set(ASSETS ${ASSETS} magic_rooks magic_bishops)
+endif()
 
 foreach(name IN LISTS ASSETS)
     set(GEN_BIN "")
-    generate_bin(NAME ${name} OUT_DIR ${GEN_DIR} BIN GEN_BIN)
+    generate_magics(NAME ${name} OUT_DIR ${GEN_DIR} BIN GEN_BIN)
     embed_bin(TARGET ChePP_core NAME ${name} BIN ${GEN_BIN} DIR ${GEN_DIR} QUALIFIER constexpr)
 endforeach ()
 
@@ -38,6 +49,6 @@ target_include_directories(ChePP_core PUBLIC ${GEN_DIR})
 
 target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1 CHEPP_USE_TB=1)
 target_link_libraries(ChePP_core PRIVATE options warnings optimization target)
-target_link_libraries(ChePP_core PUBLIC compat)
+target_link_libraries(ChePP_core PUBLIC compat hwy)
 target_include_directories(ChePP_core PRIVATE ${fathom_SOURCE_DIR}/src)
 target_include_directories(ChePP_core PUBLIC include ${hedley_SOURCE_DIR})

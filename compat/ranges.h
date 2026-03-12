@@ -3,6 +3,7 @@
 
 #if defined(USE_STD_RANGES)
 #include <ranges>
+#include <concepts>
 namespace ranges = std::ranges;
 #else
 #include <range/v3/all.hpp>

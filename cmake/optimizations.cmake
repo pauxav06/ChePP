@@ -7,19 +7,14 @@ if(ipo_supported AND NOT NO_LTO AND NOT CMAKE_BUILD_TYPE MATCHES "Debug")
     set(CMAKE_INTERPROCEDURAL_OPTIMIZATION TRUE)
 endif()
 
+target_compile_options(optimization INTERFACE
+        $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<CONFIG:Debug>>:/Od /Zi>
+        $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<NOT:$<CONFIG:Debug>>>:/O2 /Oi /Gy>
 
-if(MSVC)
-    if(CMAKE_BUILD_TYPE MATCHES "Debug")
-        target_compile_options(optimization INTERFACE /Od /Zi)
-    else()
-        target_compile_options(optimization INTERFACE /O2 /Oi /Gy)
-    endif()
-else()
-    if(CMAKE_BUILD_TYPE MATCHES "Debug")
-        target_compile_options(optimization INTERFACE -O0 -g)
-    else()
-        target_compile_options(optimization INTERFACE -O3 -fstrict-aliasing -fomit-frame-pointer)
-        target_compile_definitions(optimization INTERFACE NDEBUG)
-    endif()
-endif()
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Debug>>:-O0 -g>
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<NOT:$<CONFIG:Debug>>>:-O3 -fstrict-aliasing -fomit-frame-pointer>
+)
 
+target_compile_definitions(optimization INTERFACE
+        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<NOT:$<CONFIG:Debug>>>:NDEBUG>
+)

@@ -4,6 +4,7 @@
 #include "types.h"
 #include "utils.h"
 #include "ranges.h"
+#include "span.h"
 
 #include <array>
 #include <cassert>
@@ -439,6 +440,21 @@ namespace chepp::movegen {
             EnumArray<index_type, Square> m_offsets{};
             std::array<mask_type, size>   m_attacks{};
 
+            template <typename OutIt>
+            OutIt write(OutIt out) const {
+                ranges::for_each(m_indexers, [&](const auto& idx) { out = idx.write(out); });
+                ranges::for_each(m_offsets, [&](const auto& off) { out = utils::write(off, out); });
+                ranges::for_each(m_attacks, [&](const auto& atk) { out = utils::write(atk, out); });
+                return out;
+            }
+            template <typename InIt>
+            InIt read(InIt in) {
+                ranges::for_each(m_indexers, [&](auto& idx) { in = idx.read(in); });
+                ranges::for_each(m_offsets, [&](auto& off) { in = utils::read(off, in); });
+                ranges::for_each(m_attacks, [&](auto& atk) { in = utils::read(atk, in); });
+                return in;
+            }
+
             void
             init() {
                 size_t offset = 0;
@@ -486,6 +502,22 @@ namespace chepp::movegen {
             shift_type m_shift{};
             magic_type m_magic{};
 
+            template <typename OutIt>
+            OutIt write(OutIt out) const {
+                out = utils::write(m_mask, out);
+                out = utils::write(m_shift, out);
+                out = utils::write(m_magic, out);
+                return out;
+            }
+
+            template <typename InIt>
+            InIt read(InIt in) {
+                in = utils::read(m_mask, in);
+                in = utils::read(m_shift, in);
+                in = utils::read(m_magic, in);
+                return in;
+            }
+
             static ShiftIndexer
             make(const mask_type mask, const std::vector<mask_type>& blockers) {
                 return ShiftIndexer{mask, 64 - bit::popcount(mask), find_magic(mask, blockers)};
@@ -494,11 +526,6 @@ namespace chepp::movegen {
             [[nodiscard]] constexpr HEDLEY_ALWAYS_INLINE index_type
             index(const mask_type blockers) const {
                 return static_cast<index_type>(((blockers & m_mask) * m_magic) >> m_shift);
-            }
-
-            [[nodiscard]] static std::string
-            type() {
-                return "ShiftIndexer";
             }
 
             static magic_type
@@ -541,6 +568,16 @@ namespace chepp::movegen {
 
             mask_type m_mask{};
 
+            template <typename OutIt>
+            OutIt write(OutIt out) const {
+                return utils::write(m_mask, out);
+            }
+
+            template <typename InIt>
+            InIt read(InIt in) {
+                return utils::read(m_mask, in);
+            }
+
             static constexpr PEXTIndexer
             make(const mask_type mask, const std::vector<mask_type>&) {
                 return PEXTIndexer{mask};
@@ -553,7 +590,7 @@ namespace chepp::movegen {
         };
 
         template <PieceType pc>
-        using Magics = MagicsBase<pc, std::conditional_t<CHEPP_PEXT, PEXTIndexer, ShiftIndexer>>;
+        using Magics = MagicsBase<pc, std::conditional_t<USE_PEXT, PEXTIndexer, ShiftIndexer>>;
     } // namespace detail
 } // namespace chepp::movegen
 

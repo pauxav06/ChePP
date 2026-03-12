@@ -67,7 +67,7 @@ namespace chepp::nnue {
 
                 hwy::Params params{};
                 params.verbose           = false;
-                params.target_rel_mad    = 1;
+                params.target_rel_mad    = 0.1;
                 params.precision_divisor = 1;
                 params.seconds_per_eval  = 4e-5;
 
@@ -88,6 +88,12 @@ namespace chepp::nnue {
             layer() const noexcept {
                 return *m_layer;
             }
+
+            [[nodiscard]] auto
+            shared_layer() const noexcept {
+                return m_layer;
+            }
+
 
           private:
             std::shared_ptr<layer_t> m_layer;

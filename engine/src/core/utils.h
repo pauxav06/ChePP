@@ -3,6 +3,7 @@
 
 #include "expected.h"
 #include "format.h"
+#include "span.h"
 
 #include <algorithm>
 #include <cstdint>
@@ -12,6 +13,7 @@
 
 #include <functional>
 #include <hedley.h>
+#include <bit>
 
 namespace chepp::utils {
     template <typename T>
@@ -159,6 +161,64 @@ namespace chepp::utils {
     constexpr auto
     make_array(F&& f) {
         return make_array_from_sequence(std::forward<F>(f), std::make_index_sequence<N>{});
+    }
+
+
+    // https://en.cppreference.com/w/cpp/numeric/byteswap.html
+    template<std::integral T>
+    constexpr T byteswap(T value) noexcept
+    {
+        static_assert(std::has_unique_object_representations_v<T>,
+                      "T may not have padding bits");
+        auto value_representation = std::bit_cast<std::array<std::byte, sizeof(T)>>(value);
+        std::ranges::reverse(value_representation);
+        return std::bit_cast<T>(value_representation);
+    }
+
+    template <typename T>
+    auto le(const T& value) {
+        if constexpr (std::endian::little != std::endian::native) {
+            return byteswap(value);
+        } else {
+            return value;
+        }
+    }
+
+    template<typename R>
+    concept byte_output_range = ranges::contiguous_range<R> && std::same_as<ranges::range_value_t<R>, uint8_t>;
+
+    template<typename R>
+    concept byte_input_range = ranges::contiguous_range<R> && std::same_as<ranges::range_value_t<R>, const uint8_t>;
+
+    template <typename T, std::input_iterator It>
+    It read(T& res, It in) {
+        std::array<uint8_t, sizeof(T)> data;
+        for (auto& b : data) {
+            b = *in++;
+        }
+        res = le(std::bit_cast<T>(data));
+        return in;
+    }
+
+    template <typename T, std::output_iterator<uint8_t> It>
+    It write(const T& val, It out) {
+        auto data = std::bit_cast<std::array<uint8_t, sizeof(T)>>(le(val));
+        for (auto b : data) {
+            *out++ = b;
+        }
+        return out;
+    }
+
+    template <typename R, std::output_iterator<uint8_t> It>
+    It write_range(const R& r, It out) {
+        ranges::for_each(r, [&] (const auto& v) { out = write(v, out); });
+        return out;
+    }
+
+    template <typename R, std::input_iterator It>
+    It read_range(R& r, It out) {
+        ranges::for_each(r, [&] (auto& v) { out = read(v, out); });
+        return out;
     }
 } // namespace chepp::utils
 

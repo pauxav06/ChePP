@@ -12,11 +12,27 @@
 
 namespace chepp::movegen {
     namespace detail {
-        inline constexpr auto G_MAGIC_BISHOP = std::bit_cast<Magics<BISHOP>>(GENERATED_MAGIC_BISHOPS);
-        inline constexpr auto G_MAGIC_ROOK   = std::bit_cast<Magics<ROOK>>(GENERATED_MAGIC_ROOKS);
-        inline constexpr auto LINES          = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_LINES);
-        inline constexpr auto FROM_TO        = std::bit_cast<EnumArray<Bitboard, Square, Square>>(GENERATED_FROM_TO);
+        inline Magics<BISHOP> G_MAGIC_BISHOP{};
+        inline Magics<ROOK> G_MAGIC_ROOK{};
+        inline EnumArray<Bitboard, Square, Square> LINES{};
+        inline EnumArray<Bitboard, Square, Square> FROM_TO{};
     } // namespace detail
+
+    inline static void init() {
+        static std::once_flag init_once;
+        std::call_once(init_once, [] {
+            detail::G_MAGIC_BISHOP.read(GENERATED_MAGIC_BISHOPS.begin());
+            detail::G_MAGIC_ROOK.read(GENERATED_MAGIC_ROOKS.begin());
+            utils::read_range(detail::LINES, GENERATED_LINES.begin());
+            utils::read_range(detail::FROM_TO, GENERATED_FROM_TO.begin());
+        });
+    }
+
+    struct Initializer {
+        Initializer() { init(); }
+    };
+
+    inline Initializer g_initializer;
 
     inline constexpr Bitboard
     line(const Square sq1, const Square sq2) {

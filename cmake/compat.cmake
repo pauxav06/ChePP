@@ -21,11 +21,10 @@ check_source_compiles(CXX [[
 ]] HAVE_EXPECTED)
 
 if(NOT HAVE_EXPECTED)
+    set(EXPECTED_BUILD_TESTS OFF CACHE BOOL "" FORCE)
     message(STATUS "std::expected not found, fetching tl::expected")
-
     FetchContent_Declare(tl_expected GIT_REPOSITORY https://github.com/TartanLlama/expected.git GIT_TAG v1.1.0)
     FetchContent_MakeAvailable(tl_expected)
-
     target_link_libraries(compat INTERFACE tl::expected)
 else()
     target_compile_definitions(compat INTERFACE USE_STD_EXPEXTED)

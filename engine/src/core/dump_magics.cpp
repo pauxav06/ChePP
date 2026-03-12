@@ -9,6 +9,7 @@
 
 #include "bitboard.h"
 #include "format.h"
+#include "span.h"
 #include <argparse/argparse.hpp>
 
 using namespace chepp;
@@ -16,31 +17,66 @@ namespace fs = std::filesystem;
 
 inline bool
 write_magic_bishops(std::ofstream& out) {
-    const auto b = std::make_unique<movegen::detail::Magics<BISHOP>>();
+    using namespace movegen::detail;
+    using bishop_t = MagicsBase<BISHOP, ShiftIndexer>;
+    const auto b = std::make_unique<bishop_t>();
     b->init();
-    out.write(reinterpret_cast<const char*>(b.get()), sizeof(*b));
+    std::vector<uint8_t> bytes;
+    b->write(std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    return out.good();
+}
+
+inline bool
+write_magic_bishops_pext(std::ofstream& out) {
+    using namespace movegen::detail;
+    using bishop_t = MagicsBase<BISHOP, PEXTIndexer>;
+    const auto b = std::make_unique<bishop_t>();
+    b->init();
+    std::vector<uint8_t> bytes;
+    b->write(std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
+    return out.good();
+}
+
+
+inline bool
+write_magic_rooks_pext(std::ofstream& out) {
+    using namespace movegen::detail;
+    auto b = std::make_unique<MagicsBase<ROOK, PEXTIndexer>>();
+    b->init();
+    std::vector<uint8_t> bytes;
+    b->write(std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return out.good();
 }
 
 inline bool
 write_magic_rooks(std::ofstream& out) {
-    auto b = std::make_unique<movegen::detail::Magics<ROOK>>();
+    using namespace movegen::detail;
+    auto b = std::make_unique<MagicsBase<ROOK, ShiftIndexer>>();
     b->init();
-    out.write(reinterpret_cast<const char*>(b.get()), sizeof(*b));
+    std::vector<uint8_t> bytes;
+    b->write(std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return out.good();
 }
 
 inline bool
 write_lines(std::ofstream& out) {
     auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_lines);
-    out.write(reinterpret_cast<const char*>(l.get()), sizeof(*l));
+    std::vector<uint8_t> bytes;
+    utils::write_range(*l, std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return out.good();
 }
 
 inline bool
 write_from_to(std::ofstream& out) {
     auto l = std::make_unique<movegen::detail::lines_type>(std::in_place, movegen::detail::compute_from_to);
-    out.write(reinterpret_cast<const char*>(l.get()), sizeof(*l));
+    std::vector<uint8_t> bytes;
+    utils::write_range(*l, std::back_inserter(bytes));
+    out.write(reinterpret_cast<const char*>(bytes.data()), bytes.size());
     return out.good();
 }
 
@@ -51,6 +87,8 @@ main(int argc, char** argv) {
     targets.emplace("magic_bishops", write_magic_bishops);
     targets.emplace("lines", write_lines);
     targets.emplace("from_to", write_from_to);
+    targets.emplace("magic_rooks_pext", write_magic_rooks_pext);
+    targets.emplace("magic_bishops_pext", write_magic_bishops_pext);
 
     argparse::ArgumentParser program("dump");
     program.add_argument("--output").required().help("Path to output file");
