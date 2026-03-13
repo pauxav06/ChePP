@@ -2,7 +2,9 @@ cmake_minimum_required(VERSION 3.5)
 
 cmake_policy(SET CMP0079 NEW)
 cmake_policy(SET CMP0069 NEW)
-cmake_policy(SET CMP0135 NEW)
+if(CMAKE_VERSION VERSION_GREATER_EQUAL "3.24")
+    cmake_policy(SET CMP0135 NEW)
+endif()
 
 project(ChePP LANGUAGES C CXX)
 set(CMAKE_CXX_STANDARD 20)

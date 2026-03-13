@@ -5,8 +5,13 @@
 
 #include "generated/from_to.h"
 #include "generated/lines.h"
+#if USE_PEXT
+#include "generated/magic_bishops_pext.h"
+#include "generated/magic_rooks_pext.h"
+#else
 #include "generated/magic_bishops.h"
 #include "generated/magic_rooks.h"
+#endif
 
 #include <bit>
 
@@ -21,8 +26,13 @@ namespace chepp::movegen {
     inline static void init() {
         static std::once_flag init_once;
         std::call_once(init_once, [] {
+#if USE_PEXT
+            detail::G_MAGIC_BISHOP.read(GENERATED_MAGIC_BISHOPS_PEXT.begin());
+            detail::G_MAGIC_ROOK.read(GENERATED_MAGIC_ROOKS_PEXT.begin());
+#else
             detail::G_MAGIC_BISHOP.read(GENERATED_MAGIC_BISHOPS.begin());
             detail::G_MAGIC_ROOK.read(GENERATED_MAGIC_ROOKS.begin());
+#endif
             utils::read_range(detail::LINES, GENERATED_LINES.begin());
             utils::read_range(detail::FROM_TO, GENERATED_FROM_TO.begin());
         });

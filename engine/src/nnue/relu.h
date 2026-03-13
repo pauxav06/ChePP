@@ -4,8 +4,6 @@
 #include "layer_base.h"
 #include "utils.h"
 
-#include <hwy/base.h>
-
 namespace chepp::nnue::layers {
     template <typename InT, size_t IS, typename OutT, unsigned Q>
         requires(std::is_integral_v<InT> && std::is_integral_v<OutT> && std::is_signed_v<InT> &&

@@ -167,7 +167,7 @@ namespace chepp::nnue::layers {
                             hwy::Prefetch(&MD_ACCESS(m_weights, idx_ptr[i + 1], c, 0, 0));
                         }
                         for (size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] += hn::Load(D(), &MD_ACCESS(m_weights, idx_ptr[i], c, u, 0));
+                            *regs[u] = hn::Add(*regs[u], hn::Load(D(), &MD_ACCESS(m_weights, idx_ptr[i], c, u, 0)));
                         }
                     }
                     for (size_t u{0}; u < out.extent(1); ++u) {
@@ -194,12 +194,12 @@ namespace chepp::nnue::layers {
                     }
                     for (size_t i{0}; i < n_added; ++i) {
                         for (size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] += hn::Load(D(), &MD_ACCESS(m_weights, added_ptr[i], c, u, 0));
+                            *regs[u] = hn::Add(*regs[u], hn::Load(D(), &MD_ACCESS(m_weights, added_ptr[i], c, u, 0)));
                         }
                     }
                     for (size_t i{0}; i < n_removed; ++i) {
                         for (size_t u{0}; u < out.extent(1); ++u) {
-                            *regs[u] -= hn::Load(D(), &MD_ACCESS(m_weights, removed_ptr[i], c, u, 0));
+                            *regs[u] = hn::Sub(*regs[u], hn::Load(D(), &MD_ACCESS(m_weights, removed_ptr[i], c, u, 0)));
                         }
                     }
                     for (size_t u{0}; u < out.extent(1); ++u) {

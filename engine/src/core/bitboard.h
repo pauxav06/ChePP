@@ -15,6 +15,12 @@
 #include <random>
 #include <string>
 
+#if defined(__BMI2__)
+#define USE_PEXT 1
+#else
+#define USE_PEXT 0
+#endif
+
 namespace chepp {
     uint64_t
     pext(uint64_t val, uint64_t mask) noexcept;

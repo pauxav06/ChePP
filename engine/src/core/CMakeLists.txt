@@ -32,12 +32,7 @@ endfunction()
 add_library(ChePP_core STATIC bitboard.cpp tb.cpp)
 
 set(GEN_DIR       ${CMAKE_CURRENT_BINARY_DIR})
-set(ASSETS lines from_to)
-if (HAVE_PEXT)
-    set(ASSETS ${ASSETS} magic_rooks_pext magic_bishops_pext)
-else()
-    set(ASSETS ${ASSETS} magic_rooks magic_bishops)
-endif()
+set(ASSETS lines from_to magic_rooks_pext magic_bishops_pext magic_rooks magic_bishops)
 
 foreach(name IN LISTS ASSETS)
     set(GEN_BIN "")

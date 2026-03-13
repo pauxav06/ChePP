@@ -213,7 +213,7 @@ namespace chepp::nnue::layers {
                     constexpr_for<0, std::countr_zero(weights_t::static_extent(2))>([&](auto i) {
                         constexpr auto off =  size_t{1} << i;
                         constexpr_for<0, weights_t::static_extent(2), 2 * off>(
-                            [&](auto j) { *regs[j] += *regs[j + off]; });
+                            [&](auto j) { *regs[j] = hn::Add(*regs[j], *regs[j + off]); });
                     });
                     hn::Store(*regs[0], Dout(), &MD_ACCESS(output, b, 0));
                 }

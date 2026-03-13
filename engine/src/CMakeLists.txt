@@ -30,4 +30,4 @@ add_subdirectory(nnue)
 add_subdirectory(engine)
 
 add_executable(ChePP main.cpp)
-target_link_libraries(ChePP options compat warnings optimization target ChePP_core ChePP_nnue ChePP_engine)
+target_link_libraries(ChePP PRIVATE ChePP_core ChePP_nnue ChePP_engine options compat warnings optimization target )

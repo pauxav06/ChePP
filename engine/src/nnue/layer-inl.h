@@ -15,14 +15,15 @@ namespace chepp::nnue::layers {
         template <typename, auto>
         struct Kernel;
     }
+} // namespace chepp::nnue::layers
+HWY_AFTER_NAMESPACE();
 
+namespace chepp::nnue::layers {
     template <typename Layer, auto cfg>
         requires requires { typename HWY_NAMESPACE::Kernel<Layer, cfg>::sfinae_flag; }
     struct Kernel<HWY_TARGET, Layer, cfg> {
         using type = HWY_NAMESPACE::Kernel<Layer, cfg>;
     };
-
-} // namespace chepp::nnue::layers
-HWY_AFTER_NAMESPACE();
+}
 
 #endif

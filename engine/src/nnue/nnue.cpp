@@ -1,14 +1,14 @@
+#undef HWY_DISABLED_TARGETS
+#define HWY_DISABLED_TARGETS HWY_SCALAR
+
 #include "nnue.h"
 #include <hwy/auto_tune.h>
 #include <hwy/base.h>
 
-#undef HWY_DISABLED_TARGETS
-#define HWY_DISABLED_TARGETS HWY_SCALAR
-
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "nnue.cpp"
-
 #include <hwy/foreach_target.h>
+
 #include <hwy/highway.h>
 
 #include "accumulator-inl.h"
@@ -16,7 +16,6 @@
 #include "relu-inl.h"
 
 HWY_BEFORE_NAMESPACE();
-
 namespace chepp::nnue {
     namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
@@ -27,10 +26,10 @@ namespace chepp::nnue {
         }
     } // namespace HWY_NAMESPACE
 } // namespace chepp::nnue
-
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
+
 
 namespace chepp::nnue {
     template <typename T, auto cfg>

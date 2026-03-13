@@ -3,6 +3,8 @@
 #include "relu.h"
 #include "utils.h"
 
+#include <hwy/base.h>
+
 #if defined(CHEPP_RELU_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_RELU_INL_H_
 #undef CHEPP_RELU_INL_H_
@@ -11,6 +13,7 @@
 #endif
 
 #include "layer-inl.h"
+#include <hwy/highway.h>
 
 HWY_BEFORE_NAMESPACE();
 namespace chepp::nnue::layers {
@@ -33,6 +36,8 @@ namespace chepp::nnue::layers {
 
             using input_extents_t  = md::extents<size_t, relu_t::size_v>;
             using output_extents_t = md::extents<size_t, relu_t::size_v>;
+
+            explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept : base_t(l) {} // must override because pragmas are not transitive to base
 
             [[nodiscard]] std::string
             name() const noexcept override {
@@ -96,6 +101,8 @@ namespace chepp::nnue::layers {
 
             HWY_STATIC_CONSTEXPR input_extents_t  m_input_extents{m_input_chunks, unroll, factor, m_input_lanes};
             HWY_STATIC_CONSTEXPR output_extents_t m_output_extents{m_output_chunks, unroll, m_output_lanes};
+
+            explicit Kernel(const std::shared_ptr<layer_t>& l) noexcept : base_t(l) {} // must override because pragmas are not transitive to base
 
             [[nodiscard]] std::string
             name() const noexcept override {

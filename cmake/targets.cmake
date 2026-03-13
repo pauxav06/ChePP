@@ -30,22 +30,3 @@ target_compile_options(target INTERFACE
         $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<BOOL:${ARCH}>>:/arch:${ARCH}>
         $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<BOOL:${ARCH}>>:-march=${ARCH}>
 )
-
-set(CMAKE_REQUIRED_FLAGS ${COMP_OPTS})
-unset(HAVE_PEXT CACHE)
-check_source_compiles(CXX [[
-    #if !defined(__BMI2__)
-    #error
-    #else
-    #include <immintrin.h>
-    #endif
-    int main () { return _pext_u64(0, 9); }
-]] HAVE_PEXT)
-
-if (HAVE_PEXT)
-    add_compile_definitions(USE_PEXT=1)
-else()
-    add_compile_definitions(USE_PEXT=0)
-endif()
-
-set(CMAKE_REQUIRED_FLAGS ${PRV_FLAGS})

@@ -60,6 +60,9 @@
 #define EXTENT_IF(cond, val) (IF_ELSE(cond, val, std::dynamic_extent))
 #define HWY_CONSTEXPR_EXT(val) EXTENT_IF(HWY_HAVE_CONSTEXPR_LANES, val)
 #define HWY_STATIC_CONSTEXPR IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, static constexpr, )
+#define HWY_CONST IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, ,const)
+
+
 
 #define REG_NAME(I) reg##I
 
