@@ -1,7 +1,7 @@
 #include "bitboard.h"
 #include "format.h"
 
-#if CHEPP_PEXT
+#if USE_PEXT
 #include <immintrin.h>
 #endif
 

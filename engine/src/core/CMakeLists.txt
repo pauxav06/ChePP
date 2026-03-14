@@ -6,9 +6,8 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_include_directories(dump_magics PRIVATE ${hedley_SOURCE_DIR})
     export(TARGETS dump_magics FILE ${CMAKE_BINARY_DIR}/DumpMagicsConfig.cmake)
 else()
-    find_package(DumpMagics REQUIRED)
+    find_package(DumpMagics REQUIRED HOST)
 endif()
-
 
 function(generate_magics)
     cmake_parse_arguments(DUMP "" "NAME;OUT_DIR;BIN" "" ${ARGN})

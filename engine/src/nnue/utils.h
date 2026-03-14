@@ -62,8 +62,6 @@
 #define HWY_STATIC_CONSTEXPR IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, static constexpr, )
 #define HWY_CONST IF_ELSE(HWY_HAVE_CONSTEXPR_LANES, ,const)
 
-
-
 #define REG_NAME(I) reg##I
 
 #define DECL_REG_LOCAL_COND(I, V, ...) [[maybe_unused]] V REG_NAME(I);

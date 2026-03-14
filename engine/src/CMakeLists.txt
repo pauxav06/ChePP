@@ -3,7 +3,7 @@ if(NOT CMAKE_CROSSCOMPILING)
     target_link_libraries(bin2cpp PRIVATE options warnings optimization compat target argparse)
     export(TARGETS bin2cpp FILE ${CMAKE_BINARY_DIR}/Bin2CppConfig.cmake)
 else()
-    find_package(Bin2Cpp REQUIRED)
+    find_package(Bin2Cpp REQUIRED HOST)
 endif()
 
 function(embed_bin)

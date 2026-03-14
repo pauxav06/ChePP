@@ -376,7 +376,9 @@ namespace chepp {
 
         void
         isready() const {
-            if (m_state != Waiting) return;
+            if (m_state != Waiting) {
+                return;
+            }
             fmt::print(stdout, "readyok\n");
         }
 
@@ -507,7 +509,7 @@ namespace chepp {
             m_handle.get()->print();
         }
 
-        static void
+        void
         bench() {
             /**
             static constexpr int n_positions = 10; // just to not get messed up by cache
@@ -550,6 +552,13 @@ namespace chepp {
                       << std::endl;
 
                       **/
+
+
+            if (m_state != Waiting) {
+                return;
+            }
+            ucinewgame();
+            go("depth 10");
         }
 
         void

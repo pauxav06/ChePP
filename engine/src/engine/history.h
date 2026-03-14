@@ -37,6 +37,16 @@ namespace chepp {
             return *this;
         }
 
+        template <typename I>
+        requires (std::is_arithmetic_v<I> && std::is_convertible_v<I, T> && std::is_signed_v<I>
+                    && std::numeric_limits<I>::max() >= Range && std::numeric_limits<I>::min() <= -Range)
+        Bonus
+        operator<<(I newValue) {
+            T clamped = static_cast<T>(std::clamp(newValue, static_cast<I>(-Range), static_cast<I>(Range)));
+            value_ += clamped - value_ * std::abs(clamped) / Range;
+            return *this;
+        }
+
         T
         value() const {
             return value_;
@@ -50,7 +60,7 @@ namespace chepp {
         T value_;
     };
 
-    using HistoryBonus = Bonus<int, 16000>;
+    using HistoryBonus = Bonus<int16_t, 16000>;
 
     struct History {
 
