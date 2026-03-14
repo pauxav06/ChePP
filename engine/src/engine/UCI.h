@@ -321,11 +321,11 @@ namespace chepp {
         Parameters             m_params{};
         State                  m_state{Waiting};
         Positions              m_pos{};
-        std::jthread           m_worker;
         SearchThreadHandler    m_thread_handler{};
         EngineParameterHandler m_param_handler{};
-        TT                     m_tt{}; // lifetime for the whole life of the engine
+        TT                     m_tt{}; // lifetime for the whole life of the engine, TODO should be shared ptr
         nnue::NetworkHandle    m_handle{};
+        std::jthread           m_worker; // destroy thread first calls join and waits before destroying TT
 
       public:
         explicit UCIEngine(const bool enable_tuning = false) {
@@ -486,8 +486,8 @@ namespace chepp {
 
             m_thread_handler.set(
                 m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
-            m_worker = std::jthread([&]() {
-                m_thread_handler.start();
+            m_worker = std::jthread([&](const std::stop_token& st) {
+                m_thread_handler.start(st);
                 m_state = Waiting;
             });
 
@@ -564,7 +564,6 @@ namespace chepp {
         void
         stop() {
             m_thread_handler.stop_all();
-            if (m_worker.joinable()) m_worker.join();
         }
         void
         handle_command(const std::string& line) {
@@ -606,7 +605,6 @@ namespace chepp {
                 handle_command(line);
                 std::fflush(stdout);
             }
-
             return 0;
         }
     };

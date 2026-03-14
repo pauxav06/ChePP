@@ -2,15 +2,18 @@
 
 #include <iostream>
 using namespace chepp;
-int
-main() {
+
+int main(int argc, char** argv)
+{
     UCIEngine          engine{false};
-    std::istringstream bench_input("ucinewgame\n"
-                                   "position startpos\n"
-                                   "go depth 20\n"
-                                   "quit\n");
-    // engine.loop(bench_input);
-    // engine = UCIEngine();
-    engine.loop(std::cin);
+    if (argc == 1) {
+        return engine.loop(std::cin);
+    } else if (argc >= 2) {
+        std::stringstream oss{};
+        for (int i{1}; i < argc; ++i) {
+            oss << argv[i] << std::endl;
+        }
+        return engine.loop(oss);
+    }
     return 0;
 }

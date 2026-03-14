@@ -12,6 +12,7 @@
 #include <array>
 #include <chrono>
 #include <functional>
+#include <latch>
 #include <memory>
 #include <thread>
 #include <unordered_map>
@@ -735,6 +736,7 @@ namespace chepp {
     }
 
     struct SearchThreadHandler {
+        std::size_t m_nb_threads;
         std::vector<std::unique_ptr<SearchThread>> threads{};
         std::vector<std::jthread>                  workers{};
 
@@ -749,33 +751,38 @@ namespace chepp {
             TT*                                         tt,
             const Positions&                            pos,
             const std::shared_ptr<nnue::Arch::Network>& network) {
+            m_nb_threads = numThreads;
             threads.clear();
-            threads.reserve(numThreads);
+            threads.reserve(m_nb_threads);
             workers.clear();
-            workers.reserve(threads.size());
+            workers.reserve(m_nb_threads);
             const TimeManager::InitInfo tm_init{.side         = pos.last().side_to_move(),
                                                 .moves_played = (pos.last().full_move_clock() / 2),
                                                 .static_eval  = 0 /* TODO fix init eval */};
             m_tm = TimeManager{tm_params, tm_init, tm_constraints};
             m_tt = tt;
-            for (size_t i = 0; i < numThreads; i++) {
+            for (size_t i = 0; i < m_nb_threads; i++) {
                 threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, network));
             }
         }
 
         void
-        start() {
+        start(const std::stop_token& st) {
             workers.clear();
             m_tt->new_generation();
             m_tm.start();
 
+            std::latch latch{static_cast<std::ptrdiff_t>(m_nb_threads) + 1};
+
             for (const auto& thread : threads) {
                 auto t = thread.get();
-                workers.emplace_back([t]() { t->IterativeDeepening(); });
+                workers.emplace_back([t, &latch]() {
+                    t->IterativeDeepening();
+                    latch.arrive_and_wait();
+                });
             }
 
-            for (auto& w : workers)
-                if (w.joinable()) w.join();
+            latch.arrive_and_wait();
 
             if (const auto move = get_best_move(); move != Move::none()) {
                 fmt::println(stdout, "bestmove {}", move);
