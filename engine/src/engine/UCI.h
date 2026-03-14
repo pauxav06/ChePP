@@ -319,7 +319,7 @@ namespace chepp {
         };
 
         Parameters             m_params{};
-        State                  m_state{Waiting};
+        std::atomic<State>     m_state{Waiting};
         Positions              m_pos{};
         SearchThreadHandler    m_thread_handler{};
         EngineParameterHandler m_param_handler{};
@@ -350,7 +350,7 @@ namespace chepp {
                 return true;
             });
             m_param_handler.add<EngineParamButton>("Tune", [this]() {
-                m_handle.tune();
+                m_handle.tune_sync();
                 return true;
             });
             if (enable_tuning) // to tune magic values
@@ -381,6 +381,7 @@ namespace chepp {
         void
         ucinewgame() {
             if (m_state != Waiting) {
+                fmt::println(stdout, "info string ucinewgame failed: engine is not idle");
                 return;
             }
             m_tt.reset();
@@ -480,14 +481,15 @@ namespace chepp {
                 }
             }
 
+            m_state = Searching;
             m_thread_handler.set(
-                m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
+                m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle);
             m_worker = std::jthread([&](const std::stop_token& st) {
-                m_thread_handler.start(st);
-                m_state = Waiting;
+                m_thread_handler.start(st, [&] {
+                    m_state = Waiting;
+                });
             });
 
-            m_state = Searching;
         }
 
         void
@@ -556,8 +558,8 @@ namespace chepp {
             ucinewgame();
             TimeManager::UCIConstraints constraints;
             constraints.depth = 10;
-            m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
-            auto [nps, time] = m_thread_handler.start(std::stop_token{});
+            m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle);
+            auto [nps, time] = m_thread_handler.start(std::stop_token{}, [] {} );
             fmt::println(stdout, "Nodes searched: {}", nps);
             fmt::println(stdout, "Nodes/second: {}", nps / time * 1000);
         }

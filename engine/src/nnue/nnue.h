@@ -229,6 +229,11 @@ namespace chepp::nnue {
                 return std::span{m_aff};
             }
 
+            void clear() {
+                m_top = 0;
+            }
+
+
           private:
             std::size_t                     m_top{};
             hwy::AlignedNDArray<int16_t, 3> m_accum_stack;
@@ -273,8 +278,14 @@ namespace chepp::nnue {
                 fmt::print(stdout, "{}", Topology::name(Topology::get_layer(m_kernels), m_kernels));
             }
 
+            void clear() noexcept {
+                m_buckets.clear();
+                m_memory.clear();
+            }
+
             void
             init(const Position& pos) noexcept {
+                clear();
                 m_buckets.push_back(static_cast<size_t>((pos.occupancy().popcount() - 1) / 4));
                 m_memory.push();
                 for (const Color side : Color::all()) {

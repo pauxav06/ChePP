@@ -16,7 +16,8 @@
 #include <string>
 
 #if defined(__BMI2__)
-#define USE_PEXT 1
+//TODO to enable pext we need to move all pext related code to a .cpp file because target flags are not the same across TU
+#define USE_PEXT 0
 #else
 #define USE_PEXT 0
 #endif

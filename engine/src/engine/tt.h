@@ -43,19 +43,19 @@ namespace chepp {
                   generation(generation) {
             }
 
-            zobrist::Hash hash{};
-            uint16_t      depth{};
-            int16_t       score{};
-            Move          move{};
-            Bound         bound{};
-            int16_t       static_eval{};
-            uint8_t       generation{};
+            zobrist::Hash hash{0};
+            uint16_t      depth{0};
+            int16_t       score{0};
+            Move          move{Move::none()};
+            Bound         bound{Bound::EXACT};
+            int16_t       static_eval{0};
+            uint8_t       generation{0};
             uint8_t       repetitions{0};
         };
 
         void
         init(const size_t mb) {
-            m_generation = 0;
+            m_generation = 1;
             m_size       = floor_power_of_two(mb * 1024 * 1024 / sizeof(Entry));
             m_table.resize(m_size);
             std::ranges::fill(m_table, Entry());
@@ -64,8 +64,8 @@ namespace chepp {
 
         void
         reset() {
-            m_generation = 0;
-            std::ranges::fill(m_table, Entry());
+            m_generation = 1;
+            ranges::fill(m_table, Entry());
         }
 
         void
@@ -94,7 +94,7 @@ namespace chepp {
             const auto candidate = Entry(hash, depth, score, bound, m_generation, move, static_eval);
             auto&      old       = m_table[index(hash)];
 
-            bool replace = !old.hash || (old.generation != candidate.generation || old.depth <= candidate.depth);
+            bool replace = (old.hash != hash) || (old.generation != candidate.generation || old.depth <= candidate.depth);
             if (!replace) return;
             if (candidate.move || old.hash != candidate.hash) old.move = move;
             if (candidate.bound == TT::EXACT || candidate.hash != old.hash || candidate.depth + 4 > old.depth) {

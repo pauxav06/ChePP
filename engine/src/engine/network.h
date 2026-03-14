@@ -10,37 +10,43 @@ namespace chepp::nnue {
     struct NetworkHandle {
         NetworkHandle() noexcept : m_layers(Arch::make_layers()) {
             register_all_layers(m_registry);
-            m_network = std::make_shared<Arch::Network>(Arch::make_kernels(m_registry, m_layers));
+            m_kernels = Arch::make_kernels(m_registry, m_layers);
         }
 
         auto
         get() const noexcept {
             std::scoped_lock lock{m_mtx};
-            return m_network;
+            return std::make_shared<Arch::Network>(m_kernels); //TODO make unique
         }
 
         void
         tune() noexcept {
             if (m_running.test_and_set()) {
-                fmt::print(stderr, "error: tuning is not available\n");
+                fmt::print(stdout, "error: tuning is not available\n");
                 return;
             }
             m_worker = std::jthread([&](const std::stop_token& st) {
                 auto res = Arch::make_best_kernels(m_registry, m_layers, st);
                 if (st.stop_requested()) {
-                    fmt::print(stderr, "info string tuning aborted\n");
+                    fmt::print(stdout, "info string tuning aborted\n");
                 } else {
                     std::scoped_lock lock{m_mtx};
-                    m_network = std::make_shared<Arch::Network>(res);
+                    m_kernels = res;
                     fmt::print(stdout, "info string tuning successful\n");
                 }
                 m_running.clear();
             });
         }
 
+        void tune_sync() noexcept {
+            auto res = Arch::make_best_kernels(m_registry, m_layers, std::stop_token());
+            std::scoped_lock lock{m_mtx};
+            m_kernels = res;
+        }
+
         KernelRegistry                 m_registry{};
         Arch::layer_t                  m_layers{};
-        std::shared_ptr<Arch::Network> m_network{};
+        Arch::ikernel_t                m_kernels{};
         mutable std::mutex             m_mtx{};
         std::atomic_flag               m_running{};
         std::jthread                   m_worker{};

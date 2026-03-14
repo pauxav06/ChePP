@@ -749,7 +749,7 @@ namespace chepp {
             const TimeManager::UCIConstraints&          tm_constraints,
             TT*                                         tt,
             const Positions&                            pos,
-            const std::shared_ptr<nnue::Arch::Network>& network) {
+            const nnue::NetworkHandle& network) {
             m_nb_threads = numThreads;
             threads.clear();
             threads.reserve(m_nb_threads);
@@ -761,37 +761,39 @@ namespace chepp {
             m_tm = TimeManager{tm_params, tm_init, tm_constraints};
             m_tt = tt;
             for (size_t i = 0; i < m_nb_threads; i++) {
-                threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, network));
+                threads.emplace_back(std::make_unique<SearchThread>(params, i, &m_tm, tt, pos, network.get()));
             }
         }
 
         std::pair<uint64_t, uint64_t>
-        start(const std::stop_token& st) {
+        start(const std::stop_token& st, std::function<void()> cb) {
             workers.clear();
             m_tt->new_generation();
             m_tm.start();
 
-            std::latch latch{static_cast<std::ptrdiff_t>(m_nb_threads) + 1};
 
             for (const auto& thread : threads) {
                 auto t = thread.get();
-                workers.emplace_back([t, &latch]() {
+                workers.emplace_back([t]() {
                     t->IterativeDeepening();
-                    latch.arrive_and_wait();
                 });
             }
 
-            latch.arrive_and_wait();
-
-            if (const auto move = get_best_move(); move != Move::none()) {
-                fmt::println(stdout, "bestmove {}", move);
-                std::fflush(stdout);
+            for (auto& w : workers) {
+                w.join();
             }
 
+            auto bestmove = get_best_move();
             std::pair<uint64_t, uint64_t> res{get_total_nodes(), m_tm.elapsed_ms() * m_nb_threads};
 
             threads.clear();
             workers.clear();
+
+            cb();
+            if (bestmove != Move::none()) {
+                fmt::println(stdout, "bestmove {}", bestmove);
+                std::fflush(stdout);
+            }
 
             return res;
         }
