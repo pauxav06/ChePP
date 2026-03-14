@@ -1,5 +1,4 @@
 #include "bitboard.h"
-#include "format.h"
 
 #if USE_PEXT
 #include <immintrin.h>

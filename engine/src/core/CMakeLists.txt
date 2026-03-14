@@ -28,7 +28,7 @@ function(generate_magics)
     set(${DUMP_BIN} ${BIN} PARENT_SCOPE)
 endfunction()
 
-add_library(ChePP_core STATIC bitboard.cpp tb.cpp)
+add_library(ChePP_core STATIC bitboard.cpp tb.cpp movegen.cpp)
 
 set(GEN_DIR       ${CMAKE_CURRENT_BINARY_DIR})
 set(ASSETS lines from_to magic_rooks_pext magic_bishops_pext magic_rooks magic_bishops)

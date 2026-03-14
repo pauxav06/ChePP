@@ -5,36 +5,24 @@
 
 #include "generated/from_to.h"
 #include "generated/lines.h"
-#if USE_PEXT
-#include "generated/magic_bishops_pext.h"
-#include "generated/magic_rooks_pext.h"
-#else
-#include "generated/magic_bishops.h"
-#include "generated/magic_rooks.h"
-#endif
 
 #include <bit>
 
 namespace chepp::movegen {
     namespace detail {
-        inline Magics<BISHOP> G_MAGIC_BISHOP{};
-        inline Magics<ROOK> G_MAGIC_ROOK{};
         inline EnumArray<Bitboard, Square, Square> LINES{};
         inline EnumArray<Bitboard, Square, Square> FROM_TO{};
+        void init_magics() noexcept;
+        Bitboard rook_attacks(Square sq, Bitboard occupancy) noexcept;
+        Bitboard bishop_attacks(Square sq, Bitboard occupancy) noexcept;
     } // namespace detail
 
     inline static void init() {
         static std::once_flag init_once;
         std::call_once(init_once, [] {
-#if USE_PEXT
-            detail::G_MAGIC_BISHOP.read(GENERATED_MAGIC_BISHOPS_PEXT.begin());
-            detail::G_MAGIC_ROOK.read(GENERATED_MAGIC_ROOKS_PEXT.begin());
-#else
-            detail::G_MAGIC_BISHOP.read(GENERATED_MAGIC_BISHOPS.begin());
-            detail::G_MAGIC_ROOK.read(GENERATED_MAGIC_ROOKS.begin());
-#endif
             utils::read_range(detail::LINES, GENERATED_LINES.begin());
             utils::read_range(detail::FROM_TO, GENERATED_FROM_TO.begin());
+            detail::init_magics();
         });
     }
 
@@ -81,9 +69,9 @@ namespace chepp::movegen {
     inline constexpr Bitboard
     attacks(const Square sq, const Bitboard occupancy = bb::empty(), const Color c = WHITE) noexcept {
         if constexpr (pc == BISHOP) {
-            return detail::G_MAGIC_BISHOP.attack(sq, occupancy);
+            return detail::bishop_attacks(sq, occupancy);
         } else if constexpr (pc == ROOK) {
-            return detail::G_MAGIC_ROOK.attack(sq, occupancy);
+            return detail::rook_attacks(sq, occupancy);
         } else if constexpr (pc == QUEEN) {
             return attacks<BISHOP>(sq, occupancy) | attacks<ROOK>(sq, occupancy);
         } else if constexpr (pc == PAWN || pc == KNIGHT || pc == KING) {

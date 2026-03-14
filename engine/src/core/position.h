@@ -235,7 +235,6 @@ namespace chepp {
             }
         }
         init_zobrist();
-        refresh_cache();
         update();
     }
 

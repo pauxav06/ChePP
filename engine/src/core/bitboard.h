@@ -16,8 +16,7 @@
 #include <string>
 
 #if defined(__BMI2__)
-//TODO to enable pext we need to move all pext related code to a .cpp file because target flags are not the same across TU
-#define USE_PEXT 0
+#define USE_PEXT 1
 #else
 #define USE_PEXT 0
 #endif
@@ -494,7 +493,7 @@ namespace chepp::movegen {
             }
 
             [[nodiscard]] HEDLEY_ALWAYS_INLINE Bitboard
-            attack(Square sq, Bitboard occupancy) const {
+            attack(Square sq, Bitboard occupancy) const noexcept {
                 return Bitboard{m_attacks[m_offsets[sq] + m_indexers[sq].index(occupancy.value())]};
             }
         };
@@ -595,9 +594,6 @@ namespace chepp::movegen {
                 return static_cast<index_type>(pext(blockers, m_mask));
             }
         };
-
-        template <PieceType pc>
-        using Magics = MagicsBase<pc, std::conditional_t<USE_PEXT, PEXTIndexer, ShiftIndexer>>;
     } // namespace detail
 } // namespace chepp::movegen
 

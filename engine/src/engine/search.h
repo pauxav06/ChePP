@@ -152,14 +152,25 @@ namespace chepp {
             Move     move = first_move;
             std::vector<Move> moves{};
             while (true) {
-                if (!positions.last().is_valid(move)) break;
-                if (positions.is_repetition() || positions.last().halfmove_clock() >= 100) break;
-                if (positions.ply() >= MAX_PLY) break;
+                if (!positions.last().is_valid(move)) {
+                    break;
+                }
+                if (positions.ply() >= MAX_PLY) {
+                    break;
+                }
                 moves.push_back(move);
                 positions.do_move(move);
+                if (positions.is_repetition() || positions.last().halfmove_clock() >= 100) {
+                    positions.undo_move();
+                    break;
+                }
                 auto tt_hit = m_tt->probe(positions.last().hash());
-                if (!tt_hit) break;
-                if (moves.size() == MAX_MOVES) break;
+                if (!tt_hit) {
+                    break;
+                }
+                if (moves.size() == MAX_MOVES) {
+                    break;
+                }
                 move = tt_hit->move;
             }
             return moves;
