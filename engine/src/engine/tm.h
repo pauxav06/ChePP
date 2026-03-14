@@ -13,14 +13,14 @@ namespace chepp {
         struct UCIConstraints {
             int                   move_time{-1};
             EnumArray<int, Color> time{-1, -1};
-            EnumArray<int, Color> inc{-1, -1};
+            EnumArray<int, Color> inc{0, 0};
             int                   moves_to_go{-1};
             int                   depth = 99;
         };
 
         struct Params {
             int   baseline_moves_to_go{30};
-            int   min_time{50};
+            int   min_time{1};
             int   max_time{60 * 1000 * 60};
             int   safety_margin{200};
             float instabiliy_factor{0.05f};
@@ -43,6 +43,7 @@ namespace chepp {
 
         struct State {
             std::chrono::steady_clock::time_point start_time{};
+            std::chrono::steady_clock::time_point last_update{};
             int                                   max_time_ms{-1};
             int                                   adjusted_time_ms{-1};
             bool                                  stop_flag{false};
@@ -96,16 +97,20 @@ namespace chepp {
             }
         }
 
+        [[nodiscard]] auto elapsed_ms() const {
+            return std::chrono::duration_cast<std::chrono::milliseconds>(m_state.last_update - m_state.start_time).count();
+        }
+
         void
         update_time() {
+            m_state.last_update = std::chrono::steady_clock::now();
             if (m_state.max_time_ms > 0) {
-                auto elapsed = std::chrono::steady_clock::now() - m_state.start_time;
-                if (std::chrono::duration_cast<std::chrono::milliseconds>(elapsed).count() >=
-                    m_state.adjusted_time_ms) {
+                if (elapsed_ms() >= m_state.adjusted_time_ms) {
                     m_state.stop_flag = true;
                 }
             }
         }
+
 
         void
         stop() {

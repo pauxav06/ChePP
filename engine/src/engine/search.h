@@ -293,7 +293,7 @@ namespace chepp {
         // quiescence search supposed to prevent horizon effect
         if (depth <= 0) return QSearch(alpha, beta);
 
-        if (m_thread_id == 0 && m_statistics.nodes % 4096 == 0) {
+        if (m_thread_id == 0 && m_statistics.nodes % std::min((bit::get_msb(m_statistics.nodes) * bit::get_msb(m_statistics.nodes) * 10), 4096) == 0) {
             m_tm->update_time();
         }
 
@@ -766,7 +766,7 @@ namespace chepp {
             }
         }
 
-        void
+        std::pair<uint64_t, uint64_t>
         start(const std::stop_token& st) {
             workers.clear();
             m_tt->new_generation();
@@ -789,8 +789,12 @@ namespace chepp {
                 std::fflush(stdout);
             }
 
+            std::pair<uint64_t, uint64_t> res{get_total_nodes(), m_tm.elapsed_ms() * m_nb_threads};
+
             threads.clear();
             workers.clear();
+
+            return res;
         }
 
         [[nodiscard]] Move
@@ -803,6 +807,18 @@ namespace chepp {
                 std::ranges::max_element(move_votes, [](const auto& a, const auto& b) { return a.second < b.second; });
 
             return it != move_votes.end() ? Move{it->first} : Move{};
+        }
+
+        [[nodiscard]] uint64_t
+        get_total_nodes() const {
+            uint64_t total = 0;
+            for (const auto& t : threads) total += t->m_statistics.nodes;
+            return total;
+        }
+
+        [[nodiscard]] uint64_t
+        get_total_nps() const {
+            return get_total_nodes() / m_tm.elapsed_ms();
         }
 
         void

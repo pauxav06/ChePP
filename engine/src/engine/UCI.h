@@ -329,10 +329,10 @@ namespace chepp {
 
       public:
         explicit UCIEngine(const bool enable_tuning = false) {
-            m_param_handler.add<EngineParamSpin>("Hash Size", m_params.hash_size, 64, 64, 512, [this]() {
+            m_param_handler.add<EngineParamSpin>("Hash", m_params.hash_size, 64, 64, 512, [this]() {
                 m_tt.reset();
                 m_tt.init(m_params.hash_size);
-                fmt::print(stdout, "info string Hash Size {}\n", m_params.hash_size);
+                fmt::print(stdout, "info string Hash {}\n", m_params.hash_size);
                 return true;
             });
             m_param_handler.add<EngineParamSpin>(
@@ -558,7 +558,12 @@ namespace chepp {
                 return;
             }
             ucinewgame();
-            go("depth 10");
+            TimeManager::UCIConstraints constraints;
+            constraints.depth = 10;
+            m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
+            auto [nps, time] = m_thread_handler.start(std::stop_token{});
+            fmt::println(stdout, "Nodes searched: {}", nps);
+            fmt::println(stdout, "Nodes/seconds: {}", nps / time * 1000);
         }
 
         void
