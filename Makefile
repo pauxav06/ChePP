@@ -16,7 +16,7 @@ CMAKE_ARGS += -DCMAKE_CXX_COMPILER=$(CXX)
 endif
 
 all:
-	cmake -B $(BUILD_DIR) -S . $(CMAKE_ARGS) -DSTATIC -DARCH=native
+	cmake -B $(BUILD_DIR) -S . $(CMAKE_ARGS) -DSTATIC=True -DARCH=native
 	cmake --build $(BUILD_DIR) --target $(TARGET) --config Release
 	@if [ -f $(BIN_SINGLE) ]; then \
 		cp $(BIN_SINGLE) ./$(EXE); \
