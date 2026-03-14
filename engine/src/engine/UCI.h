@@ -366,7 +366,6 @@ namespace chepp {
 
         void
         uci() const {
-            if (m_state != Waiting) return;
             fmt::print(stdout,
                        "id name ChePP\n"
                        "id author pauxav06\n");
@@ -376,10 +375,7 @@ namespace chepp {
 
         void
         isready() const {
-            if (m_state != Waiting) {
-                return;
-            }
-            fmt::print(stdout, "readyok\n");
+            fmt::println(stdout, "readyok");
         }
 
         void
