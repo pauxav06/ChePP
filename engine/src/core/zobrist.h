@@ -40,12 +40,10 @@ namespace chepp::zobrist {
         };
     };
 
-    #define RANDOM_HASH_TABLE(NAME, ...) using NAME = RandomHashTable<__LINE__, __VA_ARGS__>
-    RANDOM_HASH_TABLE(PSQ, Piece, Square);
-    RANDOM_HASH_TABLE(EP, File);
-    RANDOM_HASH_TABLE(CASTLING, CastlingType);
-    RANDOM_HASH_TABLE(SIDE, Color);
-    #undef RANDOM_HASH_TABLE
+    using PSQ = RandomHashTable<0x1234, Piece, Square>;
+    using EP = RandomHashTable<0x432, File>;
+    using CASTLING = RandomHashTable<0x888, CastlingType>;
+    using SIDE = RandomHashTable<0x111111, Color>;
 
     inline constexpr void
     flip_piece(Hash& hash, const Piece pt, const Square sq) {
