@@ -147,10 +147,10 @@ namespace chepp {
                    ss().position->is_insufficient_material();
         }
 
-        [[nodiscard]] MoveList
+        [[nodiscard]] std::vector<Move>
         get_pv(Positions positions, const Move first_move) const {
             Move     move = first_move;
-            MoveList moves{};
+            std::vector<Move> moves{};
             while (true) {
                 if (!positions.last().is_valid(move)) break;
                 if (positions.is_repetition() || positions.last().halfmove_clock() >= 100) break;
@@ -166,7 +166,7 @@ namespace chepp {
         }
 
         static std::string
-        format_pv_line(const MoveList& pv_line) {
+        format_pv_line(const std::vector<Move>& pv_line) {
             std::string out;
             for (const auto m : pv_line) {
                 fmt::format_to(std::back_inserter(out), "{} ", m);
@@ -312,7 +312,7 @@ namespace chepp {
         m_statistics.nodes++;
 
         if (!is_root) {
-            if (ply() >= MAX_PLY) {
+            if (ply() >= MAX_PLY - 1) {
                 return evaluate();
             }
             if (is_draw()) {
