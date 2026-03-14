@@ -1,5 +1,5 @@
 target_compile_options(options INTERFACE
-        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Debug>,$<BOOL:${SANITIZE}>>:
+        $<$<AND:$<BOOL:${SANITIZE}>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:
             -fsanitize=address
             -fsanitize=undefined
             -fno-omit-frame-pointer
@@ -7,7 +7,7 @@ target_compile_options(options INTERFACE
 )
 
 target_link_options(options INTERFACE
-        $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<CONFIG:Debug>,$<BOOL:${SANITIZE}>>:
+        $<$<AND:$<BOOL:${SANITIZE}>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:
             -fsanitize=address
             -fsanitize=undefined
         >

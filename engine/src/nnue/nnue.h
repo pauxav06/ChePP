@@ -188,7 +188,7 @@ namespace chepp::nnue {
 
         struct Memory {
             explicit Memory(const MemSizes& mem) noexcept
-                : m_accum_stack({MAX_PLY, 2, mem.acc}), m_psqt_stack({MAX_PLY, 2, mem.psqt}),
+                : m_accum_stack({MAX_PLY + 1, 2, mem.acc}), m_psqt_stack({MAX_PLY + 1, 2, mem.psqt}),
                   m_relu(std::max({mem.relu0, mem.relu1, mem.relu2})), m_aff(std::max({mem.aff0, mem.aff1, mem.aff2})) {
             }
 

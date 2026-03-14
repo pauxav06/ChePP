@@ -496,7 +496,7 @@ namespace chepp {
                 }
             }
 
-            if (!is_root && depth >= (6 + is_pv) && (m == tt_move) && tt_hit->bound == TT::LOWER &&
+            if (!is_root && tt_hit && depth >= (6 + is_pv) && (m == tt_move) && tt_hit->bound == TT::LOWER &&
                 abs(tt_score) < MATE && tt_hit->depth >= depth - 3 && !ss().excluded) {
                 int singular_beta  = tt_score - depth;
                 int singular_depth = (depth - 1) / 2;
