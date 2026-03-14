@@ -76,12 +76,13 @@ namespace chepp {
                               TT*                                         tt,
                               const Positions&                            pos,
                               const std::shared_ptr<nnue::Arch::Network>& network)
-            : m_thread_id(id), m_parameters(parameters), m_tm(tm), m_tt(tt), m_search_stack(pos, network) {
+            : m_thread_id(id), m_parameters(parameters), m_base_pos(pos), m_tm(tm), m_tt(tt), m_search_stack(pos, network) {
             init_cache();
         }
         // control
         int        m_thread_id;
         Parameters m_parameters;
+        Positions m_base_pos;
         // shared states
         TimeManager* m_tm;
         TT*          m_tt;
@@ -147,9 +148,7 @@ namespace chepp {
         }
 
         [[nodiscard]] MoveList
-        get_pv(const Position& startpos, const Move first_move) const {
-            Positions positions{};
-            positions.set_pos(startpos);
+        get_pv(Positions positions, const Move first_move) const {
             Move     move = first_move;
             MoveList moves{};
             while (true) {
@@ -228,7 +227,7 @@ namespace chepp {
                             std::chrono::duration_cast<std::chrono::milliseconds>(t_now - m_statistics.t_start);
                         time_since_start = std::max(time_since_start, std::chrono::milliseconds(1));
                         auto nps         = m_statistics.nodes / time_since_start.count() * 1000;
-                        auto pv          = get_pv(ss().position(), root_best_move);
+                        auto pv          = get_pv(m_base_pos, root_best_move);
                         fmt::println(stdout,
                                      "info score {} depth {} nodes {} nps {} tb_hits {} pv {}",
                                      score,

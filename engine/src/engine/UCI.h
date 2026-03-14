@@ -559,7 +559,7 @@ namespace chepp {
             m_thread_handler.set(m_params.threads, m_params.tunables, m_params.tm, constraints, &m_tt, m_pos, m_handle.get());
             auto [nps, time] = m_thread_handler.start(std::stop_token{});
             fmt::println(stdout, "Nodes searched: {}", nps);
-            fmt::println(stdout, "Nodes/seconds: {}", nps / time * 1000);
+            fmt::println(stdout, "Nodes/second: {}", nps / time * 1000);
         }
 
         void
