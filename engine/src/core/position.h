@@ -577,7 +577,10 @@ namespace chepp {
             // set new ep square
             else if (pc.type() == PAWN && to.value() - from.value() == 2 * up) {
                 // only set if ep is actually playable
-                if (((movegen::pseudo_attack<PAWN>(to - up, us)) & occupancy(~us)) != bb::empty()) {
+                const auto ep_sq = to - up;
+                const auto adjacent = movegen::pseudo_attack<PAWN>(ep_sq, us) & occupancy(~us, PAWN);
+                if ((!m_blockers.at(~us).is_set(from) || (from.file() == ksq(~us).file()))
+                    && (adjacent & (~m_blockers.at(~us) | movegen::line(ep_sq, ksq(~us)))) != bb::empty()) {
                     m_ep_square = from + up;
                     zobrist::flip_ep(m_hash, from.file());
                 }
