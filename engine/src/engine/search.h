@@ -339,10 +339,23 @@ namespace chepp {
             }
         }
 
+        MoveList moves;
+
         // Probe the TT to see if we have a candidate score
         auto tt_hit  = m_tt->probe(ss().position->hash());
         Move tt_move = tt_hit ? tt_hit->move : Move::none();
         if (!tt_move) tt_hit = std::nullopt;
+        if (tt_hit) {
+            moves = gen_moves(ss().position());
+            if (auto it = ranges::find(moves, tt_move); it == moves.end()) {
+                tt_hit = std::nullopt;
+            }
+        }
+        if (tt_hit) {
+            if (!ss().position->is_legal(tt_move)) {
+                tt_hit = std::nullopt;
+            }
+        }
         if (tt_hit) tt_hit = causes_draw(tt_move) ? std::nullopt : tt_hit;
         int tt_score = tt_hit ? TT::read_score(tt_hit->score, ply()) : 0;
         if (!is_pv && tt_hit && !ss().excluded && tt_hit->depth >= depth) {
@@ -362,8 +375,6 @@ namespace chepp {
             ss().static_eval = eval = 0;
             improving               = false;
         }
-
-        MoveList moves;
 
         if (!is_pv && !in_check && !is_root && !ss().excluded) {
             if (tt_hit) {
@@ -673,8 +684,20 @@ namespace chepp {
         const int stand_pat = evaluate();
         ss().static_eval    = stand_pat;
 
+        MoveList moves;
         auto       tt_hit  = m_tt->probe(ss().position->hash());
         const Move tt_move = tt_hit ? tt_hit->move : Move::none();
+        if (tt_hit) {
+            moves = gen_moves(ss().position());
+            if (auto it = ranges::find(moves, tt_move); it == moves.end()) {
+                tt_hit = std::nullopt;
+            }
+        }
+        if (tt_hit) {
+            if (!ss().position->is_legal(tt_move)) {
+                tt_hit = std::nullopt;
+            }
+        }
         if (tt_move) tt_hit = causes_draw(tt_move) ? std::nullopt : tt_hit;
         const int tt_score = tt_hit ? TT::read_score(tt_hit->score, ply()) : 0;
         if (!is_pv && tt_hit) {
@@ -693,7 +716,9 @@ namespace chepp {
             best_eval = stand_pat;
         }
 
-        auto moves  = gen_moves(ss().position());
+        if (moves.empty()) {
+            moves  = gen_moves(ss().position());
+        }
         auto filter = [&](const Move move) {
             if (in_check)
                 return pos->is_legal(move);
