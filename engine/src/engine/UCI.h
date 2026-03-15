@@ -353,16 +353,27 @@ namespace chepp {
                 m_handle.tune_sync();
                 return true;
             });
+
+#define TUNE_INT(name, base, min, max, cend, rate) m_param_handler.add<EngineParamSpin>(#name, m_params.tunables.name, base, min, max);\
+fmt::println(stdout, "{}, int, {}, {}, {}, {}, {}", #name, base, min, max, cend, rate);
+
             if (enable_tuning) // to tune magic values
             {
-                m_param_handler.add<EngineParamSpin>(
-                    "AspWin min depth", m_params.tunables.aspiration_window_activation_depth, 7, 1, 10);
+                TUNE_INT(bonus_pow_div, 500, 200, 2048, 1, 0.01);
+                TUNE_INT(bonus_depth_mul, 1, 1, 100, 1, 0.02);
+                TUNE_INT(malus_depth_mul, 1, 1, 100, 1, 0.02);
+                TUNE_INT(bonus_tt, 10, 0, 300, 1, 0.02);
+                TUNE_INT(bonus_rise, 10, 0, 100, 1, 0.02);
+                TUNE_INT(bonus_cutoff, 10, 0, 100, 1, 0.02);
+                TUNE_INT(bonus_mul_div, 500, 1, 2048, 1, 0.02);
+                TUNE_INT(malus_mul_div, 500, 1, 2048, 1, 0.02);
             }
             m_tt.init(m_params.hash_size);
             if (auto err = m_pos.set_fen<true>(start_fen); !err) {
                 throw std::runtime_error("Failed to set start fen: " + err.error());
             }
         }
+
 
         void
         uci() const {

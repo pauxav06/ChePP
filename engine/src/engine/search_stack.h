@@ -43,7 +43,7 @@ namespace chepp {
         explicit SearchStack(const Positions& positions, const std::shared_ptr<nnue::Arch::Network>& network)
             : m_positions(positions), m_network(network), m_nodes(std::make_unique<Node[]>(MAX_PLY)),
               m_history(std::make_unique<History>()), m_capture_history(std::make_unique<CaptureHistory>()),
-              m_continuation_history(std::make_unique<ContinuationHistory>()),
+              m_continuation_history(std::make_unique<std::array<std::array<ContinuationHistory, 2>, 2>>()),
               m_null_move_continuation_history(std::make_unique<History>()) {
             m_network->init(m_positions.last());
             update_last_node();
@@ -106,7 +106,10 @@ namespace chepp {
             node.continuation_history = !node.prev ? nullptr
                                         : node.position->move() == Move::null()
                                             ? nullptr
-                                            : &m_continuation_history->get_relevant_history(node.position());
+                                            : &m_continuation_history
+                                                ->at(node.position->in_check(node.position->side_to_move()) * 0) //TODO keep?
+                                                .at(node.position->is_capture(node.position->move()) * 0)
+                                                .get_relevant_history(node.position());
             node.refutation_history   = &m_refutation_nodes;
         }
 
@@ -131,7 +134,7 @@ namespace chepp {
 
         std::unique_ptr<History>             m_history{};
         std::unique_ptr<CaptureHistory>      m_capture_history{};
-        std::unique_ptr<ContinuationHistory> m_continuation_history{};
+        std::unique_ptr<std::array<std::array<ContinuationHistory, 2>, 2>> m_continuation_history{};
         std::unique_ptr<History>             m_null_move_continuation_history;
         RefutationHistory                    m_refutation_nodes{MAX_MOVES};
     };

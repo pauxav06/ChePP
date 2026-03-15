@@ -5,7 +5,7 @@ using namespace chepp;
 
 int main(int argc, char** argv)
 {
-    UCIEngine          engine{false};
+    UCIEngine          engine{true};
     if (argc == 1) {
         return engine.loop(std::cin);
     } else if (argc >= 2) {

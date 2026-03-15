@@ -221,6 +221,7 @@ namespace chepp::utils {
         ranges::for_each(r, [&] (auto& v) { out = read(v, out); });
         return out;
     }
+
 } // namespace chepp::utils
 
 #if (defined __CDT_PARSER__) || (defined __INTELLISENSE__) || (defined Q_CREATOR_RUN) || (defined __CLANGD__) ||       \

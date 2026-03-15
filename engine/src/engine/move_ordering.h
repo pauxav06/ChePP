@@ -146,9 +146,12 @@ namespace chepp {
                     }
                     if (m_ss.position->is_quiet(m)) {
                         score += m_ss.history->at(m_ss.position(), m);
-                        if (m_ss.continuation_history) score += m_ss.continuation_history->at(m_ss.position(), m);
-                        if (m_ss.prev && m_ss.prev->continuation_history)
+                        if (m_ss.continuation_history) {
+                            score += m_ss.continuation_history->at(m_ss.position(), m);
+                        }
+                        if (m_ss.prev && m_ss.prev->continuation_history) {
                             score += m_ss.prev->continuation_history->at(m_ss.position(), m);
+                        }
                         break;
                     }
                 }
@@ -158,8 +161,8 @@ namespace chepp {
                     [[fallthrough]];
                 case Stage::QSearch: {
                     if (victim) {
-                        score += mvv_lva(attacker.type(), victim.type()) + HistoryBonus::max() +
-                                 m_params.good_capture * (m_ss.position->see(m) > -107) +
+                        score += mvv_lva(attacker.type(), victim.type()) * HistoryBonus::max()+
+                                 m_params.good_capture * (m_ss.position->see(m) > -107) * 0 +
                                  m_ss.capture_history->at(m_ss.position(), m);
                     }
                 }

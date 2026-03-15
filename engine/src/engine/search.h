@@ -48,6 +48,16 @@ namespace chepp {
             int max_history         = 16384;
             int max_counter_history = 16384;
 
+            int bonus_mul_div = 500;
+            int bonus_pow_div = 500;
+            int bonus_rise = 10;
+            int bonus_cutoff = 10;
+            int bonus_depth_mul = 1;
+            int bonus_tt = 10;
+            int malus_mul_div = 500;
+            int malus_depth_mul = 1;
+
+
             int tt_replacement_threshold{3};
         };
 
@@ -632,21 +642,40 @@ namespace chepp {
             best_score = ss().excluded ? alpha : in_check ? mated_in(ply()) : 0;
         }
 
+        const Move prev_move = ss().prev ? ss().prev->position->move() : Move::none();
         {
+            int bonus = static_cast<int>(std::pow(static_cast<double>(depth), 1024.0 / m_parameters.bonus_pow_div)) * m_parameters.bonus_depth_mul;
+            int malus = depth * m_parameters.malus_depth_mul;
 
-            for (const auto [m, raise, cutoff, s] : explored_quiets) {
-                int bonus = cutoff ? depth * depth : raise ? depth : -depth;
-                ss().history->at(ss().position(), m) << bonus;
-                if (ss().continuation_history) ss().continuation_history->at(ss().position(), m) << bonus;
-                if (ss().prev && ss().prev->continuation_history)
-                    ss().prev->continuation_history->at(ss().position(), m) << bonus;
+            bonus += (local_best_move == tt_move) * m_parameters.bonus_tt;
+
+            if (ss().position->is_quiet(local_best_move)) {
+                for (const auto [m, raise, cutoff, s] : explored_quiets) {
+                    int applied{0};
+                    if (m == local_best_move) {
+                        bonus += raise * m_parameters.bonus_rise;
+                        bonus += cutoff * m_parameters.bonus_cutoff;
+                        bonus = bonus * 1024 / m_parameters.bonus_mul_div;
+                        applied = bonus;
+                    } else {
+                        malus -= raise * 1024 / m_parameters.malus_mul_div;
+                        applied = -malus;
+                    }
+                    ss().history->at(ss().position(), m) << applied;
+                    if (ss().continuation_history) {
+                        ss().continuation_history->at(ss().position(), m) << applied;
+                    }
+                    if (ss().prev && ss().prev->continuation_history)
+                        ss().prev->continuation_history->at(ss().position(), m) << applied;
+                }
+            } else {
+                ss().capture_history->at(ss().position(), local_best_move) << bonus ;
             }
 
             auto explored_captures =
                 explored_tacticals | std::views::filter([this](auto e) { return ss().position->is_capture(e.move); });
             for (const auto [m, raise, cutoff, s] : explored_captures) {
-                int bonus = cutoff ? depth * depth : raise ? depth : -depth;
-                ss().capture_history->at(ss().position(), m) << bonus;
+                    ss().capture_history->at(ss().position(), m) << -depth;
             }
         }
 
