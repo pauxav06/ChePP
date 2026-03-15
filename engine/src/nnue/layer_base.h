@@ -68,14 +68,16 @@ namespace chepp::nnue {
                 hwy::Params params{};
                 params.verbose           = false;
                 params.target_rel_mad    = 0.1;
-                params.precision_divisor = 1;
+                params.precision_divisor = 256;
                 params.seconds_per_eval  = 4e-5;
 
+                auto prev = hwy::SetWarnFunc([] (const char*, int, const char*) {});
                 auto success = hwy::MeasureClosure(m_layer->make_benchmark_closure(this->shared_from_this()),
                                                    std::data(inputs),
                                                    std::size(inputs),
                                                    std::data(results),
                                                    params);
+                hwy::SetWarnFunc(prev);
 
                 if (success != 0) {
                     return static_cast<double>(results->ticks);

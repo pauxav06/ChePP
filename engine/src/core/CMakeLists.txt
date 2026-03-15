@@ -46,3 +46,9 @@ target_link_libraries(ChePP_core PRIVATE options warnings optimization target)
 target_link_libraries(ChePP_core PUBLIC compat hwy)
 target_include_directories(ChePP_core PRIVATE ${fathom_SOURCE_DIR}/src)
 target_include_directories(ChePP_core PUBLIC include ${hedley_SOURCE_DIR})
+
+target_precompile_headers(ChePP_core
+        PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/core.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/include/core-utils.h
+)

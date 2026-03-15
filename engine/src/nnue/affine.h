@@ -66,10 +66,15 @@ namespace chepp::nnue::layers {
                 hwy::AlignedVector<input_t> inputs(input_size_v + kernel->input_padding());
                 fill_random(inputs, 0);
                 hwy::AlignedVector<output_t> outputs(output_size_v + kernel->output_padding());
+                size_t repetitions = std::max(size_t{128000} / (input_size_v * output_size_v), size_t{1});
 
                 return [=](hwy::FuncInput) mutable -> hwy::FuncOutput {
-                    kernel->forward(std::data(inputs), std::data(outputs));
-                    return static_cast<hwy::FuncOutput>(outputs.back());
+                    volatile hwy::FuncOutput out = hwy::Unpredictable1();
+                    for (size_t i{0}; i < repetitions; ++i) {
+                        kernel->forward(std::data(inputs), std::data(outputs));
+                        out += static_cast<hwy::FuncOutput>(outputs.back());
+                    }
+                    return out;
                 };
             }
 

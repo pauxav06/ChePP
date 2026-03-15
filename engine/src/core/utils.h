@@ -10,6 +10,7 @@
 #include <random>
 #include <string_view>
 #include <type_traits>
+#include <vector>
 
 #include <functional>
 #include <hedley.h>
