@@ -668,14 +668,10 @@ namespace chepp {
         const Positions::Handle pos      = ss().position;
 
         if (ply() >= MAX_PLY) return evaluate();
-
         if (is_draw()) return 0;
 
         const int stand_pat = evaluate();
         ss().static_eval    = stand_pat;
-
-        if (stand_pat >= beta) return beta;
-        if (stand_pat > alpha) alpha = stand_pat;
 
         auto       tt_hit  = m_tt->probe(ss().position->hash());
         const Move tt_move = tt_hit ? tt_hit->move : Move::none();
@@ -689,9 +685,17 @@ namespace chepp {
             }
         }
 
+        int  best_eval = -INF;
+
+        if (!in_check) {
+            if (stand_pat >= beta) return beta;
+            if (stand_pat > alpha) alpha = stand_pat;
+            best_eval = stand_pat;
+        }
+
         auto moves  = gen_moves(ss().position());
         auto filter = [&](const Move move) {
-            if (in_check && false)
+            if (in_check)
                 return pos->is_legal(move);
             else
                 return pos->is_tactical(move) && pos->is_legal(move);
@@ -703,7 +707,6 @@ namespace chepp {
                               m_parameters.scoring_parameters,
                               tt_move};
 
-        int  best_eval  = stand_pat;
         Move best_move  = Move::none();
         int  move_count = 0;
         int  score      = -INF;
@@ -733,6 +736,12 @@ namespace chepp {
             }
             if (best_eval > alpha) alpha = best_eval;
             if (alpha >= beta) break;
+        }
+
+        if (move_count == 0) {
+            if (in_check) {
+                return mated_in(ply());
+            }
         }
 
         assert(best_eval > -INF && best_eval < INF);
