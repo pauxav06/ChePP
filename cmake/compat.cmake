@@ -44,7 +44,7 @@ check_source_compiles(CXX [[
 if(NOT HAVE_MDSPAN)
     message(STATUS "std::mdspan not found, fetching kokkos::mdspan")
 
-    FetchContent_Declare(mdspan GIT_REPOSITORY https://github.com/kokkos/mdspan.git GIT_TAG stable)
+    FetchContent_Declare(mdspan GIT_REPOSITORY https://github.com/kokkos/mdspan.git GIT_TAG mdspan-0.6.0)
     FetchContent_MakeAvailable(mdspan)
 
     target_link_libraries(compat INTERFACE mdspan)
@@ -66,7 +66,7 @@ if(NOT HAVE_FMT)
     message(STATUS "std::format not found, fetching fmtlib")
 
     set(FMT_MODULE OFF CACHE BOOL "" FORCE)
-    FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git GIT_TAG master)
+    FetchContent_Declare(fmt GIT_REPOSITORY https://github.com/fmtlib/fmt.git GIT_TAG 12.1.0)
     FetchContent_MakeAvailable(fmt)
 
     target_link_libraries(compat INTERFACE fmt::fmt)
@@ -87,7 +87,7 @@ check_source_compiles(CXX [[
 if(NOT HAVE_RANGES)
     message(STATUS "std::ranges not found, fetching ranges-v3")
 
-    FetchContent_Declare(range-v3 GIT_REPOSITORY https://github.com/ericniebler/range-v3.git GIT_TAG master)
+    FetchContent_Declare(range-v3 GIT_REPOSITORY https://github.com/ericniebler/range-v3.git GIT_TAG 0.12.0)
     FetchContent_MakeAvailable(range-v3)
 
     target_link_libraries(compat INTERFACE range-v3)

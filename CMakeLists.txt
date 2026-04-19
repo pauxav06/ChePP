@@ -39,17 +39,17 @@ include(cmake/compat.cmake)
 FetchContent_Declare(argparse GIT_REPOSITORY https://github.com/p-ranav/argparse.git GIT_TAG v3.1)
 FetchContent_MakeAvailable(argparse)
 
-FetchContent_Declare(hedley GIT_REPOSITORY https://github.com/nemequ/hedley.git GIT_TAG master)
+FetchContent_Declare(hedley GIT_REPOSITORY https://github.com/nemequ/hedley.git GIT_TAG v15)
 FetchContent_MakeAvailable(hedley)
 
 set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "" FORCE)
 set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
-FetchContent_Declare(highway GIT_REPOSITORY https://github.com/google/highway.git GIT_TAG master)
+FetchContent_Declare(highway GIT_REPOSITORY https://github.com/google/highway.git GIT_TAG 1.3.0)
 FetchContent_MakeAvailable(highway)
 
-FetchContent_Declare(fathom GIT_REPOSITORY https://github.com/jdart1/Fathom.git GIT_TAG master)
+FetchContent_Declare(fathom GIT_REPOSITORY https://github.com/jdart1/Fathom.git GIT_TAG v1.0)
 FetchContent_MakeAvailable(fathom)
 
 include(CTest)
