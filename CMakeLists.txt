@@ -42,7 +42,7 @@ FetchContent_MakeAvailable(argparse)
 FetchContent_Declare(hedley GIT_REPOSITORY https://github.com/nemequ/hedley.git GIT_TAG v15)
 FetchContent_MakeAvailable(hedley)
 
-set(HWY_ENABLE_CONTRIB ON CACHE BOOL "" FORCE)
+set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "" FORCE)
 set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
 
