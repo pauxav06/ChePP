@@ -41,7 +41,7 @@ endforeach ()
 
 target_include_directories(ChePP_core PUBLIC ${GEN_DIR})
 
-target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1 CHEPP_USE_TB=1)
+target_compile_definitions(ChePP_core PUBLIC TB_NO_THREADS=1 CHEPP_USE_TB=1 HWY_AUTOTUNE_STDSORT)
 target_link_libraries(ChePP_core PRIVATE options warnings optimization target)
 target_link_libraries(ChePP_core PUBLIC compat hwy)
 target_include_directories(ChePP_core PRIVATE ${fathom_SOURCE_DIR}/src)
