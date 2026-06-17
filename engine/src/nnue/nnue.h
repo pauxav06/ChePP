@@ -1,13 +1,13 @@
 #ifndef CHEPP_LAYERS_H
 #define CHEPP_LAYERS_H
 
+#include "layer_base.h"
+
 #include "accumulator.h"
 #include "affine.h"
-#include "feature_transformer.h"
-#include "layer_base.h"
 #include "relu.h"
 
-#include <hwy/targets.h>
+#include "feature_transformer.h"
 
 #include <utility>
 
@@ -31,7 +31,7 @@ namespace chepp::nnue {
 
         static auto
         make_kernel(const KernelRegistry& r, const layer_t& layer) {
-            return r.make_kernel<Operation>(layer, hwy::DispatchedTarget(), default_config);
+            return r.make_kernel<Operation>(layer, dispatchTarget(), default_config);
         }
 
         static auto
@@ -241,6 +241,9 @@ namespace chepp::nnue {
             hwy::AlignedVector<uint8_t>     m_relu;
             hwy::AlignedVector<int32_t>     m_aff;
         };
+
+        // TODO replace by interface and move all hwy dependant code to separate TU
+        // to avoid ODR violations of AlignedAllocator / hwy::Target helpers that have conditional compilation
 
         struct Network {
             explicit Network(const ikernel_t& kernels) noexcept

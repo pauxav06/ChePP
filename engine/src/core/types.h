@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "expected.h"
+#include "hedley.h"
 
 // TODO replace calls to format_to to format_to_n
 namespace chepp {
@@ -1753,35 +1754,35 @@ namespace chepp {
         std::vector<T>* ptr;
         uint32_t        index;
 
-        VectorHandle(std::vector<T>* p, const uint32_t i) : ptr(p), index(i) {
+        HEDLEY_ALWAYS_INLINE VectorHandle(std::vector<T>* p, const uint32_t i) : ptr(p), index(i) {
         }
-        VectorHandle() : ptr(nullptr), index(0) {
+        HEDLEY_ALWAYS_INLINE VectorHandle() : ptr(nullptr), index(0) {
         }
 
-        T&
+        HEDLEY_ALWAYS_INLINE T&
         operator*() const {
-            return ptr->at(index);
+            return (*ptr)[index];
         }
 
-        T*
+        HEDLEY_ALWAYS_INLINE T*
         operator->() const {
-            return &ptr->at(index);
+            return &(*ptr)[index];
         }
 
-        T&
+        HEDLEY_ALWAYS_INLINE T&
         operator()() const {
-            return ptr->at(index);
+            return **this;
         }
 
-        explicit operator bool() const {
+        HEDLEY_ALWAYS_INLINE explicit operator bool() const {
             return ptr != nullptr && index < ptr->size();
         }
 
-        bool
+        HEDLEY_ALWAYS_INLINE bool
         operator==(const VectorHandle& other) const {
             return ptr == other.ptr && index == other.index;
         }
-        bool
+        HEDLEY_ALWAYS_INLINE bool
         operator!=(const VectorHandle& other) const {
             return !(*this == other);
         }

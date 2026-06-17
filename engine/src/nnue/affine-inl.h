@@ -83,6 +83,8 @@ namespace chepp::nnue::layers {
             biases_t                     m_biases;
         };
 
+#if HWY_TARGET != HWY_SCALAR
+
         template <typename InT, size_t IS, typename OutT, size_t OS, typename WT, typename BT, AffineSimdColMaj cfg>
             requires(std::is_same_v<AffineSimdColMaj, decltype(cfg)> &&
                      std::is_same_v<std::tuple<InT, OutT, WT, BT>, std::tuple<uint8_t, int32_t, int8_t, int32_t>> &&
@@ -359,7 +361,10 @@ namespace chepp::nnue::layers {
             weights_t                    m_weights;
             biases_t                     m_biases;
         };
-    }; // namespace HWY_NAMESPACE
+
+#endif
+
+    } // namespace HWY_NAMESPACE
 } // namespace chepp::nnue::layers
 HWY_AFTER_NAMESPACE();
 

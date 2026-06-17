@@ -33,23 +33,46 @@ include(cmake/optimizations.cmake)
 include(cmake/sanitizers.cmake)
 include(cmake/targets.cmake)
 include(cmake/compat.cmake)
+include(cmake/noexcept.cmake)
+include(cmake/static.cmake)
 
 # Dependencies
 
-FetchContent_Declare(argparse GIT_REPOSITORY https://github.com/p-ranav/argparse.git GIT_TAG v3.1)
+FetchContent_Declare(
+        argparse
+        GIT_REPOSITORY https://github.com/p-ranav/argparse.git
+        GIT_TAG v3.1
+)
 FetchContent_MakeAvailable(argparse)
 
-FetchContent_Declare(hedley GIT_REPOSITORY https://github.com/nemequ/hedley.git GIT_TAG v15)
+FetchContent_Declare(
+        hedley
+        GIT_REPOSITORY https://github.com/nemequ/hedley.git
+        GIT_TAG v15
+)
 FetchContent_MakeAvailable(hedley)
 
 set(HWY_ENABLE_CONTRIB OFF CACHE BOOL "" FORCE)
 set(HWY_ENABLE_EXAMPLES OFF CACHE BOOL "" FORCE)
-set(HWY_ENABLE_TESTS OFF CACHE BOOL "" FORCE)
+set(HWY_ENABLE_TESTS ON CACHE BOOL "" FORCE)
+set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+# Add at global scope to avoid ODR violation
+# Requires tweaking of the nnue API to remove all hwy header
+# to define this at lower scope
+add_compile_definitions(PUBLIC HWY_AUTOTUNE_STDSORT)
 
-FetchContent_Declare(highway GIT_REPOSITORY https://github.com/google/highway.git GIT_TAG master)
+FetchContent_Declare(
+        highway
+        GIT_REPOSITORY https://github.com/google/highway.git
+        GIT_TAG 1.4.0
+)
 FetchContent_MakeAvailable(highway)
 
-FetchContent_Declare(fathom GIT_REPOSITORY https://github.com/jdart1/Fathom.git GIT_TAG master)
+FetchContent_Declare(
+        fathom
+        GIT_REPOSITORY https://github.com/jdart1/Fathom.git
+        GIT_TAG c9c6fef0dddc05d2e242c183acf5833149ab676d
+)
 FetchContent_MakeAvailable(fathom)
 
 include(CTest)

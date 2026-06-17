@@ -1,5 +1,5 @@
-#ifndef UNTITLED3_AFFINE_SPARSE_H
-#define UNTITLED3_AFFINE_SPARSE_H
+#ifndef CHEPP_NNUE_ACCUMULATOR_H
+#define CHEPP_NNUE_ACCUMULATOR_H
 
 #include "layer_base.h"
 #include "utils.h"

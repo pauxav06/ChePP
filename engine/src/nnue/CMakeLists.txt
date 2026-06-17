@@ -1,5 +1,3 @@
-add_library(ChePP_nnue STATIC nnue.cpp)
-
 set(NNUE_URL "https://github.com/pauxav06/chepp_NNUE/releases/download/v0.2.0/weights.net")
 set(NNUE_FILE "${CMAKE_CURRENT_SOURCE_DIR}/weights.net")
 
@@ -19,11 +17,12 @@ if(NOT EXISTS "${NNUE_FILE}")
     endif()
 endif()
 
-embed_bin(TARGET ChePP_nnue NAME weights BIN ${NNUE_FILE} DIR ${CMAKE_CURRENT_BINARY_DIR} QUALIFIER "")
+add_library(ChePP_nnue_core INTERFACE)
 
-target_link_libraries(ChePP_nnue PRIVATE options warnings optimization ChePP_core)
-target_link_libraries(ChePP_nnue PUBLIC hwy compat)
-#target_compile_definitions(ChePP_nnue PRIVATE HWY_COMPILE_ONLY_STATIC)
-target_compile_definitions(ChePP_nnue PUBLIC HWY_AUTOTUNE_STDSORT)
-target_include_directories(ChePP_nnue PUBLIC include)
-target_include_directories(ChePP_nnue PRIVATE .)
+embed_bin(TARGET ChePP_nnue_core NAME weights BIN ${NNUE_FILE} DIR ${CMAKE_CURRENT_BINARY_DIR} QUALIFIER "")
+target_include_directories(ChePP_nnue_core INTERFACE include)
+target_include_directories(ChePP_nnue_core INTERFACE .)
+
+add_library(ChePP_nnue STATIC nnue.cpp)
+target_link_libraries(ChePP_nnue PRIVATE compat options warnings optimization ChePP_core noexcept)
+target_link_libraries(ChePP_nnue PUBLIC hwy ChePP_nnue_core)

@@ -24,7 +24,7 @@ set (CORE_SOURCES
 add_executable(ChePP_core_tests ${CORE_SOURCES})
 
 target_link_libraries(ChePP_core_tests PRIVATE GTest::gtest GTest::gtest_main ChePP_core
-        options compat target warnings optimization)
+        options compat target warnings optimization noexcept)
 
 gtest_discover_tests(ChePP_core_tests)
 
@@ -40,9 +40,12 @@ foreach (TESTFILE IN LISTS NNUE_SOURCES)
     get_filename_component(TESTNAME ${TESTFILE} NAME_WE)
     add_executable(${TESTNAME} ${TESTFILE})
     target_link_libraries(${TESTNAME} PRIVATE
-            ChePP_core ChePP_nnue hwy hwy_test ${NNUE_GTEST_LIBS}
-            options compat warnings optimization)
-    target_include_directories(${TESTNAME} PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
+            ChePP_core ChePP_nnue_core hwy hwy_test ${NNUE_GTEST_LIBS}
+            options compat warnings optimization noexcept)
+    target_include_directories(
+            ${TESTNAME} PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}
+    )
     target_compile_options(${TESTNAME} PRIVATE -DHWY_IS_TEST=1)
 
     gtest_discover_tests(${TESTNAME})

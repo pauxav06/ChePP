@@ -193,11 +193,17 @@ namespace chepp::nnue::layers {
                         *regs[u] = hn::Load(D(), &MD_ACCESS(input, c, u, 0));
                     }
                     for (size_t i{0}; i < n_added; ++i) {
+                        if (i + 1 < n_added) {
+                            hwy::Prefetch(&MD_ACCESS(m_weights, added_ptr[i + 1], c, 0, 0));
+                        }
                         for (size_t u{0}; u < out.extent(1); ++u) {
                             *regs[u] = hn::Add(*regs[u], hn::Load(D(), &MD_ACCESS(m_weights, added_ptr[i], c, u, 0)));
                         }
                     }
                     for (size_t i{0}; i < n_removed; ++i) {
+                        if (i + 1 < n_removed) {
+                            hwy::Prefetch(&MD_ACCESS(m_weights, removed_ptr[i + 1], c, 0, 0));
+                        }
                         for (size_t u{0}; u < out.extent(1); ++u) {
                             *regs[u] = hn::Sub(*regs[u], hn::Load(D(), &MD_ACCESS(m_weights, removed_ptr[i], c, u, 0)));
                         }

@@ -60,6 +60,8 @@ namespace chepp::nnue::layers {
             }
         };
 
+#if HWY_TARGET != HWY_SCALAR
+
         template <typename InT, size_t IS, typename OutT, unsigned Q, ClippedReluSimd cfg>
             requires(std::is_same_v<ClippedReluSimd, decltype(cfg)> && cfg.unroll * (sizeof(InT) / sizeof(OutT)) <= 32)
         struct Kernel<ClippedRelu<InT, IS, OutT, Q>, cfg> final : ClippedRelu<InT, IS, OutT, Q>::ikernel_t {
@@ -160,6 +162,9 @@ namespace chepp::nnue::layers {
                 }
             }
         };
+
+#endif
+
     } // namespace HWY_NAMESPACE
 } // namespace chepp::nnue::layers
 

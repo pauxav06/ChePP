@@ -786,7 +786,8 @@ namespace chepp {
         }
 
         std::pair<uint64_t, uint64_t>
-        start(const std::stop_token& st, std::function<void()> cb) {
+        start(const std::stop_token& st, const std::function<void()>& cb) {
+            (void) st;
             workers.clear();
             m_tt->new_generation();
             m_tm.start();

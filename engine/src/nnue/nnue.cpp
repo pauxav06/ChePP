@@ -1,6 +1,3 @@
-#undef HWY_DISABLED_TARGETS
-#define HWY_DISABLED_TARGETS HWY_SCALAR
-
 #include "nnue.h"
 #include <hwy/auto_tune.h>
 #include <hwy/base.h>
@@ -16,28 +13,50 @@
 #include "relu-inl.h"
 
 HWY_BEFORE_NAMESPACE();
-namespace chepp::nnue {
+namespace chepp::nnue::dispatch {
     namespace HWY_NAMESPACE {
         namespace hn = hwy::HWY_NAMESPACE;
+
         template <typename T, auto cfg>
         void
         register_kernel(KernelRegistry& registry) {
             registry.register_kernel<T, HWY_TARGET, cfg>();
         }
+
+        int64_t dispatchTarget() {
+            return HWY_TARGET;
+        }
+
     } // namespace HWY_NAMESPACE
 } // namespace chepp::nnue
 HWY_AFTER_NAMESPACE();
 
 #if HWY_ONCE
 
-
 namespace chepp::nnue {
+
+#define VISITOR(TARGET, NAMESPACE) chepp::nnue::dispatch::NAMESPACE::register_kernel<T, cfg>(registery);
+
     template <typename T, auto cfg>
     void
     register_kernel(KernelRegistry& registery) {
-#define VISITOR(TARGET, NAMESPACE) chepp::nnue::NAMESPACE::register_kernel<T, cfg>(registery);
         HWY_VISIT_TARGETS(VISITOR)
+    }
+
 #undef VISITOR
+
+    namespace dispatch {
+        HWY_EXPORT(dispatchTarget);
+
+        int64_t
+        dispatchTarget() {
+            return HWY_DYNAMIC_DISPATCH(dispatchTarget)();
+        }
+    }
+
+    int64_t
+    dispatchTarget() {
+        return dispatch::dispatchTarget();
     }
 
     void

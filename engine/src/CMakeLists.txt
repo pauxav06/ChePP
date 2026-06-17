@@ -22,7 +22,7 @@ function(embed_bin)
 
     add_custom_target(${EMBED_NAME}_GENERATED ALL DEPENDS ${OUTPUT})
     add_dependencies(${EMBED_TARGET} ${EMBED_NAME}_GENERATED)
-    target_include_directories(${EMBED_TARGET} PUBLIC ${EMBED_DIR})
+    target_include_directories(${EMBED_TARGET} INTERFACE ${EMBED_DIR})
 endfunction()
 
 add_subdirectory(core)
@@ -30,4 +30,5 @@ add_subdirectory(nnue)
 add_subdirectory(engine)
 
 add_executable(ChePP main.cpp)
-target_link_libraries(ChePP PRIVATE ChePP_core ChePP_nnue ChePP_engine options compat warnings optimization target )
+target_link_libraries(ChePP PRIVATE ChePP_core ChePP_nnue ChePP_engine options compat warnings optimization target noexcept static)
+enable_lto(ChePP)

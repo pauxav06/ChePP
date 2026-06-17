@@ -126,7 +126,7 @@ namespace chepp::nnue::matrix {
         size_t parts;
 
         HSplitView(Base b, size_t p) : base(std::move(b)), parts(p) {
-            if (base.nCols() % parts != 0) throw std::runtime_error("HSplit requires nCols divisible by parts");
+            HWY_ASSERT(base.nCols() % parts == 0);
         }
 
         [[nodiscard]] size_t nRows() const { return base.nRows() * parts; }

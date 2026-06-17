@@ -556,7 +556,8 @@ namespace chepp::movegen {
                     if (!fail) return candidate;
                 }
 
-                throw std::runtime_error("Failed to find magic number for slider movegen");
+                fmt::println(stderr, "Failed to find magic number for slider movegen");
+                std::abort();
             }
 
             static magic_type

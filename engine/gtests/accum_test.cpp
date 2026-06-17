@@ -1,9 +1,6 @@
 #include <hwy/base.h>
 #include <hwy/nanobenchmark.h>
 
-#undef HWY_DISABLED_TARGETS
-#define HWY_DISABLED_TARGETS HWY_SCALAR
-
 #undef HWY_TARGET_INCLUDE
 #define HWY_TARGET_INCLUDE "accum_test.cpp"
 #include <hwy/foreach_target.h>
@@ -11,7 +8,7 @@
 #include <hwy/highway.h>
 #include <hwy/tests/test_util-inl.h>
 
-#include "../accumulator-inl.h"
+#include "accumulator-inl.h"
 
 HWY_BEFORE_NAMESPACE();
 

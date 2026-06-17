@@ -1,4 +1,5 @@
 #include "layer_base.h"
+#include "nnue.h"
 
 #if defined(CHEPP_LAYER_INL_H_) == defined(HWY_TARGET_TOGGLE)
 #ifdef CHEPP_LAYER_INL_H_
@@ -19,11 +20,21 @@ namespace chepp::nnue::layers {
 HWY_AFTER_NAMESPACE();
 
 namespace chepp::nnue::layers {
+
+#if HWY_TARGET == HWY_SCALAR
+    template <typename Layer, auto cfg>
+        requires (!requires { typename HWY_NAMESPACE::Kernel<Layer, cfg>::sfinae_flag; })
+    struct Kernel<HWY_TARGET, Layer, cfg> {
+        using type = HWY_NAMESPACE::Kernel<Layer, default_config>;
+    };
+#endif
+    
     template <typename Layer, auto cfg>
         requires requires { typename HWY_NAMESPACE::Kernel<Layer, cfg>::sfinae_flag; }
     struct Kernel<HWY_TARGET, Layer, cfg> {
         using type = HWY_NAMESPACE::Kernel<Layer, cfg>;
     };
+
 }
 
 #endif

@@ -30,3 +30,13 @@ target_compile_options(target INTERFACE
         $<$<AND:$<CXX_COMPILER_ID:MSVC>,$<BOOL:${ARCH}>>:/arch:${ARCH}>
         $<$<AND:$<NOT:$<CXX_COMPILER_ID:MSVC>>,$<BOOL:${ARCH}>>:-march=${ARCH}>
 )
+
+set(NO_LTO FALSE CACHE BOOL "Disable Link Time Optimization")
+include(CheckIPOSupported)
+check_ipo_supported(RESULT ipo_supported)
+
+function(enable_lto lto_target)
+    if(ipo_supported AND NOT NO_LTO)
+        set_property(TARGET ${lto_target} PROPERTY INTERPROCEDURAL_OPTIMIZATION TRUE)
+    endif()
+endfunction()

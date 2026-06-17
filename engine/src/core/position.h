@@ -433,7 +433,7 @@ namespace chepp {
 
         fmt::format_to(out,
                        "  a b c d e f g h \n"
-                       "Fen: {}\n",
+                       "Fen: {}",
                        to_fen());
         return res;
     }
@@ -911,7 +911,7 @@ namespace chepp {
     inline bool
     Position::is_valid(const Move move) const {
         auto moves = gen_moves(*this);
-        return std::find(moves.begin(), moves.end(), move) != moves.end();
+        return ranges::find(moves, move) != moves.end();
         //return ranges::contains(gen_legal(*this), move);
     }
 

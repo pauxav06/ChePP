@@ -19,36 +19,40 @@ namespace chepp::nnue {
             return std::make_shared<Arch::Network>(m_kernels); //TODO make unique
         }
 
-        void
+        bool
         tune() noexcept {
-            if (m_running.test_and_set()) {
-                fmt::print(stdout, "error: tuning is not available\n");
-                return;
+            const std::unique_lock lock(m_mtx, std::try_to_lock);
+            if (!lock.owns_lock()) {
+                fmt::print(stderr, "error: tuning is not available\n");
+                return false;
             }
             m_worker = std::jthread([&](const std::stop_token& st) {
-                auto res = Arch::make_best_kernels(m_registry, m_layers, st);
+                const auto res = Arch::make_best_kernels(m_registry, m_layers, st);
                 if (st.stop_requested()) {
                     fmt::print(stdout, "info string tuning aborted\n");
-                } else {
-                    std::scoped_lock lock{m_mtx};
-                    m_kernels = res;
-                    fmt::print(stdout, "info string tuning successful\n");
+                    return;
                 }
-                m_running.clear();
+                m_kernels = res;
+                fmt::print(stdout, "info string tuning successful\n");
             });
+            return true;
         }
 
-        void tune_sync() noexcept {
-            auto res = Arch::make_best_kernels(m_registry, m_layers, std::stop_token());
-            std::scoped_lock lock{m_mtx};
+        bool tune_sync() noexcept {
+            const std::unique_lock lock(m_mtx, std::try_to_lock);
+            if (!lock.owns_lock()) {
+                fmt::print(stderr, "error: tuning is not available\n");
+                return false;
+            }
+            const auto res = Arch::make_best_kernels(m_registry, m_layers, std::stop_token());
             m_kernels = res;
+            return true;
         }
 
         KernelRegistry                 m_registry{};
         Arch::layer_t                  m_layers{};
         Arch::ikernel_t                m_kernels{};
         mutable std::mutex             m_mtx{};
-        std::atomic_flag               m_running{};
         std::jthread                   m_worker{};
     };
 } // namespace chepp::nnue
